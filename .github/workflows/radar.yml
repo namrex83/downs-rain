@@ -91,10 +91,11 @@ jobs:
           ]
           USER_AGENT = "Mozilla/5.0 (compatible; downs-rain/1.0; personal rainfall map)"
           
-          # Output map classes (24-hour totals, mm) and colours, light to dark blue.
-          BREAKS = [1, 2, 5, 10, 15, 25, 50, 75, 100]
-          RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#5598e7", "#3987e5",
-                  "#2a78d6", "#256abf", "#184f95", "#0d366b"]
+          # Output map classes (24-hour totals, mm), coloured like the BOM radar scale.
+          BREAKS = [1, 2, 4, 6, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]
+          RAMP = ["#f5f5ff", "#b4b4ff", "#7878ff", "#1414ff", "#00d8c3",   # BOM radar colours
+                  "#009690", "#006666", "#ffff00", "#ffc800", "#ff9600",
+                  "#ff6400", "#ff0000", "#c80000", "#780000", "#280000"]
           
           ROOT = os.path.dirname(os.path.abspath(__file__))
           STATE = os.path.join(ROOT, "state")
@@ -578,7 +579,7 @@ jobs:
           .legend{display:flex}
           .legend div{flex:1;min-width:0}
           .legend i{display:block;height:11px;border-right:2px solid var(--bg)}
-          .legend span{font:500 .68rem var(--mono);color:var(--ink-2)}
+          .legend span{font:500 .6rem var(--mono);color:var(--ink-2);white-space:nowrap}
           .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
           .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
           .stat{border-top:2px solid var(--accent);padding-top:5px;min-width:0}
@@ -620,7 +621,7 @@ jobs:
               <div class="tablewrap"><table id="gauges"></table></div>
               <p class="note" id="notes"></p>
             </section>
-            <p class="note">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Map data © OpenStreetMap contributors.</p>
+            <p class="note">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
           </div>
           
           <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -631,7 +632,17 @@ jobs:
           let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr";
           
           const map = L.map("map", {zoomControl: true}).setView([-27.4, 151.4], 8);
-          L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 13, attribution: "© OpenStreetMap"}).addTo(map);
+          const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"});
+          const satellite = L.layerGroup([
+            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"}),
+            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17})
+          ]);
+          let base = "sat";
+          try { base = localStorage.getItem("base") || "sat"; } catch(e){}
+          (base === "map" ? streets : satellite).addTo(map);
+          L.control.layers({"Satellite": satellite, "Map": streets}, null, {position: "topright"}).addTo(map);
+          map.on("baselayerchange", e => { try { localStorage.setItem("base", e.name === "Map" ? "map" : "sat"); } catch(_){} });
+          map.setMaxZoom(17);
           gaugeLayer = L.layerGroup().addTo(map);
           
           const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
