@@ -191,6 +191,16 @@ jobs:
               sq = a[off:off + w, :w]
               rate = np.zeros(sq.shape[:2], np.float32)
               mask = sq[..., 3] > 128
+              # BOM draws solid title and time bars across the top and bottom; never count them as rain
+              solid = mask.mean(axis=1) > 0.6
+              t = 0
+              while t < 60 and solid[t]:
+                  t += 1
+              b = sq.shape[0]
+              while b > sq.shape[0] - 60 and solid[b - 1]:
+                  b -= 1
+              mask[:t] = False
+              mask[b:] = False
               if mask.any():
                   px = sq[mask][:, :3].astype(np.int32)
                   d2 = ((px[:, None, :] - _PAL_RGB[None, :, :]) ** 2).sum(-1)
@@ -709,8 +719,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: state
-          key: radar-state-${{ github.run_id }}
-          restore-keys: radar-state-
+          key: radar-state-v2-${{ github.run_id }}
+          restore-keys: radar-state-v2-
 
       - name: Process radar
         run: python radar.py
@@ -720,7 +730,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: state
-          key: radar-state-${{ github.run_id }}
+          key: radar-state-v2-${{ github.run_id }}
 
       - name: Publish new maps
         run: |
