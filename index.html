@@ -68,7 +68,7 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   <div class="controls">
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
-    <div class="field" id="dayField"><label for="day">Rain day (to 9am)</label><select id="day"></select></div>
+    <div class="field" id="dayField"><label for="day">Rain day (9am to 9am)</label><select id="day"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.8"></div>
@@ -108,8 +108,13 @@ map.setMaxZoom(17);
 gaugeLayer = L.layerGroup().addTo(map);
 
 const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
-const dayMonth = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {day:"numeric", month:"short", timeZone:"UTC"});
-const niceDay = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {weekday:"short", day:"numeric", month:"short", timeZone:"UTC"});
+// Rain days are named by the date they end on (9am that morning); labels show both days, e.g. "Tue 27 – Wed 28 Oct"
+const part = (d, o) => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {...o, timeZone:"UTC"});
+const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const wd = d => `${part(d, {weekday:"short"})} ${part(d, {day:"numeric"})}`;
+const span = (a, b) => `${wd(a)}${a.slice(0, 7) === b.slice(0, 7) ? "" : " " + part(a, {month:"short"})} – ${wd(b)} ${part(b, {month:"short"})}`;
+const rainDay = end => span(addDays(end, -1), end);
+const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.getUTCHours() >= 9) t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };   // Queensland time
 
 async function getJSON(u){ const r = await fetch(u + bust()); if(!r.ok) throw new Error(r.status); return r.json(); }
 
@@ -125,8 +130,8 @@ async function init(){
   map.fitBounds([[s+1.2,w+1.6],[n-1.2,e-1.6]]);
   L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false}).addTo(map);
   const sel = $("day");
-  sel.innerHTML = `<option value="today">Today so far (since 9am)</option>` +
-    idx.days.slice().reverse().map(d => `<option value="${d}">${niceDay(d)}</option>`).join("");
+  sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
+    idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
   if (idx.days.length) sel.value = idx.days[idx.days.length-1];
   sel.onchange = show; show();
 }
@@ -147,13 +152,14 @@ async function show(){
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
   if (today){
     $("stats").innerHTML = stat(meta.frames, "Radar scans so far") + stat(meta.as_of, "Last updated") + stat("Radar", "Not yet gauge-checked");
-    $("notes").textContent = "This is the raw radar estimate since 9am. It gets checked against gauges after 9am tomorrow.";
+    if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
+    $("notes").textContent = meta.date ? `This is the raw radar estimate since 9am ${part(addDays(meta.date, -1), {weekday:"long"})}. It gets checked against gauges after 9am ${part(meta.date, {weekday:"long"})}.` : "This is the raw radar estimate since 9am. It gets checked against gauges after 9am tomorrow.";
     return;
   }
   const g = meta.gauges || [];
   if (week){
-    $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(`${dayMonth(meta.from)} – ${dayMonth(meta.to)}`, "Rain days, each to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
-    $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.map(niceDay).join(", ")}. Totals will read low wherever it rained on those days.` : "";
+    $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
+    $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "";
     $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
       g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
     for (const x of g) gaugeMarker(x);
