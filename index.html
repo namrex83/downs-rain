@@ -78,7 +78,8 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   #dayField select{width:100%}
   .rangefield{flex:1;min-width:70px}
   input[type=range]{width:100%}
-  #map{min-height:260px}
+  #map{min-height:240px}
+  .tap{padding:6px 10px;font-size:.85rem}
 }
 </style>
 </head>
@@ -99,10 +100,10 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   </div>
 
   <div id="map"></div>
+  <div class="tap" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div id="legendBox"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
   <section class="panel">
-    <div class="tap" id="tap">Tap the map to read the rainfall at any spot.</div>
     <div class="stats" id="stats"></div>
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
@@ -271,8 +272,8 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = $("legendBox").offsetHeight + 8;
-  el.style.height = Math.max(260, innerHeight - top - legend - 10) + "px";
+  const legend = $("legendBox").offsetHeight + $("tap").offsetHeight + 16;
+  el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
 fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
