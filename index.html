@@ -34,7 +34,11 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
-input[type=range]{width:110px;accent-color:var(--accent)}
+#dayField{order:3;flex:1 1 100%}
+#dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
+  -webkit-appearance:none;appearance:none;cursor:pointer;
+  background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%232f6b4f' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center}
+#dayField select:disabled{opacity:.5}
 #map{height:62vh;min-height:340px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
 .legend{display:flex}
 .legend div{flex:1;min-width:0}
@@ -74,10 +78,8 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   label,.eyebrow{font-size:.6rem}
   .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
   select{font-size:.85rem;min-height:34px;padding:4px 8px}
-  #dayField{flex:1;min-width:0}
-  #dayField select{width:100%}
-  .rangefield{flex:1;min-width:70px}
-  input[type=range]{width:100%}
+  #dayField{order:3;flex:1 1 100%}
+  #dayField select{font-size:1rem;min-height:42px}
   #map{min-height:240px}
   .tap{padding:6px 10px;font-size:.85rem}
   .stats{gap:6px}
@@ -97,10 +99,9 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   <div class="controls">
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
-    <div class="field" id="dayField"><label for="day">Rain day (9am to 9am)</label><select id="day"></select></div>
+    <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
-    <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.8"></div>
   </div>
 
   <div id="map"></div>
@@ -185,6 +186,7 @@ const part = (d, o) => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {.
 const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const wd = d => `${part(d, {weekday:"short"})} ${part(d, {day:"numeric"})}`;
 const span = (a, b) => `${wd(a)}${a.slice(0, 7) === b.slice(0, 7) ? "" : " " + part(a, {month:"short"})} – ${wd(b)} ${part(b, {month:"short"})}`;
+const OVERLAY_OPACITY = 0.6; // fixed see-through level for the rain layer
 const rainDay = end => span(addDays(end, -1), end);
 const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.getUTCHours() >= 9) t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };   // Queensland time
 
@@ -220,7 +222,7 @@ async function draw(){
   const img = today ? "data/today.png" : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
   const [s,w,n,e] = meta.bounds;
   if (overlay) map.removeLayer(overlay);
-  overlay = L.imageOverlay(img + bust(), [[s,w],[n,e]], {opacity: +$("op").value, interactive:false}).addTo(map);
+  overlay = L.imageOverlay(img + bust(), [[s,w],[n,e]], {opacity: OVERLAY_OPACITY, interactive:false}).addTo(map);
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
   if (today){
     $("stats").innerHTML = stat(meta.frames, "Radar scans so far") + stat(meta.as_of, "Last updated") + stat("Radar", "Not yet gauge-checked");
@@ -282,7 +284,6 @@ function fitMap(){
 }
 fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
 let rw = innerWidth; addEventListener("resize", () => { if (innerWidth !== rw) { rw = innerWidth; fitMap(); } });
-$("op").oninput = () => overlay && overlay.setOpacity(+$("op").value);
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
 const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); show(); };
