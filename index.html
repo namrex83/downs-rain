@@ -19,6 +19,7 @@
   --bg:#121714; --panel:#1b221e; --ink:#eef1ec; --ink-2:#b9c2bc; --ink-3:#8b958f; --line:#2c3530;
   --accent:#5fae86; --accent-ink:#0f1612; --soft:#223229; --warn:#e3a14f; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);
   padding:calc(12px + env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
 .wrap{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -65,7 +66,9 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   </header>
 
   <div class="controls">
-    <div class="field"><label for="day">Rain day (to 9am)</label><select id="day"></select></div>
+    <div class="field"><span class="eyebrow">View</span>
+      <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
+    <div class="field" id="dayField"><label for="day">Rain day (to 9am)</label><select id="day"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.8"></div>
@@ -88,7 +91,7 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 (() => {
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
-let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr";
+let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day";
 
 const map = L.map("map", {zoomControl: true}).setView([-27.4, 151.4], 8);
 const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"});
@@ -105,6 +108,7 @@ map.setMaxZoom(17);
 gaugeLayer = L.layerGroup().addTo(map);
 
 const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
+const dayMonth = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {day:"numeric", month:"short", timeZone:"UTC"});
 const niceDay = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {weekday:"short", day:"numeric", month:"short", timeZone:"UTC"});
 
 async function getJSON(u){ const r = await fetch(u + bust()); if(!r.ok) throw new Error(r.status); return r.json(); }
@@ -128,10 +132,12 @@ async function init(){
 }
 
 async function show(){
-  const day = $("day").value;
+  const week = view === "week";
+  const day = week ? "week" : $("day").value;
+  $("dayField").hidden = week;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
   try { meta = await getJSON(`data/${day}.json`); }
-  catch(e){ meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">That day's map isn't available yet.</span>`; return; }
+  catch(e){ meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
   const today = day === "today";
   $("mRaw").disabled = today; $("mCorr").disabled = today;
   const img = today ? "data/today.png" : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
@@ -145,17 +151,24 @@ async function show(){
     return;
   }
   const g = meta.gauges || [];
+  if (week){
+    $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(`${dayMonth(meta.from)} – ${dayMonth(meta.to)}`, "Rain days, each to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
+    $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.map(niceDay).join(", ")}. Totals will read low wherever it rained on those days.` : "";
+    $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
+      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    for (const x of g) gaugeMarker(x);
+    return;
+  }
   $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
   if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
     g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
-  for (const x of g){
-    L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
-      .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
-      .bindPopup(`<b>${x.name}</b><br>Gauge ${fmt(x.mm)} mm<br>Radar ${x.radar_mm==null?"out of range":fmt(x.radar_mm)+" mm"}`)
-      .addTo(gaugeLayer);
-  }
+  for (const x of g) gaugeMarker(x);
 }
+const gaugeMarker = x => L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
+  .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
+  .bindPopup(`<b>${x.name}</b><br>Gauge ${fmt(x.mm)} mm<br>Radar ${x.radar_mm==null?"out of range":fmt(x.radar_mm)+" mm"}`)
+  .addTo(gaugeLayer);
 const stat = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
 
 function valueAt(lat, lon){
@@ -170,11 +183,14 @@ function valueAt(lat, lon){
 map.on("click", ev => {
   const v = valueAt(ev.latlng.lat, ev.latlng.lng);
   const where = `${ev.latlng.lat.toFixed(2)}°, ${ev.latlng.lng.toFixed(2)}°`;
-  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${$("day").value==="today"?" since 9am (radar only)":mode==="raw"?" (radar only)":""}.`;
+  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
 });
 $("op").oninput = () => overlay && overlay.setOpacity(+$("op").value);
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
+const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); show(); };
+$("vDay").onclick = () => setView("day");
+$("vWeek").onclick = () => setView("week");
 init();
 })();
 </script>
