@@ -773,9 +773,11 @@ jobs:
           map.getPane("labels").style.zIndex = 450;
           map.getPane("labels").style.pointerEvents = "none";
           const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"});
+          // The satellite map's own place names are only shown close in, where our town labels switch off,
+          // so a town is never named twice (see townsForZoom)
+          const satLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, pane: "labels"});
           const satellite = L.layerGroup([
-            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"}),
-            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, pane: "labels"})
+            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"})
           ]);
           let base = "sat";
           try { base = localStorage.getItem("base") || "sat"; } catch(e){}
@@ -806,7 +808,7 @@ jobs:
           const bigTowns = townLayer("big"), smallTowns = townLayer("small");
           function townsForZoom(){
             const z = map.getZoom();
-            for (const [layer, show] of [[bigTowns, z < 11], [smallTowns, z >= 8 && z < 11]])
+            for (const [layer, show] of [[bigTowns, z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
               show ? layer.addTo(map) : map.removeLayer(layer);
             declutter();
           }
@@ -820,7 +822,7 @@ jobs:
               if (kept.some(k => hits(r, k))) el.style.visibility = "hidden"; else kept.push(r);
             });
           }
-          map.on("zoomend", townsForZoom); townsForZoom();
+          map.on("zoomend baselayerchange", townsForZoom); townsForZoom();
           
           const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
           // Rain days are named by the date they end on (9am that morning); labels show both days, e.g. "Tue 27 – Wed 28 Oct"
