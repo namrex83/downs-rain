@@ -1,0 +1,33 @@
+name: Oz Forecast probe
+
+on:
+  push:
+    branches: [claude/ozforecast-probe]
+    paths: [.github/workflows/probe.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Save Oz Forecast pages
+        run: |
+          mkdir -p probe
+          UA="Mozilla/5.0 (compatible; downs-rain/1.0; personal rainfall map)"
+          get() { curl -sS -L -m 30 -A "$UA" -o "probe/$1" -w "$1 %{http_code} %{size_download}\n" "$2" >> probe/log.txt 2>&1 || echo "$1 failed" >> probe/log.txt; }
+          get warra.html "https://ozforecast.com.au/cgi-bin/weather.cgi?location=Warra.QLD&pagetype=rainfall"
+          get dalby.html "https://ozforecast.com.au/cgi-bin/weather.cgi?location=Dalby.QLD&pagetype=rainfall"
+          get home.html "https://ozforecast.com.au/"
+          get robots.txt "https://ozforecast.com.au/robots.txt"
+          cat probe/log.txt
+      - name: Commit
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add probe
+          git commit -m "Oz Forecast probe $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
