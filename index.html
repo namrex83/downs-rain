@@ -64,13 +64,29 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   text-shadow:0 0 3px #000,0 0 2px #000,0 1px 1px #000}
 .town.big span{font-size:14px;font-weight:700}
 .leaflet-container{font-family:var(--body)}
+@media (max-width:600px){
+  body{padding-top:calc(4px + env(safe-area-inset-top,0px))}
+  .wrap{gap:8px}
+  h1{font-size:1.45rem}
+  .sub{font-size:.78rem;margin-top:1px}
+  .controls{gap:6px 8px}
+  .field{gap:2px}
+  label,.eyebrow{font-size:.6rem}
+  .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
+  select{font-size:.85rem;min-height:34px;padding:4px 8px}
+  #dayField{flex:1;min-width:0}
+  #dayField select{width:100%}
+  .rangefield{flex:1;min-width:70px}
+  input[type=range]{width:100%}
+  #map{min-height:260px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>Downs <span>Radar Rain</span></h1>
-    <p class="sub">Toowoomba radar rainfall, checked against rain gauges each morning at 9am.</p>
+    <p class="sub">Toowoomba radar rainfall, gauge-checked each 9am.</p>
   </header>
 
   <div class="controls">
@@ -79,11 +95,11 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
     <div class="field" id="dayField"><label for="day">Rain day (9am to 9am)</label><select id="day"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
-    <div class="field"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.8"></div>
+    <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.8"></div>
   </div>
 
   <div id="map"></div>
-  <div><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
+  <div id="legendBox"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
   <section class="panel">
     <div class="tap" id="tap">Tap the map to read the rainfall at any spot.</div>
@@ -186,7 +202,7 @@ async function init(){
   sel.onchange = show; show();
 }
 
-async function show(){ await draw(); readTap(); }
+async function show(){ await draw(); readTap(); fitMap(); }
 async function draw(){
   const week = view === "week";
   const day = week ? "week" : $("day").value;
@@ -251,6 +267,16 @@ function readTap(){
   $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
 }
 map.on("click", ev => { tapAt = ev.latlng; readTap(); });
+function fitMap(){
+  const el = $("map");
+  if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
+  const top = el.getBoundingClientRect().top + scrollY;
+  const legend = $("legendBox").offsetHeight + 8;
+  el.style.height = Math.max(260, innerHeight - top - legend - 10) + "px";
+  map.invalidateSize();
+}
+fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
+let rw = innerWidth; addEventListener("resize", () => { if (innerWidth !== rw) { rw = innerWidth; fitMap(); } });
 $("op").oninput = () => overlay && overlay.setOpacity(+$("op").value);
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
