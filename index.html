@@ -55,6 +55,9 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 .err{color:var(--warn)}
 .glabel{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 5px;font:500 11px var(--mono);white-space:nowrap;box-shadow:none}
 .glabel::before{display:none}
+.pin{width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:#fff;border:5px solid #1c2621;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.55)}
+.pinlabel{background:#fff;color:#1c2621;border:2px solid #1c2621;border-radius:8px;padding:3px 9px;font:700 1.15rem var(--mono);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.45)}
+.pinlabel::before{border-top-color:#1c2621!important}
 .town{width:0;height:0}
 .town i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#1c2621;border:1.5px solid #fff}
 .town span{position:absolute;right:5px;top:-7px;white-space:nowrap;font:600 12px/1 var(--body);color:#fff;
@@ -183,7 +186,8 @@ async function init(){
   sel.onchange = show; show();
 }
 
-async function show(){
+async function show(){ await draw(); readTap(); }
+async function draw(){
   const week = view === "week";
   const day = week ? "week" : $("day").value;
   $("dayField").hidden = week;
@@ -233,11 +237,20 @@ function valueAt(lat, lon){
   const v = grid[Math.floor(fy*meta.grid_h)*meta.grid_w + Math.floor(fx*meta.grid_w)];
   return v < 0 ? null : v/10;
 }
-map.on("click", ev => {
-  const v = valueAt(ev.latlng.lat, ev.latlng.lng);
-  const where = `${ev.latlng.lat.toFixed(2)}°, ${ev.latlng.lng.toFixed(2)}°`;
+let pin = null, tapAt = null;
+function readTap(){
+  if (!tapAt) return;
+  const v = valueAt(tapAt.lat, tapAt.lng);
+  const label = v == null ? "No data" : `${fmt(v)} mm`;
+  if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
+      icon: L.divIcon({className:"", html:'<div class="pin"></div>', iconSize:[0,0]})})
+    .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
+  else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
+  if (!meta) return;
+  const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
-});
+}
+map.on("click", ev => { tapAt = ev.latlng; readTap(); });
 $("op").oninput = () => overlay && overlay.setOpacity(+$("op").value);
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
