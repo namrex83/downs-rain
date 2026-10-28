@@ -123,7 +123,8 @@ const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day";
 
-const map = L.map("map", {zoomControl: true}).setView([-27.4, 151.4], 8);
+const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
+const map = L.map("map", {zoomControl: true}).setView(HOME, 9);
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
 map.getPane("labels").style.zIndex = 450;
@@ -200,7 +201,6 @@ async function init(){
   try { idx = await getJSON("data/index.json"); }
   catch(e){ $("tap").innerHTML = `<span class="empty">No maps yet. The running total for today appears within the first hour of the program running, and the first finished day after the next 9am.</span>`; return; }
   legend();
-  map.fitBounds([[-27.95,150.45],[-26.4,152.1]]);   // about 100 km around Dalby
   L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false}).addTo(map);
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
