@@ -73,6 +73,12 @@ jobs:
               ((200, 0, 0), 155.0), ((120, 0, 0), 250.0), ((40, 0, 0), 360.0),
           ]
           COLOUR_TOLERANCE = 30      # max RGB distance for a pixel to count as a palette colour
+          # Gauge correction
+          FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
+          BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
+          BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
+          DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
+          DEAD_RING_KM = 5.0         # ...and at least half of it nearly everywhere within this distance
           
           # BOM automatic weather stations inside the radar's range: (product, station number)
           STATIONS = [
@@ -344,7 +350,9 @@ jobs:
           
           
           def correct(radar, gauges):
-              """Gauge-adjust a radar total: one overall scale factor, then local fixes near each gauge."""
+              """Gauge-adjust a radar total: a scale factor that varies smoothly across the map (set
+              mostly by gauges within about BIAS_RADIUS_KM), then local fixes near each gauge.
+              Returns the field, the scale factor at FOCUS (Dalby), the overall factor and gauges used."""
               n = radar.shape[0]
               k = km_per_px(n)
               yy, xx = np.mgrid[0:n, 0:n]
@@ -357,17 +365,33 @@ jobs:
                   rad = max(1, int(round(1.5 / k)))   # ~3 km box around the gauge
                   box = radar[max(0, int(r) - rad):int(r) + rad + 1, max(0, int(c) - rad):int(c) + rad + 1]
                   g["radar_mm"] = round(float(box.mean()), 1)
+                  # a dry gauge with solid rain over it and all around it (not just a storm edge) is
+                  # probably blocked or broken, so leave it out
+                  ring = max(1, int(round(DEAD_RING_KM / k)))
+                  around = radar[max(0, int(r) - ring):int(r) + ring + 1, max(0, int(c) - ring):int(c) + ring + 1]
+                  if (g["mm"] < 1.0 and g["radar_mm"] >= DEAD_RADAR_MM
+                          and float(np.percentile(around, 10)) >= DEAD_RADAR_MM / 2):
+                      g["ignored"] = "read dry under widespread rain"
+                      log(f"  ignoring {g['name']}: gauge {g['mm']} mm, radar {g['radar_mm']} mm all around")
+                      continue
                   g["_px"] = (c, r)
                   used.append(g)
               pairs = [g for g in used if g["mm"] >= 0.5 and g["radar_mm"] >= 0.5]
-              if len(pairs) >= 2:
-                  bias = sum(g["mm"] for g in pairs) / sum(g["radar_mm"] for g in pairs)
-              elif len(pairs) == 1:
-                  bias = pairs[0]["mm"] / pairs[0]["radar_mm"]
-              else:
-                  bias = 1.0
-              bias = float(min(3.0, max(0.33, bias)))
-              field = radar * bias
+              clamp = lambda b: np.clip(b, 0.33, 3.0)
+              # overall factor, pulled towards 1 when the gauges measured only a little rain
+              overall = float(clamp((sum(g["mm"] for g in pairs) + BIAS_PRIOR_MM)
+                                    / (sum(g["radar_mm"] for g in pairs) + BIAS_PRIOR_MM)))
+              # local factor: nearby gauges count most, fading out over ~BIAS_RADIUS_KM; with no
+              # gauges nearby it falls back to the overall factor
+              num = np.full(radar.shape, BIAS_PRIOR_MM * overall, np.float32)
+              den = np.full(radar.shape, BIAS_PRIOR_MM, np.float32)
+              for g in pairs:
+                  c, r = g["_px"]
+                  w = np.exp(-(np.hypot(xx - c, yy - r) * k / BIAS_RADIUS_KM) ** 2)
+                  num += w * g["mm"]
+                  den += w * g["radar_mm"]
+              scale = clamp(num / den)
+              field = radar * scale
               # local residual fix, fading out over ~25 km from each gauge
               if used:
                   num = np.zeros_like(radar)
@@ -376,15 +400,16 @@ jobs:
                       c, r = g["_px"]
                       d = np.hypot(xx - c, yy - r) * k
                       w = np.exp(-d / 25.0) / (1 + (d / 8.0) ** 2)
-                      num += w * (g["mm"] - g["radar_mm"] * bias)
+                      num += w * (g["mm"] - g["radar_mm"] * scale[int(r), int(c)])
                       den += w
                   field = np.maximum(0, field + num / den)
               for g in used:
                   c, r = g.pop("_px")
                   g["corrected_mm"] = round(float(field[int(r), int(c)]), 1)
-              return field.astype(np.float32), bias, len(pairs)
-          
-          
+              fc, fr = ll_to_px(*FOCUS, n)
+              return field.astype(np.float32), float(scale[int(fr), int(fc)]), overall, len(pairs)
+
+
           # ---------------------------------------------------------------- outputs
           def write_outputs(day, radar, field, meta):
               os.makedirs(DATA, exist_ok=True)
@@ -502,9 +527,10 @@ jobs:
                       win = st["windows"].pop(day)
                       radar = load_accum(day, win["n"])
                       gauges = fetch_bom_gauges(day) + read_my_gauges(day)
-                      field, bias, npairs = correct(radar, gauges)
+                      field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
-                              "bias": round(bias, 2), "gauges_used": npairs, "gauges": gauges}
+                              "bias": round(bias, 2), "bias_overall": round(overall, 2),
+                              "gauges_used": npairs, "gauges": gauges}
                       write_outputs(day, radar, field, meta)
                       st["done"] = (st["done"] + [day])[-14:]
                       for f in ("today.png", "today.json"):      # the running map belongs to the day just finished
@@ -686,10 +712,10 @@ jobs:
               return;
             }
             const g = meta.gauges || [];
-            $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
+            $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
             if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
             $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-              g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+              g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
             for (const x of g){
               L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
                 .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})

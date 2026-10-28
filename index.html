@@ -145,10 +145,10 @@ async function show(){
     return;
   }
   const g = meta.gauges || [];
-  $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
+  $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
   if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-    g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
   for (const x of g){
     L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
       .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
