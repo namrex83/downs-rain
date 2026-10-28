@@ -237,10 +237,11 @@ jobs:
               return RADAR_LAT - dlat, RADAR_LON - dlon, RADAR_LAT + dlat, RADAR_LON + dlon
           
           
-          def to_mercator(field, out_w=512):
+          def to_mercator(field, out_w=512, smooth=False):
               """Resample a radar-grid field onto a grid regular in Web Mercator (for web maps).
-              Values are blended between neighbouring radar pixels (bilinear), so edges come out smooth
-              without spreading rain further than the next pixel."""
+              smooth=True blends between neighbouring radar pixels (bilinear) so map images have smooth
+              edges without spreading rain further than the next pixel; tap-to-read values use the
+              radar pixels as they are."""
               n = field.shape[0]
               s, w, nn, e = bounds()
               merc = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
@@ -253,6 +254,12 @@ jobs:
               x = (LON - RADAR_LON) * 111.32 * math.cos(math.radians(RADAR_LAT))
               y = (LAT - RADAR_LAT) * 110.57
               k = km_per_px(n)
+              if not smooth:
+                  col = np.clip((n / 2 + x / k).astype(int), 0, n - 1)
+                  row = np.clip((n / 2 - y / k).astype(int), 0, n - 1)
+                  out = field[row, col].astype(np.float32)
+                  out[np.hypot(x, y) > RANGE_KM] = np.nan
+                  return out
               fc = np.clip(n / 2 + x / k - 0.5, 0, n - 1)     # position measured from pixel centres
               fr = np.clip(n / 2 - y / k - 0.5, 0, n - 1)
               c0 = np.minimum(fc.astype(int), n - 2)
@@ -424,8 +431,8 @@ jobs:
               s, w, n_, e = bounds()
               corr_m = to_mercator(field)
               rad_m = to_mercator(radar)
-              colourise(to_mercator(field, IMAGE_W)).save(os.path.join(DATA, f"{day}.png"), optimize=True)
-              colourise(to_mercator(radar, IMAGE_W)).save(os.path.join(DATA, f"{day}_radar.png"), optimize=True)
+              colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, f"{day}.png"), optimize=True)
+              colourise(to_mercator(radar, IMAGE_W, smooth=True)).save(os.path.join(DATA, f"{day}_radar.png"), optimize=True)
               # coarse value grid for tap-to-read on the page (tenths of mm, -1 = no data)
               enc = lambda m: np.where(np.isnan(m[::2, ::2]), -1, np.round(m[::2, ::2] * 10)).astype(int)
               vals, raw_vals = enc(corr_m), enc(rad_m)
@@ -503,7 +510,7 @@ jobs:
           def write_today(day, accum, info):
               os.makedirs(DATA, exist_ok=True)
               m = to_mercator(accum)
-              colourise(to_mercator(accum, IMAGE_W)).save(os.path.join(DATA, "today.png"), optimize=True)
+              colourise(to_mercator(accum, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today.png"), optimize=True)
               g = m[::2, ::2]
               vals = np.where(np.isnan(g), -1, np.round(g * 10)).astype(int)
               with open(os.path.join(DATA, "today.json"), "w") as f:
