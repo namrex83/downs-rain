@@ -55,6 +55,11 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 .err{color:var(--warn)}
 .glabel{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 5px;font:500 11px var(--mono);white-space:nowrap;box-shadow:none}
 .glabel::before{display:none}
+.town{width:0;height:0}
+.town i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#1c2621;border:1.5px solid #fff}
+.town span{position:absolute;right:5px;top:-7px;white-space:nowrap;font:600 12px/1 var(--body);color:#fff;
+  text-shadow:0 0 3px #000,0 0 2px #000,0 1px 1px #000}
+.town.big span{font-size:14px;font-weight:700}
 .leaflet-container{font-family:var(--body)}
 </style>
 </head>
@@ -94,10 +99,14 @@ const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day";
 
 const map = L.map("map", {zoomControl: true}).setView([-27.4, 151.4], 8);
+// Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
+map.createPane("labels");
+map.getPane("labels").style.zIndex = 450;
+map.getPane("labels").style.pointerEvents = "none";
 const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"});
 const satellite = L.layerGroup([
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"}),
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17})
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, pane: "labels"})
 ]);
 let base = "sat";
 try { base = localStorage.getItem("base") || "sat"; } catch(e){}
@@ -106,6 +115,43 @@ L.control.layers({"Satellite": satellite, "Map": streets}, null, {position: "top
 map.on("baselayerchange", e => { try { localStorage.setItem("base", e.name === "Map" ? "map" : "sat"); } catch(_){} });
 map.setMaxZoom(17);
 gaugeLayer = L.layerGroup().addTo(map);
+
+// Downs towns, labelled clearly when zoomed out (the base map leaves small towns off until close in).
+// Bigger towns show at every zoom out to 7, smaller ones from zoom 8; all hide from zoom 11, where
+// the base map's own labels take over. Where names would overlap, the one listed later is hidden,
+// so the small list runs from most to least important.
+const TOWNS = {
+  big: [["Toowoomba",-27.561,151.954],["Dalby",-27.182,151.262],["Warwick",-28.219,152.034],["Kingaroy",-26.540,151.837],
+    ["Chinchilla",-26.738,150.630],["Goondiwindi",-28.547,150.305],["Stanthorpe",-28.654,151.934],["Gatton",-27.559,152.276],
+    ["Miles",-26.658,150.188],["Oakey",-27.433,151.721],["Pittsworth",-27.716,151.634],["Millmerran",-27.879,151.271],["Tara",-27.276,150.457]],
+  small: [["Warra",-26.93,150.92],["Jandowae",-26.784,151.112],["Jimbour",-26.96,151.21],["Macalister",-27.04,151.08],
+    ["Bell",-26.93,151.45],["Kaimkillenbun",-27.06,151.43],["Bowenville",-27.30,151.49],["Cecil Plains",-27.53,151.19],
+    ["Kogan",-27.04,150.76],["Brigalow",-26.85,150.79],["Condamine",-26.93,150.13],["Jondaryan",-27.37,151.59],["Quinalow",-27.10,151.62],
+    ["Brookstead",-27.76,151.45],["Mount Tyson",-27.58,151.56],["Cambooya",-27.715,151.860],["Clifton",-27.934,151.907],
+    ["Allora",-28.035,151.981],["Leyburn",-28.01,151.58],["Inglewood",-28.42,151.08],["Texas",-28.85,151.17],["Yelarbon",-28.57,150.75],
+    ["Moonie",-27.72,150.37],["Meandarra",-27.32,149.88],["Wandoan",-26.123,149.960],["Kumbia",-26.69,151.65],
+    ["Nanango",-26.672,152.002],["Crows Nest",-27.260,152.052]]
+};
+const townLayer = size => L.layerGroup(TOWNS[size].map(([name, lat, lon]) => L.marker([lat, lon], {pane: "labels", interactive: false, keyboard: false,
+  icon: L.divIcon({className: "town" + (size === "big" ? " big" : ""), html: `<i></i><span>${name}</span>`, iconSize: null})})));
+const bigTowns = townLayer("big"), smallTowns = townLayer("small");
+function townsForZoom(){
+  const z = map.getZoom();
+  for (const [layer, show] of [[bigTowns, z < 11], [smallTowns, z >= 8 && z < 11]])
+    show ? layer.addTo(map) : map.removeLayer(layer);
+  declutter();
+}
+function declutter(){
+  const kept = [...document.querySelectorAll(".glabel")].map(el => el.getBoundingClientRect());
+  const hits = (a, b) => a.left < b.right + 3 && b.left < a.right + 3 && a.top < b.bottom + 2 && b.top < a.bottom + 2;
+  for (const layer of [bigTowns, smallTowns]) layer.eachLayer(m => {
+    const el = m.getElement(); if (!el) return;
+    el.style.visibility = "";
+    const r = el.querySelector("span").getBoundingClientRect();
+    if (kept.some(k => hits(r, k))) el.style.visibility = "hidden"; else kept.push(r);
+  });
+}
+map.on("zoomend", townsForZoom); townsForZoom();
 
 const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
 // Rain days are named by the date they end on (9am that morning); labels show both days, e.g. "Tue 27 – Wed 28 Oct"
@@ -126,8 +172,7 @@ async function init(){
   try { idx = await getJSON("data/index.json"); }
   catch(e){ $("tap").innerHTML = `<span class="empty">No maps yet. The running total for today appears within the first hour of the program running, and the first finished day after the next 9am.</span>`; return; }
   legend();
-  const [s,w,n,e] = idx.bounds;
-  map.fitBounds([[s+1.2,w+1.6],[n-1.2,e-1.6]]);
+  map.fitBounds([[-27.95,150.45],[-26.4,152.1]]);   // about 100 km around Dalby
   L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false}).addTo(map);
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
@@ -163,6 +208,7 @@ async function show(){
     $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
       g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
     for (const x of g) gaugeMarker(x);
+    declutter();
     return;
   }
   $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
@@ -170,6 +216,7 @@ async function show(){
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
     g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
   for (const x of g) gaugeMarker(x);
+  declutter();
 }
 const gaugeMarker = x => L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
   .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
