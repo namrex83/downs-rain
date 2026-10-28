@@ -1,0 +1,13 @@
+User-agent: Googlebot
+Disallow:
+User-agent: Mediapartners-Google
+Disallow:
+User-agent: bingbot
+Disallow: 
+User-agent: Googlebot-Image
+Disallow: /
+User-agent: MSNBot-Media
+Disallow: /
+User-agent: *
+Disallow: /
+Sitemap: https://ozforecast.com.au/sitemap.xml.gz

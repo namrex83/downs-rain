@@ -1,0 +1,120 @@
+<!DOCTYPE HTML>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="icon" sizes="192x192" href="/etc/OzF_logo_192.png" type="image/png">
+<link rel="icon" sizes="128x128" href="/etc/OzF_logo_128.png" type="image/png">
+<meta name="msapplication-TileColor" content="#FFFFFF">
+<meta name="msapplication-TileImage" content="/etc/OzF_logo_144.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/etc/OzF_logo_144.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/etc/OzF_logo_114.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/etc/OzF_logo_72.png">
+<link rel="apple-touch-icon" sizes="57x57" href="/etc/OzF_logo_57.png">
+<link rel="shortcut icon" href="/favicon.ico">
+
+<meta property="og:title" content="Oz Forecast">
+<meta property="og:type" content="website">
+<meta property="og:image" content="http://ozforecast.com.au/fbthumb.jpg">
+
+<title>Oz Forecast - Australian Weather</title>
+<link rel="canonical" href="https://ozforecast.com.au/">
+
+<link href="bootstrap.css" rel="stylesheet">
+<link href="index-style.css?v=2" rel="stylesheet">
+
+<script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+<script src="https://code.jquery.com/ui/1.11.2/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css">
+
+</head>
+
+<body class="ozf-home">
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&appId=882943845090518&version=v2.0";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+<div class="hero-unit landing">
+<div class="container">
+<div class="home-intro">
+
+<h1 class="home-logo"><img src="https://ozforecast.com.au/etc/OzF2-wide.png" width="436" height="77" alt="Oz Forecast"></h1>
+<p class="home-catchphrase">Global Models. Local Weather.</p>
+
+  <form class="home-search" action="https://ozforecast.com.au/cgi-bin/weather.cgi" method="get" data-ajax="false">
+    <label for="townnameentry">Enter Town Name:</label>
+    <div><input type="text" id="townnameentry" name="station" autocomplete="off"></div>
+    <div><button type="submit" id="submit">Search</button></div>
+  </form>
+
+<!-- <div id='fbsharediv'></div>
+<script>document.getElementById("fbsharediv").innerHTML = '<div class="fb-share-button" data-href="'+document.location+'" data-layout="button_count"></div>';</script> -->
+
+<script>
+$(function() {
+      $("#townnameentry").autocomplete({
+        source: "/cgi-bin/jsonserver.cgi",
+        minLength: 3,
+        delay: 250,
+        select: function(event, ui) {
+          location.href="/cgi-bin/weather.cgi?station="+ui['item']['id'];
+        },
+        open: function(event, ui) {
+          $('.ui-autocomplete').off('menufocus hover mouseover mouseenter');
+        }
+      });
+  });
+</script>
+
+</div></div></div>
+
+<div class="hero-pattern">
+<div class="container">
+</div></div>
+
+<div class="container">
+<div class="row landing-tips">
+<div class="span4 home-radar">
+<a href="https://radar.ozforecast.com.au/stormtracker?radar=Australia"><img src="https://radar.ozforecast.com.au/AustraliaSmall/AustraliaSmall-latest.jpg" alt="Australian Radar"></a>
+<h2>Radar</h2>
+</div>
+
+<div class="span4 home-trending">
+<h2>Trending Today</h2>
+<div class="home-trending-links">
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Mukinbudin.WA">Mukinbudin</a><br>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Beacon.WA">Beacon</a><br>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Merredin.WA">Merredin</a><br>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Kununurra.WA">Kununurra</a><br>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Dalwallinu.WA">Dalwallinu</a><br>
+</div>
+</div>
+
+
+<div class="span4 home-satellite">
+<a href="https://radar.ozforecast.com.au/satellite">
+<img src="https://radar.ozforecast.com.au/sat/IDE00405-350-latest.jpg" alt="Australian Satellite"></a>
+<h2>Satellite</h2>
+</div>
+
+</div>
+
+<div class="home-footer">
+Welcome to Oz Forecast. Realtime RADAR, lightning, webcams and weather station observations and tide and weather forecasts for 15,000 Australian locations.<BR>
+
+OzForecast.com.au is a project of Oz Forecast, ABN 61 167 720 152.<BR>
+<a href="mailto:david@ozforecast.com.au?subject=Oz%20Forecast%20Website">Contact us</a>
+&middot; <a href="https://m.ozforecast.com.au/">Alternate Mobile Site</a>
+</div>
+
+</div>
+
+
+</body></html>

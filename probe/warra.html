@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<HTML lang='en'><HEAD>
+<META http-equiv='Content-Type' content='text/html; charset=utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<script>
+(function() {
+  var blockedUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
+  var viewportWidth = Math.round(
+    document.documentElement.clientWidth || window.innerWidth || 0
+  );
+  var viewportHeight = Math.round(
+    document.documentElement.clientHeight || window.innerHeight || 0
+  );
+  if (navigator.userAgent === blockedUserAgent &&
+      viewportWidth === 1366 &&
+      (viewportHeight === 1365 || viewportHeight === 1366) &&
+      window.devicePixelRatio === 1) {
+    window.stop();
+    window.location.replace("https://ozforecast.com.au/__ozf-denied__");
+  }
+}());
+</script>
+<link rel="icon" sizes="192x192" href="/etc/OzF_logo_192.png" type="image/png">
+<link rel="icon" sizes="128x128" href="/etc/OzF_logo_128.png" type="image/png">
+<meta name="msapplication-TileColor" content="#FFFFFF">
+<meta name="msapplication-TileImage" content="/etc/OzF_logo_144.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/etc/OzF_logo_144.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/etc/OzF_logo_114.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/etc/OzF_logo_72.png">
+<link rel="apple-touch-icon" sizes="57x57" href="/etc/OzF_logo_57.png">
+<link rel="shortcut icon" href="/etc/favicon.ico">
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/themes/vader/jquery-ui.css">
+
+<link href="https://fonts.googleapis.com/css?family=Roboto&amp;display=swap" rel="stylesheet">
+<link href="/jslib/mmenu/mmenu.css" rel="stylesheet">
+<link href="/jslib/mburger/mburger.css" rel="stylesheet">
+<LINK href='https://ozforecast.com.au/main.css?v=219' rel='stylesheet' type='text/css'>
+<script defer src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+<script defer src="https://code.jquery.com/ui/1.11.3/jquery-ui.min.js"></script>
+<script defer src="/jslib/mmenu/mmenu.js?v=7"></script>
+<script id="ozf-browser-view-reporter" defer
+        src="/jslib/ozforecast/browser-view-reporter.js?v=1"
+        data-town="Warra.QLD" data-page="weather-rainfall" data-visible-ms="2000"></script>
+<TITLE>Oz Forecast - Rainfall Observations Near Warra, QLD</TITLE>
+<META NAME="robots" content="noindex,follow">
+<META NAME="geo.position" CONTENT="-26.93332;150.91667">
+</HEAD>
+
+<BODY class='ozf-theme ozf-standard-page'><div id='ozffullpage' class='ozf-theme ozf-standard-page'> <a class='weather-skip-link' href='#weather-main'>Skip to weather information</a>
+
+<!--=============== Desktop Banner ===============-->
+<div id='ozfbigheader' class='notmobile'>
+  <header id='topbanner' class='ozf-desktop-banner'>
+    <div class='ozf-banner-sponsor dontprint'>
+<a href="https://play.google.com/store/apps/details?id=au.com.ozforecast.tiledweather" target="_blank" rel="nofollow">
+<img src="/sponsors/TiledWeather.png" alt="TiledWeather" class='ozfad'>
+</a>
+</div>
+    <div class='ozf-banner-brand'>
+      <a href='https://ozforecast.com.au/'><img srcset='/etc/OzF2-wide-med.png 396w, /etc/OzF2-mobile.png 200w' sizes='(min-width: 900px) 396px, 200px' src='/etc/OzF2-wide-med.png' alt='Oz Forecast'></a><br>
+        <span style='font-size: 0.85em; font-style: italic;'>Pure love is a willingness to give without a thought of receiving anything in return.     - Peace Pilgrim</span>
+    </div>
+    <div class='ozf-banner-sponsor ozf-banner-sponsor-right dontprint notmobile'>
+<a href="http://www.csd.net.au/" target="_blank" rel="nofollow">
+<img src="/sponsors/CSD.png" alt="CSD" class='ozfad'>
+</a>
+    </div>
+  </header>
+</div>
+
+
+<!--=============== Mobile Banner ===============-->
+<header id='ozfmobilebanner' class='dontprint mobileonly'>
+<div class='ozf-mobile-banner-layout'>
+<div class='ozf-mobile-menu'>
+        <a class='mburger mburger--tornado' href='#ozfmenu'>
+          <b></b>
+          <b></b>
+          <b></b>
+        </a>
+        <br><div class='mburgermenutext'>MENU</div>
+      </div>
+<div class='ozf-mobile-brand'><a href='https://ozforecast.com.au/'><img class='ozf-mobile-logo' srcset='/etc/OzF2-wide-med.png 396w, /etc/OzF2-wide-300.png 300w, /etc/OzF2-mobile.png 200w' sizes='(min-width: 600px) 396px, (min-width: 450px) 300px, 200px' src='/etc/OzF2-wide-med.png' alt='Oz Forecast'></a></div>
+<div class='ozf-mobile-search'>
+
+<!--================= Town Search (Horizontal) =================-->
+<div style="text-align: center;" 
+>
+  <form action="https://ozforecast.com.au/cgi-bin/weather.cgi" method="get" data-ajax="false">
+    <div><label for="townnameentryh">Enter Town Name:</label>
+    <input id="townnameentryh" name="station" style="max-width: 90%;">
+    <button type="submit" id="submith">Search</button></div>
+  </form>
+</div>
+
+
+<script>
+(function(start) {
+  if (document.readyState === 'complete') start();
+  else document.addEventListener('DOMContentLoaded', start, {once: true});
+})(function() {
+      $("#townnameentryh").autocomplete({
+        source: "/cgi-bin/jsonserver.cgi",
+        minLength: 3,
+        delay: 100,
+        select: function(event, ui) {
+          location.href="https://ozforecast.com.au/cgi-bin/weather.cgi?station="+ui['item']['id'];
+        },
+        open: function(event, ui) {
+          $('.ui-autocomplete').off('menufocus hover mouseover mouseenter');
+        }
+      });
+
+});
+</script>
+</div>
+</div>
+</header>
+
+
+<!--=============== Warnings ===============-->
+<div class='dontprint weather-desktop-only weather-warning-banner'>
+<div class='additionalinfo'>
+<a class="ozf-warning" data-warning-file="IDQ20829.txt" href="http://www.bom.gov.au/cgi-bin/wrap_fwo.pl?IDQ20829.txt" target="_blank"> Moderate Flood Warning For The Lower Condamine River</a> &nbsp;&nbsp;&nbsp;&nbsp;
+</div>
+</div>
+
+
+<div class='weather-page-layout weather-page-with-ad'>
+<aside class='weather-page-sidebar leftmenu dontprint weather-desktop-only' aria-label='Weather navigation and information'>
+
+
+<!--=============== Left Menu for Desktop ===============-->
+
+<!--================= Town Search Field =================-->
+<div style="text-align: center;">
+  <form action="https://ozforecast.com.au/cgi-bin/weather.cgi" method="get" data-ajax="false">
+    <div style="font-weight: bold;"><label for="townnameentry">Enter Town Name:</label></div>
+    <input id="townnameentry" name="station" style="max-width: 90%;">
+    <button type="submit" id="submit">Search</button>
+  </form>
+</div>
+
+
+<script>
+(function(start) {
+  if (document.readyState === 'complete') start();
+  else document.addEventListener('DOMContentLoaded', start, {once: true});
+})(function() {
+      $("#townnameentry").autocomplete({
+        source: "/cgi-bin/jsonserver.cgi",
+        minLength: 3,
+        delay: 100,
+        select: function(event, ui) {
+          location.href="https://ozforecast.com.au/cgi-bin/weather.cgi?station="+ui['item']['id'];
+        },
+        open: function(event, ui) {
+          $('.ui-autocomplete').off('menufocus hover mouseover mouseenter');
+        }
+      });
+
+});
+</script>
+<div class='links mobileonly'>
+<div class='heading'>Oz Forecast Options</div>
+<a href='https://m.ozforecast.com.au/weather.html?town=warra.qld' title='Alternate mobile layout for Warra'>Alternate Mobile Site</a>
+</div>
+<div class='links'>
+<div class='heading'>Warra Weather</div>
+<a href='/cgi-bin/weather.cgi?station=Warra.QLD' title='Warra Weather Home Page'>Warra Home</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=forecast' title='Warra Forecast Details'>Detailed Forecast</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=forecastexplorer' title='Warra Forecast Explorer'>Forecast Explorer</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=extendedrain' title='Extended Rain Forecast for Warra'>Extended Rain Forecast</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=rainfall' title='Rainfall Measurements Surrounding Warra'>Local Rain Gauges</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=localgraph' title='Local Weather Graph for Warra'>Local Weather Graph</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=windgraph' title='Wind Forecast for Warra'>Wind Forecast</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=webcam' title='Webcams Closest to Warra'>Nearby Webcams</a>
+<a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=satellite' rel='nofollow' title='Daily Satellite Images Near Warra'>Daily Satellite Images</a>
+</div>
+<div class='links'>
+<div class='heading'>QLD Weather</div>
+<a href='https://radar.ozforecast.com.au/stormtracker?radar=QLD' title='QLD Radar and Satellite'>QLD Radar</a>
+<a href='/cgi-bin/extremes.cgi?state=QLD' title='Weather Extremes'>QLD Extremes</a>
+<a href='/cgi-bin/bushfire'>QLD Bushfires</a>
+<a href='https://qldtraffic.qld.gov.au/' target='_blank'>QLD Road Closures</a>
+<a href='https://www.ruralfire.qld.gov.au/map/Pages/default.aspx' target='_blank'>QLD RFS</a>
+</div>
+<div class='links'>
+<div class='heading'>Australian Weather</div>
+<a href='https://radar.ozforecast.com.au/stormtracker?radar=Australia' title='Australia Weather Radar'>Australian Radar</a>
+<a href='https://radar.ozforecast.com.au/satellite' title='Australian Satellite Loop'>Australian Satellite</a>
+<a href='https://m.ozforecast.com.au/' title='Alternate Oz Forecast mobile layout'>Alternate Mobile Site</a>
+<a href='https://ozforecast.com.au/cgi-bin/earthquakes?country=Australia'>Australian Earthquakes</a>
+<a href='https://ozforecast.com.au/cgi-bin/awsmap.cgi'>Weather Station Map</a>
+<a href='/cgi-bin/snow.cgi' title='Australia Snow Forecast'>Snow Forecast</a>
+</div>
+<div class="links">
+<div class="heading">Trending</div>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Mukinbudin.WA">Mukinbudin</a>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Beacon.WA">Beacon</a>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Merredin.WA">Merredin</a>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Kununurra.WA">Kununurra</a>
+<a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Dalwallinu.WA">Dalwallinu</a>
+</div>
+</aside>
+<main id='weather-main' class='weather-page-content-cell' tabindex='-1'>
+<div class="content">
+<div class='header-misc-ad weather-responsive-banner-placement' style='text-align: center;'>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- New Header Misc Pages -->
+<ins class="adsbygoogle weather-responsive-banner-ad"
+     style="display:block; text-align: center; margin-left: auto; margin-right: auto;"
+     data-ad-client="ca-pub-1613966467456680"
+     data-ad-slot="3712443406"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+</div>
+
+
+<!--=============== Rainfall Table ===============-->
+<h1 class='visually-hidden'>Local rainfall near Warra</h1>
+<div class='local-rainfall-table weather-table-scroll' role='region' tabindex='0' aria-label='Local rainfall observations'>
+<TABLE class="ozf"> <caption><span class="visually-hidden">Latest weather station observations</span></caption> <THEAD><TR> <TH id='observations-1-location' rowspan=2 colspan=2>Location<span>/Distance<BR>(km)</span></TH>
+<TH id='observations-1-updated' rowspan=2>Last Update<span><BR>(UTC+10:00)</span></TH> <TH id='observations-1-rain' colspan=3>Rain (mm)</TH> </TR>
+<TR> <TH id='observations-1-rain-since'>>9am</TH> <TH id='observations-1-rain-previous'>To 9am</TH> <TH id='observations-1-rain-week'>7-Day</TH> </TR></THEAD><TBODY>
+<TR><TH colspan=6>Local Stations</TH></TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541154"> Warra Alert </a> </TD> <TD headers='observations-1-location'>-</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.8 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 79.4 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11487"> Warra (DDCGI) </a> </TD> <TD headers='observations-1-location'>6.7 N</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> - </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 48.4 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11488"> Cooranga (DDCGI) </a> </TD> <TD headers='observations-1-location'>11 ENE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 4.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 42.2 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541156"> Brigalow Bridge Alert </a> </TD> <TD headers='observations-1-location'>14 WNW</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.8 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 44.6 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11368"> Brigalow (DPI) </a> </TD> <TD headers='observations-1-location'>14 NNW</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 5.4 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 69.4 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11486"> Daandine (DDCGI) </a> </TD> <TD headers='observations-1-location'>16 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.8 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 53.4 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541122"> Jandowae-Macalister Road Al </a> </TD> <TD headers='observations-1-location'>17 ENE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 61.0 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541099"> Jimbour West Tm </a> </TD> <TD headers='observations-1-location'>17 ENE</TD> <TD headers='observations-1-updated'> 21:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 50.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11907"> Tangalooma (Macalister) </a> </TD> <TD headers='observations-1-location'>19 ESE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 3.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 42.0 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11489"> Jimbour (DDCGI) </a> </TD> <TD headers='observations-1-location'>21 E</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 2.4 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 59.8 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11449"> Macalister </a> </TD> <TD headers='observations-1-location'>22 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 2.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 36.2 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11452"> Maclee (Macalister) </a> </TD> <TD headers='observations-1-location'>23 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 32.2 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11558"> Macalister (DDCGI) </a> </TD> <TD headers='observations-1-location'>24 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 4.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 8.2 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541118"> Jandowae Al </a> </TD> <TD headers='observations-1-location'>26 NE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 60.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11542"> Jimbour North </a> </TD> <TD headers='observations-1-location'>28 E</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.8 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 36.6 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541194"> Jinghi Jinghi Alert </a> </TD> <TD headers='observations-1-location'>31 NNE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> 1.0 </TD> <TD headers='observations-1-rain observations-1-rain-week'> 57.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541126"> Beruna Al </a> </TD> <TD headers='observations-1-location'>33 N</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 44.0 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11490"> Pirrinuan (DDCGI) </a> </TD> <TD headers='observations-1-location'>35 ESE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 2.4 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 68.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541124"> Burncluith Bridge Al </a> </TD> <TD headers='observations-1-location'>35 NW</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 5.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 60.0 </TD> </TR>
+<TR><TH colspan=6>Westerly Stations</TH></TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541123"> Chinchilla Al </a> </TD> <TD headers='observations-1-location'>36 NW</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 5.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 65.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=99127"> Portable Qfdn (Wieambilla) </a> </TD> <TD headers='observations-1-location'>46 WSW</TD> <TD headers='observations-1-updated'> 21:50</TD> <TD headers='observations-1-rain observations-1-rain-since'> 0.8 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> 2.0 </TD> <TD headers='observations-1-rain observations-1-rain-week'> 18.4 </TD> </TR>
+<TR><TH colspan=6>Northerly Stations</TH></TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=742025"> Horse Creek Al </a> </TD> <TD headers='observations-1-location'>51 NNW</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> 2.0 </TD> <TD headers='observations-1-rain observations-1-rain-week'> 56.0 </TD> </TR>
+<TR><TH colspan=6>Easterly Stations</TH></TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541117"> Sengs Road Al </a> </TD> <TD headers='observations-1-location'>37 NE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 2.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 42.0 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=94542"> Dalby </a> </TD> <TD headers='observations-1-location'>43 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 4.4 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 54.6 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541041"> Dalby Alert </a> </TD> <TD headers='observations-1-location'>44 SE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 4.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 64.0 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=7541121"> Diamondy Al </a> </TD> <TD headers='observations-1-location'>48 NE</TD> <TD headers='observations-1-updated'> 21:45</TD> <TD headers='observations-1-rain observations-1-rain-since'> 2.0 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 46.0 </TD> </TR>
+<TR><TH colspan=6>Southerly Stations</TH></TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11480"> Kupunn (DDCGI) </a> </TD> <TD headers='observations-1-location'>35 SSE</TD> <TD headers='observations-1-updated'> 21:30</TD> <TD headers='observations-1-rain observations-1-rain-since'> 6.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 76.8 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11704"> Glenesk (DDi) </a> </TD> <TD headers='observations-1-location'>41 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 1.2 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 16.0 </TD> </TR>
+<TR class="odd"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11485"> Nandi (DDCGI) </a> </TD> <TD headers='observations-1-location'>44 SSE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> 5.6 </TD> <TD headers='observations-1-rain observations-1-rain-previous'> - </TD> <TD headers='observations-1-rain observations-1-rain-week'> 66.6 </TD> </TR>
+<TR class="even"> <TD headers='observations-1-location' style="text-align: left;"> <a href="https://ozforecast.com.au/cgi-bin/weatherstation.cgi?station=11541"> Dalby South </a> </TD> <TD headers='observations-1-location'>50 SE</TD> <TD headers='observations-1-updated'> 22:00</TD> <TD headers='observations-1-rain observations-1-rain-since'> <span class='disabled_text'> 4.0 ?</span> </TD> <TD headers='observations-1-rain observations-1-rain-previous'> <span class='disabled_text'> - ?</span> </TD> <TD headers='observations-1-rain observations-1-rain-week'> <span class='disabled_text'> 4.2 ?</span> </TD> </TR>
+</TBODY></TABLE>
+<div class="attribution">Weather station observations courtesy  WDRC ,  DDCGI ,  <a href="http://www.daff.qld.gov.au/" target="_blank" rel="nofollow">Queensland Department of Primary Industries</a> ,  DNRME ,  Hamilton Agriculture ,  Boss Agricultural ,  A.G McVeigh Trading ,  McVeigh Partnership Trust ,  <a href="http://www.bom.gov.au/" target="_blank" rel="nofollow">Bureau of Meteorology</a> ,  CSIRO Ag & Food </div>
+</div>
+</div>
+</main>
+<aside id='extrawidth' aria-label='Advertisement'>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- OzF-extrawidth -->
+<ins class="adsbygoogle"
+     style="display:inline-block;width:160px;height:600px"
+     data-ad-client="ca-pub-1613966467456680"
+     data-ad-slot="9324079316"></ins>
+<script>
+if (window.matchMedia && window.matchMedia("(min-width: 1500px)").matches) {
+  (adsbygoogle = window.adsbygoogle || []).push({});
+}
+</script>
+</aside>
+</div>
+
+
+<!--=============== Menu for Mobile ===============-->
+<div id='ozfmobilemenu' class='mobileonly' style='display: none;'>
+<nav id='ozfmenu'>
+<ul>
+<li><a href='/cgi-bin/weather.cgi?station=Warra.QLD' title='Warra Weather Home Page'>Warra Home</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=forecast' title='Warra Forecast Details'>Detailed Forecast</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=forecastexplorer' title='Warra Forecast Explorer'>Forecast Explorer</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=extendedrain' title='Extended Rain Forecast for Warra'>Extended Rain Forecast</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=rainfall' title='Rainfall Measurements Surrounding Warra'>Local Rain Gauges</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=localgraph' title='Local Weather Graph for Warra'>Local Weather Graph</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=windgraph' title='Wind Forecast for Warra'>Wind Forecast</a></li>
+<li><a href='/cgi-bin/extremes.cgi?state=QLD' title='Weather Extremes'>QLD Extremes</a></li>
+<li><a href='/cgi-bin/bushfire' title='QLD Bushfires'>QLD Bushfires</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=webcam' title='Webcams Closest to Warra'>Nearby Webcams</a></li>
+<li><a href='/cgi-bin/weather.cgi?location=Warra.QLD&amp;pagetype=satellite' rel='nofollow' title='Daily Satellite Images Near Warra'>Daily Satellite Images</a></li>
+<li class='ozfsubmenu'><span>Radar</span>
+  <ul>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=Australia' title='Australia RADAR Storm Tracker'>Australian National</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=NSW-QLD' title='NSW-QLD RADAR Storm Tracker'>NE NSW & SE QLD</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=NSW' title='NSW RADAR Storm Tracker'>New South Wales</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=NT' title='NT RADAR Storm Tracker'>Northern Territory</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=Pilbara' title='Pilbara RADAR Storm Tracker'>Pilbara Region</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=QLD' title='QLD RADAR Storm Tracker'>Queensland</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=SA' title='SA RADAR Storm Tracker'>South Australia</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=SW-WA' title='SW-WA RADAR Storm Tracker'>South Western Australia</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=TAS' title='TAS RADAR Storm Tracker'>Tasmania</a></li>
+  <li><a href='https://radar.ozforecast.com.au/stormtracker?radar=VIC' title='VIC RADAR Storm Tracker'>Victoria</a></li>
+  </ul>
+</li>
+<li class='ozfsubmenu'><span>Satellite</span>
+  <ul>
+  <li><a href='https://radar.ozforecast.com.au/satellite?product=IDE00406'>Composite</a></li>
+  <li><a href='https://radar.ozforecast.com.au/satellite?product=IDE00405'>Infrared</a></li>
+  <li><a href='https://radar.ozforecast.com.au/satellite?product=IDE00404'>False Colour IR</a></li>
+  <li><a href='https://radar.ozforecast.com.au/satellite?product=IDE00402'>Visible</a></li>
+  <li><a href='https://radar.ozforecast.com.au/satellite?product=IDE00407'>Water Vapour</a></li>
+  </ul>
+</li>
+<li class='ozfsubmenu'><span>Trending</span>
+  <ul>
+  <li><a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Mukinbudin.WA">Mukinbudin</a></li>
+  <li><a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Beacon.WA">Beacon</a></li>
+  <li><a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Merredin.WA">Merredin</a></li>
+  <li><a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Kununurra.WA">Kununurra</a></li>
+  <li><a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Dalwallinu.WA">Dalwallinu</a></li>
+  </ul>
+</li>
+<li class='ozfsubmenu'><span>Other</span>
+  <ul>
+  <li><a href='https://ozforecast.com.au/cgi-bin/snow.cgi' title='Australian Snow Forecast'>Snow Forecast</a></li>
+  <li><a href='https://ozforecast.com.au/cgi-bin/earthquakes?tilename=Australia' title='Australian Earthquakes'>Australian Earthquakes</a></li>
+  <li><a href='https://ozforecast.com.au/cgi-bin/awsmap.cgi' title='Weather Station Map'>Weather Station Map</a></li>
+  <li><a href='https://play.google.com/store/apps/details?id=au.com.ozforecast.m.launcher&hl=en_AU'>Android App</a></li>
+  </ul>
+</li>
+</ul>
+</nav>
+</div>
+<script>
+(function(start) {
+  if (document.readyState === 'complete') start();
+  else document.addEventListener('DOMContentLoaded', start, {once: true});
+})(function() {
+
+    $("#ozfmenu").mmenu(
+      {
+        navbar: {
+          title: "Warra Weather"
+        },
+        "extensions": [
+           "fx-menu-zoom",
+           "fx-panels-zoom",
+           "fx-listitems-drop",
+           "pagedim-black",
+         ],
+navbars: 
+[
+  { 
+     position: "top",
+     content: ["prev", "title"],
+  },
+],
+    searchfield: {
+        search: false
+    }
+    }
+);
+
+});
+</script>
+
+
+<!--=============== Disclaimer ===============-->
+<div style='text-align: center;'>
+<div id='disclaimer' 
+class='weather-page-disclaimer'
+>
+This information is automatically generated, is not quality controlled and may not update in a timely manner. You accept all risks and responsibility for losses, damages, costs and other consequences resulting directly or indirectly from using this site and any information or material available from it.
+</div>
+</div>
+<a href='/cgi-bin/bottrap.cgi?period=498108&amp;source=Warra.QLD%3Arainfall&amp;token=61b0a3aa0b6499ba8962fa62a2b1db2dc3b9470ec9da65414359c0210408721b' rel='nofollow' tabindex='-1' aria-hidden='true' style='position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;'>Additional local weather information</a>
+</div></BODY>
+</HTML>
