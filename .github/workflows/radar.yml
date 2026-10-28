@@ -98,6 +98,7 @@ jobs:
           USER_AGENT = "Mozilla/5.0 (compatible; downs-rain/1.0; personal rainfall map)"
           
           # Output map classes (24-hour totals, mm), coloured like the BOM radar scale.
+          IMAGE_W = 1536   # map image width in pixels (~0.35 km each, so storm edges draw smoothly)
           BREAKS = [1, 2, 4, 6, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]
           RAMP = ["#f5f5ff", "#b4b4ff", "#7878ff", "#1414ff", "#00d8c3",   # BOM radar colours
                   "#009690", "#006666", "#ffff00", "#ffc800", "#ff9600",
@@ -237,7 +238,9 @@ jobs:
           
           
           def to_mercator(field, out_w=512):
-              """Resample a radar-grid field onto a grid regular in Web Mercator (for web maps)."""
+              """Resample a radar-grid field onto a grid regular in Web Mercator (for web maps).
+              Values are blended between neighbouring radar pixels (bilinear), so edges come out smooth
+              without spreading rain further than the next pixel."""
               n = field.shape[0]
               s, w, nn, e = bounds()
               merc = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
@@ -250,9 +253,14 @@ jobs:
               x = (LON - RADAR_LON) * 111.32 * math.cos(math.radians(RADAR_LAT))
               y = (LAT - RADAR_LAT) * 110.57
               k = km_per_px(n)
-              col = np.clip((n / 2 + x / k).astype(int), 0, n - 1)
-              row = np.clip((n / 2 - y / k).astype(int), 0, n - 1)
-              out = field[row, col].astype(np.float32)
+              fc = np.clip(n / 2 + x / k - 0.5, 0, n - 1)     # position measured from pixel centres
+              fr = np.clip(n / 2 - y / k - 0.5, 0, n - 1)
+              c0 = np.minimum(fc.astype(int), n - 2)
+              r0 = np.minimum(fr.astype(int), n - 2)
+              tc, tr = fc - c0, fr - r0
+              f = field.astype(np.float32)
+              out = ((f[r0, c0] * (1 - tc) + f[r0, c0 + 1] * tc) * (1 - tr)
+                     + (f[r0 + 1, c0] * (1 - tc) + f[r0 + 1, c0 + 1] * tc) * tr)
               out[np.hypot(x, y) > RANGE_KM] = np.nan
               return out
           
@@ -416,8 +424,8 @@ jobs:
               s, w, n_, e = bounds()
               corr_m = to_mercator(field)
               rad_m = to_mercator(radar)
-              colourise(corr_m).save(os.path.join(DATA, f"{day}.png"), optimize=True)
-              colourise(rad_m).save(os.path.join(DATA, f"{day}_radar.png"), optimize=True)
+              colourise(to_mercator(field, IMAGE_W)).save(os.path.join(DATA, f"{day}.png"), optimize=True)
+              colourise(to_mercator(radar, IMAGE_W)).save(os.path.join(DATA, f"{day}_radar.png"), optimize=True)
               # coarse value grid for tap-to-read on the page (tenths of mm, -1 = no data)
               enc = lambda m: np.where(np.isnan(m[::2, ::2]), -1, np.round(m[::2, ::2] * 10)).astype(int)
               vals, raw_vals = enc(corr_m), enc(rad_m)
@@ -476,10 +484,10 @@ jobs:
                       t["days"] += 1
               if corr is None:
                   return
-              def up(a):   # smooth back up to the daily maps' resolution; outside the radar stays empty
+              def up(a):   # smooth up to the daily maps' image size; outside the radar stays empty
                   h, w = a.shape
                   im = Image.fromarray(np.nan_to_num(a, nan=-1000).astype(np.float32), "F")
-                  out = np.asarray(im.resize((w * 2, h * 2), Image.BILINEAR), np.float32)
+                  out = np.asarray(im.resize((IMAGE_W, round(h * IMAGE_W / w)), Image.BILINEAR), np.float32)
                   return np.where(out < 0, np.nan, out)
               colourise(up(corr)).save(os.path.join(DATA, "week.png"), optimize=True)
               colourise(up(raw)).save(os.path.join(DATA, "week_radar.png"), optimize=True)
@@ -495,7 +503,7 @@ jobs:
           def write_today(day, accum, info):
               os.makedirs(DATA, exist_ok=True)
               m = to_mercator(accum)
-              colourise(m).save(os.path.join(DATA, "today.png"), optimize=True)
+              colourise(to_mercator(accum, IMAGE_W)).save(os.path.join(DATA, "today.png"), optimize=True)
               g = m[::2, ::2]
               vals = np.where(np.isnan(g), -1, np.round(g * 10)).astype(int)
               with open(os.path.join(DATA, "today.json"), "w") as f:
