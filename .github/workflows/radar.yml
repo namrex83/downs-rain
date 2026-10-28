@@ -47,6 +47,7 @@ jobs:
           import os
           import re
           import sys
+          import zipfile
           
           import numpy as np
           from PIL import Image, ImageDraw
@@ -58,6 +59,7 @@ jobs:
           FTP_HOST = "ftp.bom.gov.au"
           FTP_RADAR_DIR = "/anon/gen/radar"
           FTP_TRANS_DIR = "/anon/gen/radar_transparencies"
+          FTP_SITES_DIR = "/anon2/home/ncc/metadata/sitelists"     # BOM station list (stations.zip)
           TZ_OFFSET = dt.timedelta(hours=10)                        # Queensland, no daylight saving
           NOMINAL_STEP_MIN = 5.0     # used when there is no previous frame to measure the gap
           MAX_STEP_MIN = 15.0        # longer gaps are treated as missing data
@@ -309,7 +311,41 @@ jobs:
           
           
           # ---------------------------------------------------------------- gauges
-          def fetch_bom_gauges(day):
+          def station_positions(src):
+              """Exact positions of our BOM stations by WMO number; the observation feeds round them to
+              0.1 degree (up to ~5 km out). Looked up once from the BOM station list and kept in
+              data/stations.json. Returns {} if the list can't be read, and the rounded positions are used."""
+              p = os.path.join(DATA, "stations.json")
+              if os.path.exists(p):
+                  return json.load(open(p))
+              try:
+                  z = zipfile.ZipFile(io.BytesIO(src.get(FTP_SITES_DIR, "stations.zip")))
+                  text = z.read(z.namelist()[0]).decode("latin-1")
+              except Exception as e:
+                  log(f"  station list unavailable, using rounded gauge positions: {e}")
+                  return {}
+              want = {wmo for _, wmo in STATIONS}
+              out = {}
+              for line in text.splitlines():
+                  parts = line.split()
+                  if not parts or parts[-1] not in want:
+                      continue
+                  m = re.search(r"\s(-\d{1,2}\.\d{3,})\s+(\d{3}\.\d{3,})\s", line)
+                  if not m:
+                      continue
+                  is_open = re.search(r"\s\.\.\s+-\d", line) is not None   # no end year: still running
+                  if parts[-1] in out and not is_open:
+                      continue                                                 # keep the open site over a closed one
+                  out[parts[-1]] = {"site": parts[0], "lat": float(m.group(1)), "lon": float(m.group(2))}
+              if out:
+                  os.makedirs(DATA, exist_ok=True)
+                  with open(p, "w") as f:
+                      json.dump(out, f, indent=1)
+              log(f"  exact positions found for {len(out)} of {len(want)} BOM gauges")
+              return out
+          
+          
+          def fetch_bom_gauges(day, positions=None):
               """24-hour rainfall to 9am on `day` from BOM automatic stations."""
               import requests
               start = window_end_utc(day) - dt.timedelta(days=1) + TZ_OFFSET   # local 9am previous day
@@ -339,7 +375,8 @@ jobs:
                                   pass
                       if not vals or not obs:
                           continue
-                      out.append({"name": obs[0]["name"], "lat": obs[0]["lat"], "lon": obs[0]["lon"],
+                      pos = (positions or {}).get(wmo, obs[0])
+                      out.append({"name": obs[0]["name"], "lat": pos["lat"], "lon": pos["lon"],
                                   "mm": round(max(vals), 1), "source": "BOM"})
                   except Exception as e:
                       log(f"  gauge {wmo}: {e}")
@@ -552,6 +589,7 @@ jobs:
               st = load_state()
               src = Source()
               try:
+                  positions = station_positions(src)
                   names = src.list_frames()
                   log(f"{len(names)} {PRODUCT} frames on the server")
                   last = dt.datetime.fromisoformat(st["last_ts"]) if st["last_ts"] else None
@@ -590,7 +628,7 @@ jobs:
                           continue
                       win = st["windows"].pop(day)
                       radar = load_accum(day, win["n"])
-                      gauges = fetch_bom_gauges(day) + read_my_gauges(day)
+                      gauges = fetch_bom_gauges(day, positions) + read_my_gauges(day)
                       field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
