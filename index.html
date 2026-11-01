@@ -210,7 +210,7 @@ async function init(){
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
     idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
-  if (idx.days.length) sel.value = idx.days[idx.days.length-1];
+  sel.value = "today";   // open on the running total since 9am
   sel.onchange = show; show();
 }
 
@@ -221,7 +221,10 @@ async function draw(){
   $("dayField").hidden = week;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
   try { meta = await getJSON(`data/${day}.json`); }
-  catch(e){ meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
+  catch(e){
+    // just after 9am the running total restarts and can be missing briefly: show the finished day instead
+    if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
+    meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
   const today = day === "today";
   $("mRaw").disabled = today; $("mCorr").disabled = today;
   const img = today ? "data/today.png" : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
