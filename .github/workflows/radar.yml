@@ -648,15 +648,15 @@ jobs:
                       log(f"Finished {day}: {win['frames']} frames, {meta['coverage_pct']}% of the day, "
                           f"radar x{bias:.2f} from {npairs} gauge(s)")
           
-                  # running since-9am map, refreshed about once an hour
+                  # running since-9am map, refreshed on every run that added new scans
                   cur = window_for(now)
                   if cur in st["windows"]:
-                      hour_key = (now + TZ_OFFSET).strftime("%Y-%m-%dT%H")
-                      if st.get("today_hour") != hour_key:
-                          w = st["windows"][cur]
+                      w = st["windows"][cur]
+                      written = f"{cur}:{w['frames']}"
+                      if st.get("today_hour") != written:
                           write_today(cur, load_accum(cur, w["n"]),
                                       {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")})
-                          st["today_hour"] = hour_key
+                          st["today_hour"] = written
                           log(f"Updated today's running total ({w['frames']} frames)")
               finally:
                   src.close()
