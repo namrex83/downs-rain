@@ -9,7 +9,8 @@ storms.py's GFS file, every 3 hours out to 3 days:
          is lifted to 500 hPa (dry to its cloud base, then moist) and compared with the air there
   cape   most-unstable CAPE (J/kg) as ECMWF computes it, if the open data has it; else left empty
   shear  difference between the 10 m and 500 hPa winds (knots)
-  cin    most-unstable convective inhibition, the cap (J/kg, as a positive number), if available
+  cin    the cap (J/kg, as a positive number): ECMWF's most-unstable CIN if the open data has it,
+         else estimated from the 925, 850 and 700 hPa temperatures
 """
 import datetime as dt
 import json
@@ -62,25 +63,49 @@ def es(t):
     return 6.112 * np.exp(17.67 * (t - 273.15) / (t - 29.65))
 
 
-def lifted_index(t2, td2, ps, t500):
-    """Surface-based lifted index (K): t500 minus the lifted parcel's temperature at 500 hPa."""
+RD = 287.04
+
+
+def parcel_temp(t2, td2, ps, level):
+    """Temperature (K) of air lifted from the ground (2 m temperature and dew point) to `level` hPa:
+    dry up to its cloud base, then following the moist adiabat."""
     td2 = np.minimum(td2, t2)
     tl = 1 / (1 / (td2 - 56) + np.log(t2 / td2) / 800) + 56          # cloud-base temperature
     pl = ps * (tl / t2) ** (1 / 0.2854)                               # cloud-base pressure
-    dry = t2 * (500 / ps) ** 0.2854                                   # if the base is above 500 hPa
-    # follow the moist adiabat from cloud base up to 500 hPa in small steps
-    rd, cp, lv, eps = 287.04, 1005.7, 2.501e6, 0.622
+    dry = t2 * (level / ps) ** 0.2854                                 # if the base is above the level
+    cp, lv, eps = 1005.7, 2.501e6, 0.622
     t, p = tl.copy(), pl.copy()
     n = 60
-    dp = (500 - np.maximum(pl, 500)) / n                             # negative: going up
+    dp = (level - np.maximum(pl, level)) / n                         # negative: going up
     for _ in range(n):
         e = es(t)
         rs = eps * e / np.maximum(p - e, 1)
-        dtdp = (rd * t + lv * rs) / (p * (cp + lv * lv * rs * eps / (rd * t * t)))
+        dtdp = (RD * t + lv * rs) / (p * (cp + lv * lv * rs * eps / (RD * t * t)))
         t = t + dtdp * dp
         p = p + dp
-    parcel = np.where(pl <= 500, dry, t)
-    return t500 - parcel
+    return np.where(pl <= level, dry, t)
+
+
+def lifted_index(t2, td2, ps, t500):
+    """Surface-based lifted index (K): t500 minus the lifted parcel's temperature at 500 hPa."""
+    return t500 - parcel_temp(t2, td2, ps, 500)
+
+
+def cap_estimate(t2, td2, ps, temps):
+    """Rough convective inhibition (J/kg) below 700 hPa: the energy needed to push air from the
+    ground up through layers where it is colder than the air around it (e.g. a night-time
+    inversion). temps = {level hPa: air temperature K} for 925, 850 and 700 hPa."""
+    levels = [ps] + [lv for lv in (925, 850, 700)]
+    env = [t2] + [temps[lv] for lv in (925, 850, 700)]
+    par = [t2] + [parcel_temp(t2, td2, ps, lv) for lv in (925, 850, 700)]
+    cin = np.zeros_like(t2)
+    for i in range(3):
+        lo, hi = levels[i], levels[i + 1]
+        lo_p = np.maximum(lo, hi + 1e-3) if np.ndim(lo) else max(lo, hi + 1e-3)
+        above_ground = ps > hi                                       # skip levels below the ground
+        deficit = ((env[i] - par[i]) + (env[i + 1] - par[i + 1])) / 2
+        cin += np.where(above_ground, RD * np.maximum(deficit, 0) * np.log(lo_p / hi), 0)
+    return cin
 
 
 def run():
@@ -89,13 +114,14 @@ def run():
     when = client.latest(type="fc", stream="oper", param="2t", step=72)
     tag = when.strftime("%Y-%m-%dT%HZ")
     old = json.load(open(OUT)) if os.path.exists(OUT) else {}
-    if old.get("run") == tag and "cin" in old and "--force" not in sys.argv:   # files made before the cap was added are redone
+    if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and "--force" not in sys.argv:   # files made before the cap was added are redone
         print(f"Already have the {tag} storm run")
         return
     base = dict(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS)
     print(f"Getting ECMWF {tag} storm ingredients", flush=True)
     client.retrieve(**base, param=["2t", "2d", "sp", "10u", "10v"], target="sfc.grib2")
     client.retrieve(**base, param=["t", "u", "v"], levtype="pl", levelist=500, target="pl.grib2")
+    client.retrieve(**base, param="t", levtype="pl", levelist=[925, 850, 700], target="low.grib2")
     have_cape = have_cin = True
     try:
         client.retrieve(**base, param="mucape", target="cape.grib2")
@@ -109,6 +135,7 @@ def run():
         have_cin = False
     sfc, (lats, lons) = read("sfc.grib2")
     pl, _ = read("pl.grib2")
+    low, _ = read("low.grib2")
     cape = read("cape.grib2")[0] if have_cape else {}
     cins = read("cin.grib2")[0] if have_cin else {}
     get = lambda d, name, step, level=None: next((v for (n, lv, s), v in d.items()
@@ -127,6 +154,10 @@ def run():
         c = get(cape, "mucape", step)
         cp.append(np.round(c).astype(int).flatten().tolist() if c is not None else [None] * t2.size)
         c = get(cins, "mucin", step)
+        if c is None:      # not in the open data: estimate the cap from the 925, 850 and 700 hPa temperatures
+            temps = {lv: get(low, "t", step, lv) for lv in (925, 850, 700)}
+            if all(v is not None for v in temps.values()):
+                c = cap_estimate(t2, td2, ps / 100, temps)
         cn.append(np.round(np.abs(np.nan_to_num(c))).astype(int).flatten().tolist() if c is not None else [None] * t2.size)
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
@@ -134,7 +165,7 @@ def run():
                    "model": "ECMWF IFS (open data, 0.25°)",
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
                    "times": times, "li": li, "cape": cp, "shear": sh, "cin": cn}, f, separators=(",", ":"))
-    for p in ("sfc.grib2", "pl.grib2", "cape.grib2", "cin.grib2"):
+    for p in ("sfc.grib2", "pl.grib2", "low.grib2", "cape.grib2", "cin.grib2"):
         if os.path.exists(p):
             os.remove(p)
     lowest = min(min(x) for x in li) / 10 if li else None
