@@ -1,0 +1,3 @@
+# Your own rain gauge readings, used to correct that rain day (date = the morning of the 9am reading)
+# date,name,lat,lon,mm
+2026-11-02,Gauge near Jandowae,-26.81,151.18,24

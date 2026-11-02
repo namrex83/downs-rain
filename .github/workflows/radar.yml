@@ -79,6 +79,7 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
+          GAUGE_HOLD_KM = 3.0        # the map is pulled to each gauge's reading within about this distance
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
           DEAD_RING_KM = 5.0         # ...and at least half of it nearly everywhere within this distance
           
@@ -455,6 +456,12 @@ jobs:
                       num += w * (g["mm"] - g["radar_mm"] * scale[int(r), int(c)])
                       den += w
                   field = np.maximum(0, field + num / den)
+                  # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
+                  # so the map at a gauge matches what it measured even where the radar changes quickly
+                  for g in used:
+                      c, r = g["_px"]
+                      w = np.exp(-(np.hypot(xx - c, yy - r) * k / GAUGE_HOLD_KM) ** 2)
+                      field = field * (1 - w) + g["mm"] * w
               for g in used:
                   c, r = g.pop("_px")
                   g["corrected_mm"] = round(float(field[int(r), int(c)]), 1)
@@ -463,6 +470,57 @@ jobs:
           
           
           # ---------------------------------------------------------------- outputs
+          def halve(m):
+              """Tap-to-read grid: each 2x2 block of the map grid becomes its average (it used to take the
+              block's top-left value, which could read about a kilometre off)."""
+              h, w = (m.shape[0] // 2) * 2, (m.shape[1] // 2) * 2
+              b = m[:h, :w].reshape(h // 2, 2, w // 2, 2)
+              with np.errstate(invalid="ignore"):
+                  out = np.nanmean(b, axis=(1, 3)) if np.isnan(b).any() else b.mean(axis=(1, 3))
+              return out
+          
+          
+          def radar_total_path(day):
+              return os.path.join(DATA, "radar_totals", f"{day}.npz")
+          
+          
+          def save_radar_total(day, radar):
+              """Keep each finished day's uncorrected radar total, so the day can be corrected again
+              later (e.g. when a gauge reading is added to my_gauges.csv)."""
+              os.makedirs(os.path.dirname(radar_total_path(day)), exist_ok=True)
+              np.savez_compressed(radar_total_path(day), radar=radar.astype(np.float16))
+          
+          
+          def gauge_key(gauges):
+              return sorted([g["name"], g["lat"], g["lon"], g["mm"]] for g in gauges)
+          
+          
+          def recorrect_changed_days():
+              """Redo the gauge correction for finished days whose my_gauges.csv readings were added or
+              changed since the day was made. BOM readings are taken from the day as first made."""
+              p = os.path.join(DATA, "index.json")
+              if not os.path.exists(p):
+                  return
+              for day in json.load(open(p))["days"][-14:]:
+                  mp = os.path.join(DATA, f"{day}.json")
+                  if not (os.path.exists(mp) and os.path.exists(radar_total_path(day))):
+                      continue
+                  meta = json.load(open(mp))
+                  mine = read_my_gauges(day)
+                  if gauge_key(mine) == meta.get("my_gauges", []):
+                      continue
+                  radar = np.load(radar_total_path(day))["radar"].astype(np.float32)
+                  bom = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
+                         for g in meta.get("gauges", []) if g.get("source") == "BOM"]
+                  gauges = bom + mine
+                  field, bias, overall, npairs = correct(radar, gauges)
+                  meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
+                  meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
+                               "gauges": gauges, "my_gauges": gauge_key(mine)})
+                  write_outputs(day, radar, field, meta)
+                  log(f"Re-corrected {day} with {len(mine)} of your gauge reading(s): radar x{bias:.2f} at Dalby")
+          
+          
           def write_outputs(day, radar, field, meta):
               os.makedirs(DATA, exist_ok=True)
               s, w, n_, e = bounds()
@@ -471,7 +529,7 @@ jobs:
               colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, f"{day}.png"), optimize=True)
               colourise(to_mercator(radar, IMAGE_W, smooth=True)).save(os.path.join(DATA, f"{day}_radar.png"), optimize=True)
               # coarse value grid for tap-to-read on the page (tenths of mm, -1 = no data)
-              enc = lambda m: np.where(np.isnan(m[::2, ::2]), -1, np.round(m[::2, ::2] * 10)).astype(int)
+              enc = lambda m: np.where(np.isnan(halve(m)), -1, np.round(halve(m) * 10)).astype(int)
               vals, raw_vals = enc(corr_m), enc(rad_m)
               meta.update({"date": day, "bounds": [s, w, n_, e], "grid_w": int(vals.shape[1]),
                            "grid_h": int(vals.shape[0]), "grid": vals.flatten().tolist(),
@@ -548,7 +606,7 @@ jobs:
               os.makedirs(DATA, exist_ok=True)
               m = to_mercator(accum)
               colourise(to_mercator(accum, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today.png"), optimize=True)
-              g = m[::2, ::2]
+              g = halve(m)
               vals = np.where(np.isnan(g), -1, np.round(g * 10)).astype(int)
               with open(os.path.join(DATA, "today.json"), "w") as f:
                   json.dump({"date": day, "bounds": list(bounds()), **info, "grid_w": int(vals.shape[1]),
@@ -628,11 +686,13 @@ jobs:
                           continue
                       win = st["windows"].pop(day)
                       radar = load_accum(day, win["n"])
-                      gauges = fetch_bom_gauges(day, positions) + read_my_gauges(day)
+                      mine = read_my_gauges(day)
+                      gauges = fetch_bom_gauges(day, positions) + mine
                       field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
-                              "gauges_used": npairs, "gauges": gauges}
+                              "gauges_used": npairs, "gauges": gauges, "my_gauges": gauge_key(mine)}
+                      save_radar_total(day, radar)
                       write_outputs(day, radar, field, meta)
                       st["done"] = (st["done"] + [day])[-14:]
                       for f in ("today.png", "today.json"):      # the running map belongs to the day just finished
@@ -647,6 +707,8 @@ jobs:
                           pass
                       log(f"Finished {day}: {win['frames']} frames, {meta['coverage_pct']}% of the day, "
                           f"radar x{bias:.2f} from {npairs} gauge(s)")
+          
+                  recorrect_changed_days()
           
                   # running since-9am map, refreshed on every run that added new scans
                   cur = window_for(now)
