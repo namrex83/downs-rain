@@ -873,8 +873,14 @@ $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
 const OUTLOOK_LINKS = [
   {title: "Rainfall outlook", text: "Chance of above-median rainfall over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/rainfall/median/seasonal/1"},
   {title: "Maximum temperature outlook", text: "Chance of above-median daytime temperatures over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/temperature/maximum/median/seasonal/0"},
+  {heading: "Climate drivers"},
+  {title: "El Niño / La Niña (ENSO)", text: "ENSO Outlook: the state of the Pacific and the chance of El Niño or La Niña", url: "https://www.bom.gov.au/climate/enso/outlook/"},
+  {title: "Indian Ocean Dipole (IOD)", text: "Indian Ocean temperatures and their pull on rain over inland Australia", url: "https://www.bom.gov.au/climate/iod/"},
+  {title: "Southern Annular Mode (SAM)", text: "The belt of westerly winds to the south and its effect on eastern rainfall", url: "https://www.bom.gov.au/climate/sam/"},
+  {title: "Madden–Julian Oscillation (MJO)", text: "The tropical pulse of cloud and rain that passes every 30 to 60 days", url: "https://www.bom.gov.au/climate/mjo/"},
 ];
-$("outLinks").innerHTML = OUTLOOK_LINKS.map(l => `<a href="${l.url}" target="_blank" rel="noopener"><div><b>${l.title}</b><span>${l.text}</span></div></a>`).join("");
+$("outLinks").innerHTML = OUTLOOK_LINKS.map(l => l.heading ? `<div class="eyebrow" style="margin-top:6px">${l.heading}</div>`
+  : `<a href="${l.url}" target="_blank" rel="noopener"><div><b>${l.title}</b><span>${l.text}</span></div></a>`).join("");
 
 function setTab(t, first){
   tab = t;
