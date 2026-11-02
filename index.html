@@ -158,7 +158,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
-    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
+    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It is turned down where the air near the ground isn't unstable, and where a cap of stable air holds storms back (the inhibition, or "cap", in the tap readout; over about 50 J/kg is a real lid, as after a clear night). It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
   <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm and forecast maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
@@ -411,11 +411,20 @@ const qDate = t => qld(t).toISOString().slice(0, 10);
 const qHour = t => { const h = qld(t).getUTCHours(); return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };
 
 // one category per point per hour for the "Combined" view
-function category(li, cape, sh){
+// severity = sqrt(2 x CAPE) x shear (m/s), turned down where storms can't get going:
+// where air rising from the ground isn't unstable (lifted index above 0, full at -2 or below) and
+// where a cap holds (inhibition over 50 J/kg, down to a quarter at 200+), as after a clear night
+function severity(li, cape, sh, cin){
+  if (cape == null || sh == null) return null;
+  const fLi = li == null ? 1 : Math.min(1, Math.max(0, -li / 20));   // li is x10
+  const fCap = cin == null ? 1 : Math.min(1, Math.max(0.25, 1 - (cin - 50) / 200));
+  return Math.sqrt(2 * cape) * sh * 0.5144 * fLi * fCap;
+}
+function category(li, cape, sh, cin){
   if (li == null || cape == null || cape < 250 || li > -10) return 0;   // li is x10
   if (cape >= 1000 && li <= -40 && sh != null && sh >= 40){
     // grade the severe areas by severity (sqrt(2 x CAPE) x shear in m/s) so the hot spots show
-    const sev = Math.sqrt(2 * cape) * sh * 0.5144;
+    const sev = severity(li, cape, sh, cin);
     return sev >= 1700 ? 5 : sev >= 1300 ? 4 : 3;
   }
   if (cape >= 500 && sh != null && sh >= 25) return 2;
@@ -428,12 +437,12 @@ function fieldValues(field){
   const n = S.lats.length * S.lons.length, out = new Array(n).fill(null);
   for (const h of hours) for (let k = 0; k < n; k++){
     let v;
-    if (field === "mix") v = category(S.li[h][k], S.cape[h][k], S.shear[h][k]);
-    else if (field === "sev") v = S.cape[h][k] == null || S.shear[h][k] == null ? null : Math.sqrt(2 * S.cape[h][k]) * S.shear[h][k] * 0.5144;
+    if (field === "mix") v = category(S.li[h][k], S.cape[h][k], S.shear[h][k], S.cin ? S.cin[h][k] : null);
+    else if (field === "sev") v = severity(S.li[h][k], S.cape[h][k], S.shear[h][k], S.cin ? S.cin[h][k] : null);
     else { v = S[field][h][k]; if (v != null && field === "li") v /= 10; }
     if (v == null) continue;
     const cur = out[k];
-    if (cur == null || (field === "li" ? v < cur : v > cur)) out[k] = v;
+    if (cur == null || (field === "li" || field === "cin" ? v < cur : v > cur)) out[k] = v;   // the worst cap is the weakest one
   }
   return out;
 }
@@ -510,10 +519,11 @@ function sReadTap(){
   if (li == null && cape == null){ setPin("Outside"); $("sTap").textContent = `No storm data at ${where} (outside the forecast area).`; return; }
   const liT = li == null ? "–" : li.toFixed(1).replace("-", "−");
   const sev = sample(fieldValues("sev"), tapAt.lat, tapAt.lng);
+  const cin = S.cin ? sample(fieldValues("cin"), tapAt.lat, tapAt.lng) : null;
   const pinTxt = {sev: `Sev ${Math.round(sev ?? 0)}`, li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
     mix: (["None", ...SCALES.mix.names])[Math.round(sample(fieldValues("mix"), tapAt.lat, tapAt.lng) ?? 0)]}[sField];
   setPin(pinTxt);
-  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
+  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt${cin == null ? "" : ` · cap <b>${Math.round(cin)}</b> J/kg`}<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
 }
 
 function sHourLabel(){

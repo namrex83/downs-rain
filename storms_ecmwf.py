@@ -9,6 +9,7 @@ storms.py's GFS file, every 3 hours out to 3 days:
          is lifted to 500 hPa (dry to its cloud base, then moist) and compared with the air there
   cape   most-unstable CAPE (J/kg) as ECMWF computes it, if the open data has it; else left empty
   shear  difference between the 10 m and 500 hPa winds (knots)
+  cin    most-unstable convective inhibition, the cap (J/kg, as a positive number), if available
 """
 import datetime as dt
 import json
@@ -94,18 +95,24 @@ def run():
     print(f"Getting ECMWF {tag} storm ingredients", flush=True)
     client.retrieve(**base, param=["2t", "2d", "sp", "10u", "10v"], target="sfc.grib2")
     client.retrieve(**base, param=["t", "u", "v"], levtype="pl", levelist=500, target="pl.grib2")
-    have_cape = True
+    have_cape = have_cin = True
     try:
         client.retrieve(**base, param="mucape", target="cape.grib2")
     except Exception as e:
         print(f"  no CAPE in the open data ({e}); CAPE maps will be empty", flush=True)
         have_cape = False
+    try:
+        client.retrieve(**base, param="mucin", target="cin.grib2")
+    except Exception as e:
+        print(f"  no CIN (cap) in the open data ({e}); severity won't allow for the cap", flush=True)
+        have_cin = False
     sfc, (lats, lons) = read("sfc.grib2")
     pl, _ = read("pl.grib2")
     cape = read("cape.grib2")[0] if have_cape else {}
+    cins = read("cin.grib2")[0] if have_cin else {}
     get = lambda d, name, step, level=None: next((v for (n, lv, s), v in d.items()
                                                  if n == name and s == step and (level is None or lv == level)), None)
-    times, li, cp, sh = [], [], [], []
+    times, li, cp, sh, cn = [], [], [], [], []
     for step in STEPS:
         t2, td2, ps = get(sfc, "2t", step), get(sfc, "2d", step), get(sfc, "sp", step)
         u10, v10 = get(sfc, "10u", step), get(sfc, "10v", step)
@@ -118,17 +125,19 @@ def run():
         sh.append(np.round(np.hypot(u5 - u10, v5 - v10) * KT).astype(int).flatten().tolist())
         c = get(cape, "mucape", step)
         cp.append(np.round(c).astype(int).flatten().tolist() if c is not None else [None] * t2.size)
+        c = get(cins, "mucin", step)
+        cn.append(np.round(np.abs(np.nan_to_num(c))).astype(int).flatten().tolist() if c is not None else [None] * t2.size)
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
                    "model": "ECMWF IFS (open data, 0.25°)",
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
-                   "times": times, "li": li, "cape": cp, "shear": sh}, f, separators=(",", ":"))
-    for p in ("sfc.grib2", "pl.grib2", "cape.grib2"):
+                   "times": times, "li": li, "cape": cp, "shear": sh, "cin": cn}, f, separators=(",", ":"))
+    for p in ("sfc.grib2", "pl.grib2", "cape.grib2", "cin.grib2"):
         if os.path.exists(p):
             os.remove(p)
     lowest = min(min(x) for x in li) / 10 if li else None
-    print(f"Wrote {OUT}: {len(lats)}x{len(lons)} points x {len(times)} times; lowest LI {lowest}; CAPE {'yes' if have_cape else 'no'}")
+    print(f"Wrote {OUT}: {len(lats)}x{len(lons)} points x {len(times)} times; lowest LI {lowest}; CAPE {'yes' if have_cape else 'no'}; CIN {'yes' if have_cin else 'no'}")
 
 
 if __name__ == "__main__":

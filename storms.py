@@ -40,11 +40,16 @@ def grid():
     return lats, lons
 
 
+OPTIONAL = ["convective_inhibition"]   # the cap; asked for if the model has it
+use_optional = True
+
+
 def fetch(points, model):
+    global use_optional
     params = {
         "latitude": ",".join(str(p[0]) for p in points),
         "longitude": ",".join(str(p[1]) for p in points),
-        "hourly": ",".join(VARS), "models": model, "forecast_hours": HOURS,
+        "hourly": ",".join(VARS + (OPTIONAL if use_optional else [])), "models": model, "forecast_hours": HOURS,
         "wind_speed_unit": "kn", "timeformat": "unixtime", "cell_selection": "nearest",
     }
     for attempt in range(4):
@@ -54,6 +59,9 @@ def fetch(points, model):
             return data if isinstance(data, list) else [data]
         print(f"  {model}: HTTP {r.status_code} {r.text[:200]}", flush=True)
         if r.status_code == 400:
+            if use_optional:                  # maybe CIN isn't offered: try again without it
+                use_optional = False
+                return fetch(points, model)
             return None
         time.sleep(10 * (attempt + 1))
     return None
@@ -91,11 +99,14 @@ def run():
     li = [[None] * len(points) for _ in range(nt)]
     cape = [[None] * len(points) for _ in range(nt)]
     sh = [[None] * len(points) for _ in range(nt)]
+    cin = [[None] * len(points) for _ in range(nt)]
     for k, res in enumerate(results):
         h = res["hourly"]
         for t in range(min(nt, len(h["time"]))):
             v = h["lifted_index"][t]
             li[t][k] = None if v is None else int(round(v * 10))
+            v = (h.get("convective_inhibition") or [None] * nt)[t]
+            cin[t][k] = None if v is None else int(round(abs(v)))
             v = h["cape"][t]
             cape[t][k] = None if v is None else int(round(v))
             v = shear(h["wind_speed_10m"][t], h["wind_direction_10m"][t],
@@ -106,7 +117,7 @@ def run():
     out = {
         "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
         "model": model, "lats": lats, "lons": lons, "times": times,
-        "li": li, "cape": cape, "shear": sh,
+        "li": li, "cape": cape, "shear": sh, "cin": cin,
     }
     with open(OUT, "w") as f:
         json.dump(out, f, separators=(",", ":"))
