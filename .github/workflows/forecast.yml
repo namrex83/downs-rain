@@ -2,7 +2,7 @@ name: Rain forecast
 
 on:
   schedule:
-    - cron: "23 8,9,20,21 * * *"   # ECMWF 00z and 12z open data are out by about 8am/8pm UTC (6:23pm and 6:23am Qld, with a retry an hour later)
+    - cron: "23 5,8,9,11,17,20,21,23 * * *"   # ECMWF 00z/12z are out by about 08/20 UTC, GFS runs about 5 h after 00/06/12/18 UTC; each script skips a run it already has
   workflow_dispatch: {}            # lets you press "Run workflow" by hand
 
 permissions:
@@ -24,10 +24,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install ecmwf-opendata eccodes numpy
+        run: pip install ecmwf-opendata eccodes numpy requests
 
       - name: Get ECMWF rain forecast
         run: python forecast.py
+
+      - name: Get GFS rain forecast
+        continue-on-error: true          # a problem here shouldn't stop the ECMWF maps going out
+        run: python forecast_gfs.py
 
       - name: Get ECMWF storm ingredients
         continue-on-error: true          # a problem here shouldn't stop the rain forecast going out
@@ -38,10 +42,10 @@ jobs:
           git config user.name "radar-bot"
           git config user.email "radar-bot@users.noreply.github.com"
           git add data/forecast.json
-          [ -f data/storms_ecmwf.json ] && git add data/storms_ecmwf.json
+          for f in data/storms_ecmwf.json data/forecast_gfs.json; do [ -f $f ] && git add $f; done
           if git diff --cached --quiet; then
             echo "Nothing new"
           else
-            git commit -m "ECMWF forecast $(date -u +%Y-%m-%dT%H:%MZ)"
+            git commit -m "Model forecast $(date -u +%Y-%m-%dT%H:%MZ)"
             for i in 1 2 3 4 5; do git pull --rebase && git push && break; sleep 7; done
           fi

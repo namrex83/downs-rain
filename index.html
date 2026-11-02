@@ -110,7 +110,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div><h1>Downs <span>Radar Rain</span></h1>
     <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
-    <p class="sub" id="subFc" hidden>Rain forecast from the ECMWF weather model.</p></div>
+    <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
     <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tFc" aria-pressed="false">Forecast</button></div>
   </header>
 
@@ -134,6 +134,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls fcOnly" hidden>
+    <div class="field"><span class="eyebrow">Model</span>
+      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
     <div class="field"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
@@ -152,7 +154,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
-    <p class="note">The forecast is the ECMWF model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
+    <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
@@ -547,9 +549,10 @@ async function startStorms(){
   sDraw();
 }
 
-// data/forecast.json (made by forecast.py from ECMWF open data) holds rain per 10am-to-10am day,
-// mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
-let F = null, fOverlay = null;
+// data/forecast.json (forecast.py, ECMWF) and data/forecast_gfs.json (forecast_gfs.py, GFS) hold
+// rain per 10am-to-10am day, mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
+let F = null, fOverlay = null, fModel = "ecmwf";
+try { if (localStorage.getItem("fModel") === "gfs") fModel = "gfs"; } catch(e){}
 const fVals = () => $("fDay").value === "total" ? F.total : F.mm10[+$("fDay").value];
 function fSample(vals, lat, lon){
   const nr = F.lats.length, nc = F.lons.length, step = F.lats[0] - F.lats[1];
@@ -590,16 +593,19 @@ function fReadTap(){
   $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}.`;
 }
 async function startForecast(){
-  try { F = await getJSON("data/forecast.json"); }
-  catch(e){ $("fTap").innerHTML = `<span class="empty">No forecast yet. It appears after the "Rain forecast" job first runs on GitHub (twice a day).</span>`; fitMap(); return; }
+  [...$("fModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === fModel));
+  const keep = F && $("fDay").value !== "total" ? F.days[+$("fDay").value] : F ? "total" : null;
+  try { F = await getJSON(fModel === "gfs" ? "data/forecast_gfs.json" : "data/forecast.json"); }
+  catch(e){ F = null; if (fOverlay) map.removeLayer(fOverlay);
+    $("fTap").innerHTML = `<span class="empty">No ${fModel === "gfs" ? "GFS" : "ECMWF"} forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
   if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
   const today = new Date(Date.now() + 36e5 * 10).toISOString().slice(0, 10);
   $("fDay").innerHTML = F.days.map((d, i) => `<option value="${i}">${rainDay(d)}</option>`).join("") + `<option value="total">Next 7 days total</option>`;
   // open on the first forecast day that hasn't finished yet
   const first = F.days.findIndex(d => d > today || (d === today && new Date(Date.now() + 36e5 * 10).getUTCHours() < 10));
-  $("fDay").value = String(Math.max(0, first));
+  $("fDay").value = keep === "total" ? "total" : keep && F.days.includes(keep) ? String(F.days.indexOf(keep)) : String(Math.max(0, first));   // switching model keeps the chosen day
   const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
-  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. Updated twice a day, at about 6:30am and 6:30pm.`;
+  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Updated four times a day. GFS data from NOAA (US government, public domain)." : "Updated twice a day, at about 6:30am and 6:30pm."}`;
   fDraw();
 }
 
@@ -634,6 +640,11 @@ $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
 $("fDay").onchange = () => fDraw();
+$("fModel").onclick = e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.m === fModel) return;
+  fModel = b.dataset.m; try { localStorage.setItem("fModel", fModel); } catch(_){}
+  startForecast();
+};
 $("sModel").onclick = e => {
   const b = e.target.closest("button"); if (!b || b.dataset.m === sModel) return;
   sModel = b.dataset.m; try { localStorage.setItem("sModel", sModel); } catch(_){}
