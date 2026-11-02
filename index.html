@@ -7,17 +7,21 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* Layout: controls, a tall map, then the day's numbers — read top to bottom on a phone. */
+/* Layout: a sky-blue header band with the tabs, controls, a tall map, then the numbers — read top to bottom on a phone. */
 :root{
-  --bg:#f3f4f0; --panel:#fff; --ink:#1c2621; --ink-2:#4f5b55; --ink-3:#7c8781; --line:#dde1db;
-  --accent:#2f6b4f; --accent-ink:#fff; --soft:#e3eee7; --warn:#a35a00;
+  --bg:#eef3f8; --panel:#fff; --ink:#14263a; --ink-2:#4b5e73; --ink-3:#7f90a3; --line:#d9e3ee;
+  --accent:#1d6fb8; --accent-ink:#fff; --soft:#e4f0fb; --warn:#a35a00;
+  --band:linear-gradient(180deg,rgba(10,40,80,.35),rgba(10,40,80,.12) 55%,rgba(10,40,80,.45)),url("assets/clouds.jpg") center 35%/cover,#1d6fb8;
+  --band-ink:#fff; --band-sub:#e3f2ff;
+  --shadow:0 6px 18px rgba(20,50,90,.15);
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#121714; --panel:#1b221e; --ink:#eef1ec; --ink-2:#b9c2bc; --ink-3:#8b958f; --line:#2c3530;
-  --accent:#5fae86; --accent-ink:#0f1612; --soft:#223229; --warn:#e3a14f; color-scheme:dark}}
+  --bg:#0d1722; --panel:#152232; --ink:#e7eef6; --ink-2:#a8b8ca; --ink-3:#74879c; --line:#24354a;
+  --accent:#4ea3e8; --accent-ink:#06121f; --soft:#18304a; --warn:#e3a14f;
+  --band:linear-gradient(180deg,rgba(4,14,28,.62),rgba(4,14,28,.45) 55%,rgba(4,14,28,.7)),url("assets/clouds.jpg") center 35%/cover,#123f6b; --band-sub:#bcd7ee; --shadow:0 6px 18px rgba(0,0,0,.35); color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);
@@ -30,7 +34,7 @@ h1 span{color:var(--accent)}
 .field{display:flex;flex-direction:column;gap:3px}
 label,.eyebrow{font:600 .7rem/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}
 select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px}
-.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
 .rSlide{flex:1 1 180px}
 .rimg{clip-path:inset(4.5% 0 4.5% 0)}   /* hide BOM's title and time bars along the top and bottom */
@@ -40,9 +44,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #dayField{order:3;flex:1 1 100%}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
   -webkit-appearance:none;appearance:none;cursor:pointer;
-  background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%232f6b4f' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center}
+  background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%231d6fb8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center}
 #dayField select:disabled{opacity:.5}
-#map{height:62vh;min-height:340px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+#map{height:62vh;min-height:340px;border-radius:18px;border:0;background:var(--panel);box-shadow:var(--shadow)}
 .legend{display:flex}
 .legend div{flex:1;min-width:0}
 .legend i{display:block;height:11px;border-right:2px solid var(--bg)}
@@ -52,7 +56,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .stat{border-top:2px solid var(--accent);padding-top:5px;min-width:0}
 .stat b{display:block;font:600 1.45rem/1.1 var(--display);font-variant-numeric:tabular-nums}
 .stat span{font-size:.78rem;color:var(--ink-2)}
-.tap{background:var(--soft);border-radius:10px;padding:8px 12px;font-size:.92rem}
+.tap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:.92rem;box-shadow:0 2px 8px rgba(20,50,90,.06)}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
 th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
 td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabular-nums}
@@ -75,9 +79,24 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   text-shadow:0 0 3px #000,0 0 2px #000,0 1px 1px #000}
 .town.big span{font-size:14px;font-weight:700}
 .leaflet-container{font-family:var(--body)}
-header{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+  background:var(--band);color:var(--band-ink);border-radius:0 0 22px 22px;
+  margin:calc(-12px - env(safe-area-inset-top,0px)) -14px 0;padding:calc(16px + env(safe-area-inset-top,0px)) 14px 14px}
 header>div:first-child{min-width:0}
-header .seg{flex:0 0 auto}
+header h1, header h1 span{color:var(--band-ink);text-shadow:0 2px 8px rgba(0,20,50,.45)}
+header .sub{text-shadow:0 1px 4px rgba(0,20,50,.5)}
+header h1 span{opacity:.82}
+header .sub{color:var(--band-sub)}
+/* the tabs: frosted pills on the band, each with an icon that takes the text colour */
+header .seg{flex:0 0 auto;border:0;border-radius:16px;background:rgba(10,40,80,.3);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:4px;gap:4px}
+header .seg button{background:transparent;color:#eaf6ff;border-radius:12px;font-weight:700;min-height:56px;padding:0 14px}
+header .seg button[aria-pressed=true]{background:var(--panel);color:var(--accent);box-shadow:0 3px 10px rgba(0,40,80,.25)}
+header .seg button::before{content:"";display:block;width:20px;height:20px;margin:0 auto 2px;background:currentColor;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
+#tFc::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E")}
+#tStorm::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E")}
+#tRadar::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E")}
+#tRain::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E")}
 input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-height:28px}
 #sHourField{flex:1 1 100%}
 .verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
@@ -88,6 +107,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .slegend.cats span{font:600 .68rem var(--body);white-space:normal;line-height:1.15;display:block;padding-right:4px}
 @media (max-width:600px){
   body{padding-top:calc(4px + env(safe-area-inset-top,0px))}
+  header{margin-top:calc(-4px - env(safe-area-inset-top,0px));padding-top:calc(12px + env(safe-area-inset-top,0px))}
   .wrap{gap:8px}
   h1{font-size:1.45rem}
   .sub{font-size:.78rem;margin-top:1px}
@@ -100,7 +120,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   header{flex-wrap:wrap;align-items:flex-start}
   header>div:first-child{flex:1 1 100%}
   header .seg{flex:1 1 100%}
-  header .seg button{flex:1;min-height:38px;font-size:.92rem}
+  header .seg button{flex:1;min-height:54px;font-size:.85rem;padding:0 4px}
   #dayField{order:3;flex:1 1 100%}
   #dayField select{font-size:1rem;min-height:42px}
   #map{min-height:240px}
