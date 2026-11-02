@@ -882,7 +882,12 @@ const OUTLOOK_LINKS = [
 $("outLinks").innerHTML = OUTLOOK_LINKS.map(l => l.heading ? `<div class="eyebrow" style="margin-top:6px">${l.heading}</div>`
   : `<a href="${l.url}" target="_blank" rel="noopener"><div><b>${l.title}</b><span>${l.text}</span></div></a>`).join("");
 
+// Radar zooming (including the range buttons) stays on the Radar tab: leaving it puts the map back
+// where the other tabs had it
+let viewBeforeRadar = null;
 function setTab(t, first){
+  if (t === "radar" && tab !== "radar") viewBeforeRadar = {c: map.getCenter(), z: map.getZoom()};
+  if (t !== "radar" && tab === "radar" && viewBeforeRadar && !first) { map.setView(viewBeforeRadar.c, viewBeforeRadar.z, {animate: false}); viewBeforeRadar = null; }
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
   $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tOut").setAttribute("aria-pressed", t === "outlook");
