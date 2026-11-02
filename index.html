@@ -125,6 +125,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="controls stormOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg" id="sField"><button data-f="li" aria-pressed="true">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="mix" aria-pressed="false">Combined</button></div></div>
+    <div class="field"><span class="eyebrow">Model</span>
+      <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
     <div class="field"><span class="eyebrow">When</span>
       <div class="seg"><button id="sWorst" aria-pressed="true">Worst of day</button><button id="sHourly" aria-pressed="false">By hour</button></div></div>
@@ -508,18 +510,27 @@ function sSetHourRange(want){
   $("sHour").value = best; sHourLabel();
 }
 
+let sModel = "gfs";
+try { if (localStorage.getItem("sModel") === "ecmwf") sModel = "ecmwf"; } catch(e){}
 async function startStorms(){
-  try { S = await getJSON("data/storms.json"); }
-  catch(e){ $("sTap").innerHTML = `<span class="empty">No storm forecast yet. It appears after the "Storm ingredients" job first runs on GitHub (four times a day).</span>`; fitMap(); return; }
+  [...$("sModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === sModel));
+  const keep = S ? $("sDay").value : null;
+  try { S = await getJSON(sModel === "ecmwf" ? "data/storms_ecmwf.json" : "data/storms.json"); }
+  catch(e){ S = null; if (sOverlay) map.removeLayer(sOverlay);
+    $("sTap").innerHTML = `<span class="empty">No ${sModel === "ecmwf" ? "ECMWF" : "GFS"} storm forecast yet. It appears after its job next runs on GitHub.</span>`; fitMap(); return; }
   sDays = [...new Set(S.times.map(qDate))];
   const nowQ = qld(Date.now() / 1000), today = nowQ.toISOString().slice(0, 10);
   sDays = sDays.filter(d => d >= today || sDays.length === 1);
   $("sDay").innerHTML = sDays.map(d => `<option value="${d}">${d === today ? "Today" : part(d, {weekday:"long"})} ${part(d, {day:"numeric", month:"short"})}</option>`).join("");
   // open on today until mid-afternoon, then tomorrow (when storm maps are usually wanted)
-  $("sDay").value = (nowQ.getUTCHours() >= 15 && sDays.includes(addDays(today, 1))) ? addDays(today, 1) : sDays[0];
+  $("sDay").value = keep && sDays.includes(keep) ? keep   // switching model keeps the chosen day
+    : (nowQ.getUTCHours() >= 15 && sDays.includes(addDays(today, 1))) ? addDays(today, 1) : sDays[0];
   sSetHourRange(15);   // the hourly slider opens at 3pm, near the usual storm peak
   const made = new Date(S.made.replace("Z", ":00Z"));
-  $("sInfo").textContent = `GFS forecast (${S.model.replace("_", " ")}, half-degree grid, via Open-Meteo), fetched ${made.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric", minute: "2-digit"})}. Updated four times a day.`;
+  const qTime = d => d.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric", minute: "2-digit"});
+  $("sInfo").textContent = sModel === "ecmwf"
+    ? `ECMWF forecast (${S.model}), model run of ${qTime(new Date(S.run.replace(/T(\d\d)Z/, "T$1:00:00Z")))} Qld time, every 3 hours. Lifted index worked out here from ECMWF's surface and 500 hPa temperatures; CAPE is ECMWF's most-unstable CAPE. Updated twice a day. Contains modified Copernicus/ECMWF data, © ECMWF, CC BY 4.0.`
+    : `GFS forecast (${S.model.replace("_", " ")}, half-degree grid, via Open-Meteo), fetched ${qTime(made)}. Updated four times a day.`;
   sDraw();
 }
 
@@ -610,6 +621,11 @@ $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
 $("fDay").onchange = () => fDraw();
+$("sModel").onclick = e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.m === sModel) return;
+  sModel = b.dataset.m; try { localStorage.setItem("sModel", sModel); } catch(_){}
+  startStorms();
+};
 $("sField").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
   sField = b.dataset.f; [...$("sField").children].forEach(x => x.setAttribute("aria-pressed", x === b)); sDraw();
