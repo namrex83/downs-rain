@@ -278,7 +278,7 @@ const townLayer = size => L.layerGroup(TOWNS[size].map(([name, lat, lon]) => L.m
 const bigTowns = townLayer("big"), smallTowns = townLayer("small"), regionTowns = townLayer("region");
 function townsForZoom(){
   const z = map.getZoom();
-  for (const [layer, show] of [[bigTowns, z < 11], [regionTowns, tab !== "rain" && z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
+  for (const [layer, show] of [[bigTowns, z < 11], [regionTowns, z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
     show ? layer.addTo(map) : map.removeLayer(layer);
   declutter();
 }
