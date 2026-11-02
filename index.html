@@ -217,6 +217,7 @@ let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", v
 let tab = "fc";   // "fc" (forecast, the first tab and where new visitors start), "storms", "radar" or "rain"
 try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}
 
+const RAIN_VIEW = [-27.25, 151.15];   // Rain tab: Kingaroy to Clifton, Tara to Crows Nest at zoom 8.25
 const STORM_VIEW = [-27.36, 151.12];   // Storms tab: Chinchilla to Allora at zoom 8
 const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
 const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, 9);
@@ -785,8 +786,10 @@ function setTab(t, first){
     if (ring) ring.addTo(map);
     if (idx) show();
   }
-  // Storms opens wider (Chinchilla to Allora, Moonie to Nanango); Radar sets its own view; the rest share the Downs view
+  // Storms and Rain open wider (Chinchilla to Allora / Kingaroy to Clifton); Radar sets its own view;
+  // Forecast uses the Downs close-up
   if (t === "storms") map.setView(STORM_VIEW, 8);
+  else if (t === "rain") map.setView(RAIN_VIEW, 8.25);
   else if (!first && t !== "radar") map.setView(HOME, 9);
   townsForZoom(); fitMap();
 }
