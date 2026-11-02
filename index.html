@@ -120,7 +120,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
     <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
-    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tFc" aria-pressed="false">Forecast</button></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rain</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -192,8 +192,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
-let tab = "rain";   // "rain", "radar", "storms" or "fc" (forecast)
-try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (t === "storms" || t === "fc" || t === "radar") tab = t; } catch(e){}
+let tab = "fc";   // "fc" (forecast, the first tab and where new visitors start), "storms", "radar" or "rain"
+try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}
 
 const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
 const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, 9);
