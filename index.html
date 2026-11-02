@@ -848,8 +848,11 @@ $("rPlay").onclick = () => rPlay(!rTimer);
 $("rRange").onclick = e => {
   const b = e.target.closest("button"); if (!b || +b.dataset.km === rRange) return;
   rRange = +b.dataset.km; try { localStorage.setItem("rRange", rRange); } catch(_){}
-  if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);   // 512 km: show the whole of South East Queensland
-  startRadar(false);   // 128 and 256 km keep the map where it is
+  // tapping a range frames it like BOM's loop: 128 and 256 km show their whole area around Toowoomba,
+  // 512 km the whole of South East Queensland (opening the tab keeps the shared view)
+  if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);
+  else map.fitBounds(rBounds());
+  startRadar(false);
 };
 $("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
