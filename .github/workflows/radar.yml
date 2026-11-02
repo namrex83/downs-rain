@@ -602,15 +602,27 @@ jobs:
               log(f"  7-day total {want[0]} to {want[-1]} from {len(used)} finished day(s)")
           
           
-          def write_today(day, accum, info):
+          def write_today(day, accum, info, positions=None):
+              """The running total since 9am: radar only (today.png, grid_raw) and, when any gauges have readings so
+              far (BOM gauges since 9am, plus readings entered in my_gauges.csv for this day), a provisional
+              gauge-corrected version (today_corr.png, grid). The day is corrected properly once it finishes."""
               os.makedirs(DATA, exist_ok=True)
-              m = to_mercator(accum)
+              enc = lambda f: np.where(np.isnan(halve(to_mercator(f))), -1, np.round(halve(to_mercator(f)) * 10)).astype(int)
               colourise(to_mercator(accum, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today.png"), optimize=True)
-              g = halve(m)
-              vals = np.where(np.isnan(g), -1, np.round(g * 10)).astype(int)
+              raw = enc(accum)
+              out = {"date": day, "bounds": list(bounds()), **info, "grid_w": int(raw.shape[1]), "grid_h": int(raw.shape[0]),
+                     "grid": raw.flatten().tolist()}
+              try:
+                  gauges = fetch_bom_gauges(day, positions) + read_my_gauges(day)
+                  if any(g["mm"] >= 0.5 for g in gauges):
+                      field, bias, overall, npairs = correct(accum, gauges)
+                      colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
+                      out.update({"provisional": True, "grid_raw": out["grid"], "grid": enc(field).flatten().tolist(),
+                                  "bias": round(bias, 2), "gauges_used": npairs, "gauges": gauges})
+              except Exception as e:
+                  log(f"  provisional correction skipped: {e}")
               with open(os.path.join(DATA, "today.json"), "w") as f:
-                  json.dump({"date": day, "bounds": list(bounds()), **info, "grid_w": int(vals.shape[1]),
-                             "grid_h": int(vals.shape[0]), "grid": vals.flatten().tolist()}, f, separators=(",", ":"))
+                  json.dump(out, f, separators=(",", ":"))
               update_index(None)
           
           
@@ -766,7 +778,7 @@ jobs:
                       save_radar_total(day, radar)
                       write_outputs(day, radar, field, meta)
                       st["done"] = (st["done"] + [day])[-14:]
-                      for f in ("today.png", "today.json"):      # the running map belongs to the day just finished
+                      for f in ("today.png", "today_corr.png", "today.json"):      # the running map belongs to the day just finished
                           try:
                               os.remove(os.path.join(DATA, f))
                           except OSError:
@@ -785,10 +797,10 @@ jobs:
                   cur = window_for(now)
                   if cur in st["windows"]:
                       w = st["windows"][cur]
-                      written = f"{cur}:{w['frames']}"
+                      written = f"{cur}:{w['frames']}:{gauge_key(read_my_gauges(cur))}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           write_today(cur, load_accum(cur, w["n"]),
-                                      {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")})
+                                      {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")}, positions)
                           st["today_hour"] = written
                           log(f"Updated today's running total ({w['frames']} frames)")
               finally:

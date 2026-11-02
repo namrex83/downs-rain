@@ -351,13 +351,23 @@ async function draw(){
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
-  const today = day === "today";
-  $("mRaw").disabled = today; $("mCorr").disabled = today;
-  const img = today ? "data/today.png" : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
+  const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
+  $("mRaw").disabled = today && !prov; $("mCorr").disabled = today && !prov;
+  const img = today ? (prov && mode !== "raw" ? "data/today_corr.png" : "data/today.png") : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
   const [s,w,n,e] = meta.bounds;
   if (overlay) map.removeLayer(overlay);
   overlay = L.imageOverlay(img + bust(), [[s,w],[n,e]], {opacity: OVERLAY_OPACITY, interactive:false}).addTo(map);
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
+  if (prov){
+    const g = meta.gauges || [];
+    $("stats").innerHTML = stat(`×${meta.bias}`, "Provisional scale, at Dalby") + stat(meta.gauges_used, "Gauges so far") + stat(meta.as_of, "Last updated");
+    if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
+    $("notes").textContent = `Provisional: the rain since 9am ${part(addDays(meta.date, -1), {weekday:"long"})}, corrected with the gauge readings so far (BOM gauges, and any local readings entered). It's corrected properly once the day finishes at 9am ${part(meta.date, {weekday:"long"})}.`;
+    $("gauges").innerHTML = `<thead><tr><th>Gauge (so far)</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
+      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    drawGauges(); declutter();
+    return;
+  }
   if (today){
     $("stats").innerHTML = stat(meta.frames, "Radar scans so far") + stat(meta.as_of, "Last updated") + stat("Radar", "Not yet gauge-checked");
     if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
@@ -426,7 +436,7 @@ function readTap(){
   setPin(v == null ? "No data" : `${fmt(v)} mm`);
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
-  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
+  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${view!=="week"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
 }
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
