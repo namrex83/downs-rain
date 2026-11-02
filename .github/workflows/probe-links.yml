@@ -1,0 +1,18 @@
+name: Check outlook links (one-off test)
+on:
+  workflow_dispatch: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Try BOM climate driver addresses
+        run: |
+          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+          for u in https://www.bom.gov.au/climate/enso/ https://www.bom.gov.au/climate/mjo/ https://www.bom.gov.au/climate/sam/ https://www.bom.gov.au/climate/iod/ \
+                   https://www.bom.gov.au/climate/ocean/outlooks/ https://www.bom.gov.au/climate/model-summary/ https://www.bom.gov.au/climate/enso/outlook/ \
+                   https://www.bom.gov.au/climate/about/australian-climate-influences.shtml https://www.bom.gov.au/climate/outlooks/; do
+            out=$(curl -s -o /tmp/p -w "%{http_code} %{url_effective}" -L --max-time 25 -A "$UA" "$u")
+            title=$(grep -o '<title>[^<]*' /tmp/p | head -1 | cut -c8-110)
+            echo "$u -> $out | $title"
+          done
