@@ -72,6 +72,17 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
   text-shadow:0 0 3px #000,0 0 2px #000,0 1px 1px #000}
 .town.big span{font-size:14px;font-weight:700}
 .leaflet-container{font-family:var(--body)}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+header>div:first-child{min-width:0}
+header .seg{flex:0 0 auto}
+input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-height:28px}
+#sHourField{flex:1 1 100%}
+.verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
+.slegend{display:flex}
+.slegend div{flex:1;min-width:0}
+.slegend i{display:block;height:11px;border-right:2px solid var(--bg)}
+.slegend span{font:500 .6rem var(--mono);color:var(--ink-2);white-space:nowrap}
+.slegend.cats span{font:600 .68rem var(--body);white-space:normal;line-height:1.15;display:block;padding-right:4px}
 @media (max-width:600px){
   body{padding-top:calc(4px + env(safe-area-inset-top,0px))}
   .wrap{gap:8px}
@@ -96,11 +107,13 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 <body>
 <div class="wrap">
   <header>
-    <h1>Downs <span>Radar Rain</span></h1>
-    <p class="sub">Toowoomba radar rainfall, gauge-checked each 9am.</p>
+    <div><h1>Downs <span>Radar Rain</span></h1>
+    <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
+    <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS weather model.</p></div>
+    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tStorm" aria-pressed="false">Storms</button></div>
   </header>
 
-  <div class="controls">
+  <div class="controls rainOnly">
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
     <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
@@ -108,17 +121,33 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
   </div>
 
-  <div id="map"></div>
-  <div class="tap" id="tap">Tap the map to read the rainfall at any spot.</div>
-  <div class="stats" id="stats"></div>
-  <div id="legendBox"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
+  <div class="controls stormOnly" hidden>
+    <div class="field"><span class="eyebrow">Show</span>
+      <div class="seg" id="sField"><button data-f="li" aria-pressed="true">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="mix" aria-pressed="false">Combined</button></div></div>
+    <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
+    <div class="field"><span class="eyebrow">When</span>
+      <div class="seg"><button id="sWorst" aria-pressed="true">Worst of day</button><button id="sHourly" aria-pressed="false">By hour</button></div></div>
+    <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label><input type="range" id="sHour" min="0" max="0" value="0"></div>
+  </div>
 
-  <section class="panel">
+  <div id="map"></div>
+  <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
+  <div class="stats rainOnly" id="stats"></div>
+  <div id="legendBox" class="rainOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
+
+  <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
+  <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
+
+  <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
   </section>
-  <p class="note">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
-  <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them.</p>
+  <section class="panel stormOnly" hidden>
+    <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
+    <p class="note"><b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
+  </section>
+  <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
+  <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -126,7 +155,9 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 (() => {
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
-let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day";
+let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
+let tab = "rain";   // "rain" or "storms"
+try { if (localStorage.getItem("tab") === "storms" || location.hash === "#storms") tab = "storms"; } catch(e){}
 
 const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
 const map = L.map("map", {zoomControl: true}).setView(HOME, 9);
@@ -163,21 +194,27 @@ const TOWNS = {
     ["Brookstead",-27.76,151.45],["Mount Tyson",-27.58,151.56],["Cambooya",-27.715,151.860],["Clifton",-27.934,151.907],
     ["Allora",-28.035,151.981],["Leyburn",-28.01,151.58],["Inglewood",-28.42,151.08],["Texas",-28.85,151.17],["Yelarbon",-28.57,150.75],
     ["Moonie",-27.72,150.37],["Meandarra",-27.32,149.88],["Wandoan",-26.123,149.960],["Kumbia",-26.69,151.65],
-    ["Nanango",-26.672,152.002],["Crows Nest",-27.260,152.052]]
+    ["Nanango",-26.672,152.002],["Crows Nest",-27.260,152.052]],
+  // regional centres, shown on the Storms tab where the map is zoomed out over SE Qld and northern NSW
+  region: [["Brisbane",-27.470,153.025],["Gold Coast",-28.017,153.400],["Sunshine Coast",-26.650,153.067],["Gympie",-26.190,152.665],
+    ["Bundaberg",-24.866,152.349],["Rockhampton",-23.378,150.510],["Emerald",-23.527,148.164],["Roma",-26.573,148.787],
+    ["St George",-28.036,148.582],["Moree",-29.465,149.844],["Lismore",-28.813,153.277],["Grafton",-29.690,152.933],
+    ["Armidale",-30.513,151.665],["Tamworth",-31.093,150.932],["Coffs Harbour",-30.296,153.114],["Port Macquarie",-31.430,152.909],
+    ["Tenterfield",-29.049,152.019],["Inverell",-29.775,151.112],["Biloela",-24.402,150.512],["Taroom",-25.639,149.797],["Gayndah",-25.625,151.611]]
 };
 const townLayer = size => L.layerGroup(TOWNS[size].map(([name, lat, lon]) => L.marker([lat, lon], {pane: "labels", interactive: false, keyboard: false,
-  icon: L.divIcon({className: "town" + (size === "big" ? " big" : ""), html: `<i></i><span>${name}</span>`, iconSize: null})})));
-const bigTowns = townLayer("big"), smallTowns = townLayer("small");
+  icon: L.divIcon({className: "town" + (size !== "small" ? " big" : ""), html: `<i></i><span>${name}</span>`, iconSize: null})})));
+const bigTowns = townLayer("big"), smallTowns = townLayer("small"), regionTowns = townLayer("region");
 function townsForZoom(){
   const z = map.getZoom();
-  for (const [layer, show] of [[bigTowns, z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
+  for (const [layer, show] of [[bigTowns, z < 11], [regionTowns, tab === "storms" && z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
     show ? layer.addTo(map) : map.removeLayer(layer);
   declutter();
 }
 function declutter(){
   const kept = [...document.querySelectorAll(".glabel")].map(el => el.getBoundingClientRect());
   const hits = (a, b) => a.left < b.right + 3 && b.left < a.right + 3 && a.top < b.bottom + 2 && b.top < a.bottom + 2;
-  for (const layer of [bigTowns, smallTowns]) layer.eachLayer(m => {
+  for (const layer of [regionTowns, bigTowns, smallTowns]) layer.eachLayer(m => {
     const el = m.getElement(); if (!el) return;
     el.style.visibility = "";
     const r = el.querySelector("span").getBoundingClientRect();
@@ -206,15 +243,16 @@ async function init(){
   try { idx = await getJSON("data/index.json"); }
   catch(e){ $("tap").innerHTML = `<span class="empty">No maps yet. The running total for today appears within the first hour of the program running, and the first finished day after the next 9am.</span>`; return; }
   legend();
-  L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false}).addTo(map);
+  ring = L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false});
+  if (tab === "rain") ring.addTo(map);
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
     idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
   sel.value = "today";   // open on the running total since 9am
-  sel.onchange = show; show();
+  sel.onchange = show; if (tab === "rain") show();
 }
 
-async function show(){ await draw(); readTap(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
 async function draw(){
   const week = view === "week";
   const day = week ? "week" : $("day").value;
@@ -272,16 +310,19 @@ let pin = null, tapAt = null;
 function readTap(){
   if (!tapAt) return;
   const v = valueAt(tapAt.lat, tapAt.lng);
-  const label = v == null ? "No data" : `${fmt(v)} mm`;
-  if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
-      icon: L.divIcon({className:"", html:'<div class="pin"></div>', iconSize:[0,0]})})
-    .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
-  else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
+  setPin(v == null ? "No data" : `${fmt(v)} mm`);
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
 }
-map.on("click", ev => { tapAt = ev.latlng; readTap(); });
+function setPin(label){
+  if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
+      icon: L.divIcon({className:"", html:'<div class="pin"></div>', iconSize:[0,0]})})
+    .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
+  else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
+}
+const readAnyTap = () => tab === "storms" ? sReadTap() : readTap();
+map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
 // The blue circle shows how accurate the phone thinks its position is.
@@ -305,19 +346,20 @@ function locateMe(btn){
     if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
     else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
     map.setView(ll, Math.max(map.getZoom(), 12));
-    tapAt = ll; readTap();
+    tapAt = ll; readAnyTap();
   }, err => {
     btn.classList.remove("busy");
     $("tap").textContent = err.code === 1
       ? "Location is turned off for this site. On iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App, then try again."
       : "Couldn't get your location just now. Try again in the open, away from buildings.";
+    if (tab === "storms") $("sTap").textContent = $("tap").textContent;
   }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
 }
 function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = $("legendBox").offsetHeight + $("tap").offsetHeight + $("stats").offsetHeight + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -328,7 +370,184 @@ $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","t
 const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); show(); };
 $("vDay").onclick = () => setView("day");
 $("vWeek").onclick = () => setView("week");
-init();
+
+// ================================================================ Storms tab
+// data/storms.json (made by storms.py from the GFS model) holds lifted index (x10), CAPE and
+// deep-layer shear on a half-degree grid, hourly. We colour it in the browser.
+let S = null, sOverlay = null, sField = "li", sWorst = true, sDays = [];
+const SCALES = {
+  li: {title: "Lifted index (°C) · lower is more unstable", stops: [0,-2,-4,-6,-8,-10], sign: -1,
+       colors: ["#fde68a","#fbbf24","#f97316","#dc2626","#a21caf","#5b21b6"]},
+  cape: {title: "CAPE (J/kg) · storm fuel", stops: [250,500,1000,1500,2500,3500], sign: 1,
+       colors: ["#fde68a","#fbbf24","#f97316","#dc2626","#a21caf","#5b21b6"]},
+  shear: {title: "Deep-layer shear (knots) · storm organisation", stops: [20,30,40,50,60], sign: 1,
+       colors: ["#bae6fd","#60a5fa","#2563eb","#7c3aed","#c026d3"]},
+  mix: {title: "Where the ingredients overlap", cats: true, stops: [1,2,3], sign: 1,
+       colors: ["#fde047","#f97316","#dc2626"], names: ["Storms possible", "Organised storms", "Severe ingredients"]}
+};
+const hex = c => [1,3,5].map(i => parseInt(c.slice(i, i+2), 16));
+const qld = t => new Date((t + 36000) * 1000);   // Queensland time, no daylight saving
+const qDate = t => qld(t).toISOString().slice(0, 10);
+const qHour = t => { const h = qld(t).getUTCHours(); return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };
+
+// one category per point per hour for the "Combined" view
+function category(li, cape, sh){
+  if (li == null || cape == null || cape < 250 || li > -10) return 0;   // li is x10
+  if (cape >= 1000 && li <= -40 && sh != null && sh >= 40) return 3;
+  if (cape >= 500 && sh != null && sh >= 25) return 2;
+  return 1;
+}
+
+// the field to show: one hour, or the worst value of each point across the chosen day
+function fieldValues(field){
+  const hours = sWorst ? S.times.map((t, i) => qDate(t) === $("sDay").value ? i : -1).filter(i => i >= 0) : [+$("sHour").value];
+  const n = S.lats.length * S.lons.length, out = new Array(n).fill(null);
+  for (const h of hours) for (let k = 0; k < n; k++){
+    let v;
+    if (field === "mix") v = category(S.li[h][k], S.cape[h][k], S.shear[h][k]);
+    else { v = S[field][h][k]; if (v != null && field === "li") v /= 10; }
+    if (v == null) continue;
+    const cur = out[k];
+    if (cur == null || (field === "li" ? v < cur : v > cur)) out[k] = v;
+  }
+  return out;
+}
+
+// bilinear read of a grid field at any lat/lon (grid rows run north to south)
+function sample(vals, lat, lon){
+  const nr = S.lats.length, nc = S.lons.length, step = S.lats[0] - S.lats[1];
+  const fy = (S.lats[0] - lat) / step, fx = (lon - S.lons[0]) / (S.lons[1] - S.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  const q = [[r,c,(1-dy)*(1-dx)],[r,c+1,(1-dy)*dx],[r+1,c,dy*(1-dx)],[r+1,c+1,dy*dx]];
+  let sum = 0, wt = 0;
+  for (const [rr, cc, w] of q){ const v = vals[rr*nc + cc]; if (v != null && w > 0){ sum += v*w; wt += w; } }
+  return wt > 0 ? sum / wt : null;
+}
+
+function colourFor(field, v){
+  const sc = SCALES[field];
+  if (v == null) return null;
+  if (sc.cats){ const c = Math.round(v); return c >= 1 ? hex(sc.colors[c - 1]) : null; }
+  let idx = -1;
+  sc.stops.forEach((s, i) => { if (sc.sign < 0 ? v <= s : v >= s) idx = i; });
+  return idx < 0 ? null : hex(sc.colors[idx]);
+}
+
+function sDraw(){
+  if (!S) return;
+  const vals = fieldValues(sField);
+  const s = S.lats[S.lats.length - 1], n = S.lats[0], w = S.lons[0], e = S.lons[S.lons.length - 1];
+  const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const W = 450, H = Math.round(W * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++){
+    const my = merc(n) - (y + .5) / H * (merc(n) - merc(s));
+    const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
+    for (let x = 0; x < W; x++){
+      const c = colourFor(sField, sample(vals, lat, w + (x + .5) / W * (e - w)));
+      if (!c) continue;
+      const o = (y*W + x) * 4; img.data[o] = c[0]; img.data[o+1] = c[1]; img.data[o+2] = c[2]; img.data[o+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  if (sOverlay) map.removeLayer(sOverlay);
+  sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}).addTo(map);
+  sLegend(); sReadTap();
+}
+
+function sLegend(){
+  const sc = SCALES[sField];
+  $("sLegendTitle").textContent = sc.title + (sWorst ? " · worst of the day" : "");
+  $("sLegend").className = "slegend" + (sc.cats ? " cats" : "");
+  $("sLegend").innerHTML = sc.colors.map((c, i) => `<div><i style="background:${c}"></i><span>${sc.cats ? sc.names[i] : (sField === "li" ? String(sc.stops[i]).replace("-", "−") : sc.stops[i]) + (i === sc.colors.length - 1 ? (sc.sign < 0 ? "↓" : "+") : "")}</span></div>`).join("");
+}
+
+function verdict(li, cape, sh){
+  if (li == null) return "";
+  const inst = li > 0 ? "stable" : li > -2 ? "only slightly unstable" : li > -4 ? "unstable" : li > -6 ? "quite unstable" : "very unstable";
+  const org = sh == null ? "" : sh < 20 ? "weak shear, so storms would be short-lived" : sh < 30 ? "moderate shear" : sh < 40 ? "enough shear for organised storms" : "strong shear, enough for supercells";
+  return `Air ${inst}${li <= -2 && org ? "; " + org : ""}.`;
+}
+function sReadTap(){
+  if (tab !== "storms" || !tapAt) return;
+  const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
+  if (!S){ setPin("No data"); return; }
+  const li = sample(fieldValues("li"), tapAt.lat, tapAt.lng), cape = sample(fieldValues("cape"), tapAt.lat, tapAt.lng),
+        sh = sample(fieldValues("shear"), tapAt.lat, tapAt.lng);
+  if (li == null && cape == null){ setPin("Outside"); $("sTap").textContent = `No storm data at ${where} (outside the forecast area).`; return; }
+  const liT = li == null ? "–" : li.toFixed(1).replace("-", "−");
+  const pinTxt = {li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
+    mix: (["None", ...SCALES.mix.names])[Math.round(sample(fieldValues("mix"), tapAt.lat, tapAt.lng) ?? 0)]}[sField];
+  setPin(pinTxt);
+  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt<span class="verdict">${verdict(li, cape, sh)}</span>`;
+}
+
+function sHourLabel(){
+  const t = S.times[+$("sHour").value];
+  $("sHourLbl").textContent = `Time · ${part(qDate(t), {weekday:"short"})} ${qHour(t)}`;
+}
+function sSetHourRange(want){
+  // limit the slider to the chosen day, keeping the same hour of day where possible
+  if (want == null) want = qld(S.times[+$("sHour").value] ?? S.times[0]).getUTCHours();
+  const idxs = S.times.map((t, i) => qDate(t) === $("sDay").value ? i : -1).filter(i => i >= 0);
+  if (!idxs.length) return;
+  $("sHour").min = idxs[0]; $("sHour").max = idxs[idxs.length - 1];
+  const best = idxs.reduce((a, i) => Math.abs(qld(S.times[i]).getUTCHours() - want) < Math.abs(qld(S.times[a]).getUTCHours() - want) ? i : a, idxs[0]);
+  $("sHour").value = best; sHourLabel();
+}
+
+async function startStorms(){
+  try { S = await getJSON("data/storms.json"); }
+  catch(e){ $("sTap").innerHTML = `<span class="empty">No storm forecast yet. It appears after the "Storm ingredients" job first runs on GitHub (four times a day).</span>`; fitMap(); return; }
+  sDays = [...new Set(S.times.map(qDate))];
+  const nowQ = qld(Date.now() / 1000), today = nowQ.toISOString().slice(0, 10);
+  sDays = sDays.filter(d => d >= today || sDays.length === 1);
+  $("sDay").innerHTML = sDays.map(d => `<option value="${d}">${d === today ? "Today" : part(d, {weekday:"long"})} ${part(d, {day:"numeric", month:"short"})}</option>`).join("");
+  // open on today until mid-afternoon, then tomorrow (when storm maps are usually wanted)
+  $("sDay").value = (nowQ.getUTCHours() >= 15 && sDays.includes(addDays(today, 1))) ? addDays(today, 1) : sDays[0];
+  sSetHourRange(15);   // the hourly slider opens at 3pm, near the usual storm peak
+  const made = new Date(S.made.replace("Z", ":00Z"));
+  $("sInfo").textContent = `GFS forecast (${S.model.replace("_", " ")}, half-degree grid, via Open-Meteo), fetched ${made.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric", minute: "2-digit"})}. Updated four times a day.`;
+  sDraw();
+}
+
+function setTab(t, first){
+  tab = t;
+  try { localStorage.setItem("tab", t); } catch(e){}
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms");
+  document.querySelectorAll(".rainOnly").forEach(el => el.hidden = t !== "rain");
+  document.querySelectorAll(".stormOnly").forEach(el => el.hidden = t !== "storms");
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms";
+  $("dayField").hidden = t === "rain" && view === "week";
+  if (t === "storms"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
+    map.fitBounds([[-31.5, 147], [-23.5, 154]]);
+    if (S) sDraw(); else if (first || !S) startStorms();
+  } else {
+    if (sOverlay) map.removeLayer(sOverlay);
+    if (ring) ring.addTo(map);
+    if (!first) map.setView(HOME, 9);
+    if (idx) show();
+  }
+  townsForZoom(); fitMap();
+}
+$("tRain").onclick = () => tab !== "rain" && setTab("rain");
+$("tStorm").onclick = () => tab !== "storms" && setTab("storms");
+$("sField").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  sField = b.dataset.f; [...$("sField").children].forEach(x => x.setAttribute("aria-pressed", x === b)); sDraw();
+};
+const setWhen = worst => { sWorst = worst; $("sWorst").setAttribute("aria-pressed", worst); $("sHourly").setAttribute("aria-pressed", !worst);
+  $("sHourField").hidden = worst; fitMap(); sDraw(); };
+$("sWorst").onclick = () => setWhen(true);
+$("sHourly").onclick = () => setWhen(false);
+$("sDay").onchange = () => { sSetHourRange(); sDraw(); };
+$("sHour").oninput = () => { sHourLabel(); sDraw(); };
+
+init(); setTab(tab, true);
 })();
 </script>
 </body>
