@@ -140,7 +140,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
     <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rain</button></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -194,7 +194,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note" id="notes"></p>
   </section>
   <section class="panel radarOnly" hidden>
-    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rain tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
+    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -711,7 +711,7 @@ function rShow(i){
   const d = rFrames[i], ago = Math.round((Date.now() - d) / 60000);
   $("rFrame").value = i;
   $("rLbl").textContent = `Radar · ${qTimeShort(d)}`;
-  $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rFrames.length - 1 ? ", the latest" : ""}. For rainfall totals, see the Rain tab.`;
+  $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rFrames.length - 1 ? ", the latest" : ""}. For rainfall totals, see the Rainfall tab.`;
 }
 function rPlay(on){
   $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "Pause" : "Play";
