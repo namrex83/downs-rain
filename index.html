@@ -109,8 +109,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <header>
     <div><h1>Downs <span>Radar Rain</span></h1>
     <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
-    <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS weather model.</p></div>
-    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tStorm" aria-pressed="false">Storms</button></div>
+    <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS weather model.</p>
+    <p class="sub" id="subFc" hidden>Rain forecast from the ECMWF weather model.</p></div>
+    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tFc" aria-pressed="false">Forecast</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -130,10 +131,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label><input type="range" id="sHour" min="0" max="0" value="0"></div>
   </div>
 
+  <div class="controls fcOnly" hidden>
+    <div class="field"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
+  </div>
+
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
-  <div id="legendBox" class="rainOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
+  <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
+  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
@@ -142,12 +148,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
   </section>
+  <section class="panel fcOnly" hidden>
+    <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
+    <p class="note">The forecast is the ECMWF model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
+  </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
     <p class="note"><b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
-  <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
+  <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm and forecast maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -156,8 +166,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
-let tab = "rain";   // "rain" or "storms"
-try { if (localStorage.getItem("tab") === "storms" || location.hash === "#storms") tab = "storms"; } catch(e){}
+let tab = "rain";   // "rain", "storms" or "fc" (forecast)
+try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (t === "storms" || t === "fc") tab = t; } catch(e){}
 
 const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
 const map = L.map("map", {zoomControl: true}).setView(HOME, 9);
@@ -207,7 +217,7 @@ const townLayer = size => L.layerGroup(TOWNS[size].map(([name, lat, lon]) => L.m
 const bigTowns = townLayer("big"), smallTowns = townLayer("small"), regionTowns = townLayer("region");
 function townsForZoom(){
   const z = map.getZoom();
-  for (const [layer, show] of [[bigTowns, z < 11], [regionTowns, tab === "storms" && z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
+  for (const [layer, show] of [[bigTowns, z < 11], [regionTowns, tab !== "rain" && z < 11], [smallTowns, z >= 8 && z < 11], [satLabels, z >= 11 && map.hasLayer(satellite)]])
     show ? layer.addTo(map) : map.removeLayer(layer);
   declutter();
 }
@@ -321,7 +331,7 @@ function setPin(label){
     .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
-const readAnyTap = () => tab === "storms" ? sReadTap() : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -359,7 +369,7 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -513,21 +523,83 @@ async function startStorms(){
   sDraw();
 }
 
+// data/forecast.json (made by forecast.py from ECMWF open data) holds rain per 10am-to-10am day,
+// mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
+let F = null, fOverlay = null;
+const fVals = () => $("fDay").value === "total" ? F.total : F.mm10[+$("fDay").value];
+function fSample(vals, lat, lon){
+  const nr = F.lats.length, nc = F.lons.length, step = F.lats[0] - F.lats[1];
+  const fy = (F.lats[0] - lat) / step, fx = (lon - F.lons[0]) / (F.lons[1] - F.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  return (vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx
+        + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx) / 10;
+}
+function fDraw(){
+  if (!F || !idx) return;
+  const vals = fVals(), ramp = idx.ramp.map(hex);
+  const s = F.lats[F.lats.length - 1], n = F.lats[0], w = F.lons[0], e = F.lons[F.lons.length - 1];
+  const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const W = 450, H = Math.round(W * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++){
+    const my = merc(n) - (y + .5) / H * (merc(n) - merc(s));
+    const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
+    for (let x = 0; x < W; x++){
+      const v = fSample(vals, lat, w + (x + .5) / W * (e - w));
+      let k = -1; idx.breaks.forEach((b, i) => { if (v != null && v >= b) k = i; });
+      if (k < 0) continue;
+      const o = (y*W + x) * 4; img.data[o] = ramp[k][0]; img.data[o+1] = ramp[k][1]; img.data[o+2] = ramp[k][2]; img.data[o+3] = 225;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  if (fOverlay) map.removeLayer(fOverlay);
+  fOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}).addTo(map);
+  fReadTap();
+}
+function fReadTap(){
+  if (tab !== "fc" || !tapAt || !F) return;
+  const v = fSample(fVals(), tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
+  const when = $("fDay").value === "total" ? "over the next 7 days" : "10am " + rainDay(F.days[+$("fDay").value]).replace(" – ", " – 10am ");
+  setPin(v == null ? "Outside" : `${fmt(v)} mm`);
+  $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}.`;
+}
+async function startForecast(){
+  try { F = await getJSON("data/forecast.json"); }
+  catch(e){ $("fTap").innerHTML = `<span class="empty">No forecast yet. It appears after the "Rain forecast" job first runs on GitHub (twice a day).</span>`; fitMap(); return; }
+  if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
+  const today = new Date(Date.now() + 36e5 * 10).toISOString().slice(0, 10);
+  $("fDay").innerHTML = F.days.map((d, i) => `<option value="${i}">${rainDay(d)}</option>`).join("") + `<option value="total">Next 7 days total</option>`;
+  // open on the first forecast day that hasn't finished yet
+  const first = F.days.findIndex(d => d > today || (d === today && new Date(Date.now() + 36e5 * 10).getUTCHours() < 10));
+  $("fDay").value = String(Math.max(0, first));
+  const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
+  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. Updated twice a day, at about 6:30am and 6:30pm.`;
+  fDraw();
+}
+
 function setTab(t, first){
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms");
-  document.querySelectorAll(".rainOnly").forEach(el => el.hidden = t !== "rain");
-  document.querySelectorAll(".stormOnly").forEach(el => el.hidden = t !== "storms");
-  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms";
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc");
+  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly"}[t];
+  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly").forEach(el => el.hidden = !el.classList.contains(only));
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc";
   $("dayField").hidden = t === "rain" && view === "week";
+  if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
+  if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
     map.fitBounds([[-31.5, 147], [-23.5, 154]]);
     if (S) sDraw(); else if (first || !S) startStorms();
+  } else if (t === "fc"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
+    map.fitBounds([[-29.3, 149.6], [-25.4, 153.2]]);
+    if (F) fDraw(); else startForecast();
   } else {
-    if (sOverlay) map.removeLayer(sOverlay);
     if (ring) ring.addTo(map);
     if (!first) map.setView(HOME, 9);
     if (idx) show();
@@ -536,6 +608,8 @@ function setTab(t, first){
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
+$("tFc").onclick = () => tab !== "fc" && setTab("fc");
+$("fDay").onchange = () => fDraw();
 $("sField").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
   sField = b.dataset.f; [...$("sField").children].forEach(x => x.setAttribute("aria-pressed", x === b)); sDraw();

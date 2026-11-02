@@ -1,0 +1,42 @@
+name: Rain forecast
+
+on:
+  schedule:
+    - cron: "23 8,9,20,21 * * *"   # ECMWF 00z and 12z open data are out by about 8am/8pm UTC (6:23pm and 6:23am Qld, with a retry an hour later)
+  workflow_dispatch: {}            # lets you press "Run workflow" by hand
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forecast
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install ecmwf-opendata eccodes numpy
+
+      - name: Get ECMWF rain forecast
+        run: python forecast.py
+
+      - name: Publish
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add data/forecast.json
+          if git diff --cached --quiet; then
+            echo "Nothing new"
+          else
+            git commit -m "Rain forecast $(date -u +%Y-%m-%dT%H:%MZ)"
+            for i in 1 2 3 4 5; do git pull --rebase && git push && break; sleep 7; done
+          fi
