@@ -217,10 +217,10 @@ let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", v
 let tab = "fc";   // "fc" (forecast, the first tab and where new visitors start), "storms", "radar" or "rain"
 try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}
 
-const RAIN_VIEW = [-27.25, 151.15];   // Rain tab: Kingaroy to Clifton, Tara to Crows Nest at zoom 8.25
-const STORM_VIEW = [-27.36, 151.12];   // Storms tab: Chinchilla to Allora at zoom 8
-const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
-const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, 9);
+// Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
+// tabs keeps wherever the map has been moved to
+const HOME = [-27.25, 151.15], HOME_ZOOM = 8.25;
+const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, HOME_ZOOM);
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
 map.getPane("labels").style.zIndex = 450;
@@ -406,7 +406,7 @@ function locateMe(btn){
     const ll = L.latLng(pos.coords.latitude, pos.coords.longitude), acc = pos.coords.accuracy;
     if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
     else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
-    map.setView(ll, Math.max(map.getZoom(), 12));
+    if (!map.getBounds().contains(ll)) map.panTo(ll);   // keep the zoom; only move if you're off the map
     tapAt = ll; readAnyTap();
   }, err => {
     btn.classList.remove("busy");
@@ -685,7 +685,6 @@ async function startForecast(){
 // 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
 // centred on the radar, 2 x range across.
 const R_CODES = {128: "IDR1083", 256: "IDR1082", 512: "IDR1081"};
-const R_VIEW = 8.5;   // the Radar tab opens on the Downs a little wider than the other tabs
 let rRange = 256;
 try { const r = +localStorage.getItem("rRange"); if (R_CODES[r]) rRange = r; } catch(e){}
 const R_URL = t => `https://www.bom.gov.au/radar/${R_CODES[rRange]}.T.${t}.png`;
@@ -735,7 +734,6 @@ async function startRadar(fit){
   const newest = await rNewest();
   if (tab !== "radar") return;
   if (!newest){ $("rTap").textContent = "Couldn't load the BOM radar just now. Check your connection, or try again in a few minutes."; fitMap(); return; }
-  if (fit) map.setView(HOME, R_VIEW);   // open on the Downs; zoom out to see the whole range
   // the last hour, 5 minutes apart; keep the pictures that exist (some ranges come less often)
   const cand = [...Array(12)].map((_, i) => new Date(newest - (11 - i) * 300000));
   const ok = await Promise.all(cand.map(d => tryImg(R_URL(utcStamp(d)))));
@@ -786,11 +784,6 @@ function setTab(t, first){
     if (ring) ring.addTo(map);
     if (idx) show();
   }
-  // Storms and Rain open wider (Chinchilla to Allora / Kingaroy to Clifton); Radar sets its own view;
-  // Forecast uses the Downs close-up
-  if (t === "storms") map.setView(STORM_VIEW, 8);
-  else if (t === "rain") map.setView(RAIN_VIEW, 8.25);
-  else if (!first && t !== "radar") map.setView(HOME, 9);
   townsForZoom(); fitMap();
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
