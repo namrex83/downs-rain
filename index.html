@@ -42,7 +42,8 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
 .rSlide{flex:1 1 180px}
-.rimg{clip-path:inset(4.5% 0 4.5% 0)}   /* hide BOM's title and time bars along the top and bottom */
+.rimg{clip-path:inset(4.5% 0 4.5% 0)}
+.rpred{filter:saturate(.75) brightness(1.05)}   /* predicted frames look slightly washed out */   /* hide BOM's title and time bars along the top and bottom */
 .rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
@@ -205,7 +206,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note" id="notes"></p>
   </section>
   <section class="panel radarOnly" hidden>
-    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
+    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next hour: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -726,6 +727,8 @@ function rBounds(){
 const R_COLOURS = ["#f5f5ff","#b4b4ff","#7878ff","#1414ff","#00d8c3","#009690","#006666","#ffff00","#ffc800","#ff9600","#ff6400","#ff0000","#c80000","#780000","#280000"];
 const R_RATES = [0.5, 1, 2, 3, 5, 8, 12, 17, 27, 42, 63, 98, 155, 250, 360];
 let rFrames = [], rLayers = [], rPos = 0, rTimer = null, rRefresh = null, rPause = 0;
+// rNReal: how many of rFrames are real radar pictures; any after them are the next-hour prediction
+let rNReal = 0, rMotion = null;
 const utcStamp = d => d.toISOString().replace(/[-:T]/g, "").slice(0, 12);
 const qTimeShort = d => d.toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"}).replace(" ", "");
 const tryImg = src => new Promise(ok => { const im = new Image(); im.onload = () => ok(true); im.onerror = () => ok(false); im.src = src; });
@@ -741,15 +744,21 @@ function rShow(i){
   rLayers.forEach((l, k) => l.setOpacity(k === i ? 0.8 : 0));
   const d = rFrames[i], ago = Math.round((Date.now() - d) / 60000);
   $("rFrame").value = i;
+  if (i >= rNReal){
+    const ahead = Math.round((d - rFrames[rNReal - 1]) / 60000);
+    $("rLbl").textContent = `Predicted · ${qTimeShort(d)} (+${ahead} min)`;
+    $("rTap").innerHTML = `<b>Prediction</b> for about <b>${qTimeShort(d)}</b>, ${ahead} minutes after the latest picture: the rain moved along at its current speed and direction, ${rMotion.words}. It can't show storms growing, weakening, turning or new ones forming.`;
+    return;
+  }
   $("rLbl").textContent = `Radar · ${qTimeShort(d)}`;
-  $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rFrames.length - 1 ? ", the latest" : ""}. For rainfall totals, see the Rainfall tab.`;
+  $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rNReal - 1 ? ", the latest" : ""}. For rainfall totals, see the Rainfall tab.`;
 }
 function rPlay(on){
   $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "Pause" : "Play";
   clearInterval(rTimer); rTimer = null;
   if (!on) return;
   rTimer = setInterval(() => {
-    if (rPos === rFrames.length - 1 && rPause++ < 3) return;   // linger on the latest picture
+    if ((rPos === rFrames.length - 1 || rPos === rNReal - 1) && rPause++ < (rPos === rNReal - 1 && rNReal < rFrames.length ? 1 : 3)) return;   // linger on "now" and on the last picture
     rPause = 0; rShow((rPos + 1) % rFrames.length);
   }, 500);
 }
@@ -771,11 +780,29 @@ async function startRadar(fit){
   if (tab !== "radar") return;
   rFrames = cand.filter((d, i) => ok[i] || i === cand.length - 1);
   rLayers = rFrames.map(d => L.imageOverlay(R_URL(utcStamp(d)), rBounds(), {opacity: 0, interactive: false, className: "rimg"}).addTo(map));
+  rNReal = rFrames.length;
+  // next hour: slide the latest picture along the way the rain has been moving (measured by the radar job)
+  rMotion = null;
+  try {
+    const m = await getJSON("data/motion.json"), latest = rFrames[rNReal - 1];
+    if (m.u_kmh != null && (m.quality ?? 0) >= 6 && Math.abs(latest - new Date(m.time)) < 3 * 36e5){
+      const speed = Math.hypot(m.u_kmh, m.v_kmh), from = (Math.atan2(-m.u_kmh, -m.v_kmh) * 180 / Math.PI + 360) % 360;
+      const compass = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(from / 45) % 8];
+      rMotion = {...m, words: speed < 3 ? "which is barely moving" : `about ${Math.round(speed)} km/h from the ${compass}`};
+      const [[s0, w0], [n0, e0]] = rBounds(), coslat = Math.cos(idx.radar.lat * Math.PI / 180);
+      for (let lead = 10; lead <= 60; lead += 10){
+        const dLat = m.v_kmh * lead / 60 / 110.57, dLon = m.u_kmh * lead / 60 / (111.32 * coslat);
+        rFrames.push(new Date(+latest + lead * 60000));
+        rLayers.push(L.imageOverlay(R_URL(utcStamp(latest)), [[s0 + dLat, w0 + dLon], [n0 + dLat, e0 + dLon]], {opacity: 0, interactive: false, className: "rimg rpred"}).addTo(map));
+      }
+    }
+  } catch(e){}
+  if (tab !== "radar") { rClear(); return; }
   $("rFrame").max = rFrames.length - 1;
-  rShow(rFrames.length - 1); rPlay(true); fitMap();
+  rShow(rNReal - 1); rPlay(true); fitMap();
   rRefresh = setInterval(async () => {   // pick up new pictures while the tab is open
     const latest = await rNewest();
-    if (tab === "radar" && latest && latest > rFrames[rFrames.length - 1]) startRadar();
+    if (tab === "radar" && latest && latest > rFrames[rNReal - 1]) startRadar();
   }, 120000);
 }
 $("rPlay").onclick = () => rPlay(!rTimer);
@@ -784,7 +811,7 @@ $("rRange").onclick = e => {
   rRange = +b.dataset.km; try { localStorage.setItem("rRange", rRange); } catch(_){}
   startRadar(false);   // keep the map where it is
 };
-$("rLatest").onclick = () => { rPlay(false); rShow(rFrames.length - 1); };
+$("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
 
 function setTab(t, first){

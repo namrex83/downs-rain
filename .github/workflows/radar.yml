@@ -614,6 +614,49 @@ jobs:
               update_index(None)
           
           
+          def estimate_motion(src, names):
+              """How fast and which way the rain is moving, measured from the radar itself: the shift that best lines
+              up the newest picture with the one about 30 minutes earlier (phase correlation over ~200 km around
+              the radar). Written to data/motion.json for the Radar tab's next-hour prediction."""
+              frames = [(parse_frame_time(nm), nm) for nm in names]
+              frames = [(t, nm) for t, nm in frames if t]
+              if len(frames) < 2:
+                  return
+              t_new, nm_new = frames[-1]
+              older = [(abs((t_new - t).total_seconds() / 60 - 30), t, nm) for t, nm in frames[:-1] if 20 <= (t_new - t).total_seconds() / 60 <= 45]
+              out = {"time": t_new.isoformat(timespec="minutes"), "u_kmh": None, "v_kmh": None}
+              if older:
+                  _, t_old, nm_old = min(older)
+                  new, _ = decode_rate(src.get(FTP_RADAR_DIR, nm_new))
+                  old, _ = decode_rate(src.get(FTP_RADAR_DIR, nm_old))
+                  n = new.shape[0]; k = km_per_px(n); h = int(round(200 / k)); c = n // 2
+                  a, b = np.log1p(new[c - h:c + h, c - h:c + h]), np.log1p(old[c - h:c + h, c - h:c + h])
+                  wet = float(((a > 0.4) | (b > 0.4)).mean())
+                  out["wet_fraction"] = round(wet, 3)
+                  if wet >= 0.01:
+                      win = np.outer(np.hanning(2 * h), np.hanning(2 * h))
+                      fa, fb = np.fft.fft2(a * win), np.fft.fft2(b * win)
+                      r = fa * np.conj(fb); r /= np.abs(r) + 1e-9
+                      corr = np.fft.fftshift(np.fft.ifft2(r).real)
+                      lim = int(round(70 / k))                              # ignore moves faster than ~140 km/h
+                      sub = corr[h - lim:h + lim + 1, h - lim:h + lim + 1]
+                      iy, ix = np.unravel_index(np.argmax(sub), sub.shape)
+                      def refine(m, i):   # parabola through the peak and its neighbours, for sub-pixel accuracy
+                          if 0 < i < len(m) - 1:
+                              d = m[i - 1] - 2 * m[i] + m[i + 1]
+                              return i + (0.5 * (m[i - 1] - m[i + 1]) / d if d else 0)
+                          return i
+                      dy, dx = refine(sub[:, ix], iy) - lim, refine(sub[iy, :], ix) - lim
+                      hours = (t_new - t_old).total_seconds() / 3600
+                      out.update({"u_kmh": round(dx * k / hours, 1), "v_kmh": round(-dy * k / hours, 1),
+                                  "quality": round(float(sub.max() / (corr.std() + 1e-9)), 1),
+                                  "from": t_old.isoformat(timespec="minutes")})
+              os.makedirs(DATA, exist_ok=True)
+              with open(os.path.join(DATA, "motion.json"), "w") as f:
+                  json.dump(out, f)
+              log(f"  rain motion: {out.get('u_kmh')}, {out.get('v_kmh')} km/h (east, north)")
+          
+          
           def write_check_image(src, sample_png, off):
               """Overlay the BOM town labels with our own computed town dots, to confirm alignment."""
               try:
@@ -676,6 +719,11 @@ jobs:
                       log(f"  {nm}: {step:.0f} min, max rate {rate.max():.0f} mm/h")
                   if last:
                       st["last_ts"] = last.isoformat()
+          
+                  try:
+                      estimate_motion(src, names)
+                  except Exception as e:
+                      log(f"  rain motion skipped: {e}")
           
                   if sample is not None and not os.path.exists(os.path.join(DATA, "check.png")):
                       write_check_image(src, sample, st["windows"][window_for(last)]["offset"])
