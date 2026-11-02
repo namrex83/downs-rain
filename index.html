@@ -174,7 +174,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="fSum"><button data-n="0" aria-pressed="true">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="false">7-day total</button></div></div>
+      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button></div></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
@@ -214,8 +214,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
-let tab = "fc";   // "fc" (forecast, the first tab and where new visitors start), "storms", "radar" or "rain"
-try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}
+let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
+try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
 
 // Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
 // tabs keeps wherever the map has been moved to
@@ -615,7 +615,7 @@ async function startStorms(){
 let F = null, fOverlay = null, fModel = "ecmwf";
 try { if (localStorage.getItem("fModel") === "gfs") fModel = "gfs"; } catch(e){}
 // fSumN: 0 shows one day; 3 or 7 add up that many days from fStart, the first day that hasn't finished
-let fSumN = 0, fStart = 0;
+let fSumN = 7, fStart = 0;   // opens on the 7-day total
 const fSpan = () => [fStart, Math.min(F.days.length, fStart + fSumN)];
 function fVals(){
   if (!fSumN) return F.mm10[+$("fDay").value];
