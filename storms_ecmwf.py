@@ -88,7 +88,8 @@ def run():
     client = Client(source="ecmwf")
     when = client.latest(type="fc", stream="oper", param="2t", step=72)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
+    old = json.load(open(OUT)) if os.path.exists(OUT) else {}
+    if old.get("run") == tag and "cin" in old and "--force" not in sys.argv:   # files made before the cap was added are redone
         print(f"Already have the {tag} storm run")
         return
     base = dict(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS)
