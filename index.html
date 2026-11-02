@@ -160,6 +160,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
+    <div class="field"><span class="eyebrow">Gauges</span>
+      <div class="seg" id="gSeg"><button data-g="1" aria-pressed="true">On</button><button data-g="0" aria-pressed="false">Off</button></div></div>
   </div>
 
   <div class="controls stormOnly" hidden>
@@ -359,6 +361,7 @@ async function draw(){
   if (today){
     $("stats").innerHTML = stat(meta.frames, "Radar scans so far") + stat(meta.as_of, "Last updated") + stat("Radar", "Not yet gauge-checked");
     if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
+    drawGauges();
     $("notes").textContent = meta.date ? `This is the raw radar estimate since 9am ${part(addDays(meta.date, -1), {weekday:"long"})}. It gets checked against gauges after 9am ${part(meta.date, {weekday:"long"})}.` : "This is the raw radar estimate since 9am. It gets checked against gauges after 9am tomorrow.";
     return;
   }
@@ -367,16 +370,40 @@ async function draw(){
     $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
     $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "";
     $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
-    declutter();
+      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    drawGauges(); declutter();
     return;
   }
   $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
   if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-    g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (mine)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
-  declutter();
+    g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+  drawGauges(); declutter();
 }
+// Rain gauges on the Rainfall map: the local network (data/gauge_sites.json) plus every gauge the day was
+// corrected with. Filled dots have a reading for the day; values show when zoomed in, or tap a dot.
+let gaugeSites = [], gaugesOn = true;
+try { gaugesOn = localStorage.getItem("gaugesOn") !== "0"; } catch(e){}
+getJSON("data/gauge_sites.json").then(j => { gaugeSites = j; if (tab === "rain") drawGauges(); }).catch(() => {});
+function drawGauges(){
+  gaugeLayer.clearLayers();
+  [...$("gSeg").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.g === "1") === gaugesOn));
+  if (!gaugesOn || tab !== "rain") return;
+  const used = (meta && meta.gauges) || [], byName = Object.fromEntries(used.map(g => [g.name, g]));
+  const all = [...gaugeSites.map(s => ({...s, ...(byName[s.name] || {})})), ...used.filter(g => !gaugeSites.some(s => s.name === g.name))];
+  const labels = map.getZoom() >= 9.5;
+  for (const x of all){
+    if (x.lat == null) continue;
+    const has = x.mm != null && !x.ignored;
+    const mk = L.circleMarker([x.lat, x.lon], {radius: 4.5, color: "#0b3d6e", weight: 1.5, fillColor: has ? "#1d6fb8" : "#fff", fillOpacity: 1})
+      .bindPopup(`<b>${x.name}</b><br>${has ? `Gauge ${fmt(x.mm)} mm${x.corrected_mm != null ? ` · map ${fmt(x.corrected_mm)} mm` : ""}` : x.ignored ? "Left out: read dry under widespread rain" : "No reading for this day"}${x.approx_km ? `<br><span style="color:#7f90a3">Position within about ${x.approx_km} km</span>` : ""}`);
+    if (has && labels) mk.bindTooltip(String(fmt(x.mm)), {permanent: true, direction: "right", className: "glabel", offset: [5, 0]});
+    mk.addTo(gaugeLayer);
+  }
+}
+$("gSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; gaugesOn = b.dataset.g === "1";
+  try { localStorage.setItem("gaugesOn", gaugesOn ? "1" : "0"); } catch(_){} drawGauges(); declutter(); };
+map.on("zoomend", () => { if (tab === "rain") { drawGauges(); declutter(); } });
 const gaugeMarker = x => L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
   .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
   .bindPopup(`<b>${x.name}</b><br>Gauge ${fmt(x.mm)} mm<br>Radar ${x.radar_mm==null?"out of range":fmt(x.radar_mm)+" mm"}`)
