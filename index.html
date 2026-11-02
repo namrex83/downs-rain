@@ -72,7 +72,8 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 .err{color:var(--warn)}
 .glabel{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 5px;font:500 11px var(--mono);white-space:nowrap;box-shadow:none}
 .glabel::before{display:none}
-.pin{width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:#fff;border:5px solid #1c2621;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.55)}
+.pin{width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:4px solid #1c2621;box-shadow:0 0 0 2px #fff,0 2px 5px rgba(0,0,0,.5)}
+.nolabel .pinlabel{display:none}   /* Radar: just the marker, no label */
 .pinlabel{background:#fff;color:#1c2621;border:2px solid #1c2621;border-radius:8px;padding:3px 9px;font:700 1.15rem var(--mono);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.45)}
 .pinlabel::before{border-top-color:#1c2621!important}
 .locate a{display:flex!important;align-items:center;justify-content:center;width:34px!important;height:34px!important;cursor:pointer}
@@ -403,11 +404,11 @@ function readTap(){
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
       icon: L.divIcon({className:"", html:'<div class="pin"></div>', iconSize:[0,0]})})
-    .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
+    .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-12], className:"pinlabel"}).addTo(map);
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? (tapAt && setPin("Here")) : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -824,6 +825,7 @@ function setTab(t, first){
   document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly").forEach(el => el.hidden = !el.classList.contains(only));
   $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar";
   if (t !== "radar") rClear();
+  map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
   if (t !== "fc") fLoop(false);
   $("dayField").hidden = t === "rain" && view === "week";
@@ -836,7 +838,7 @@ function setTab(t, first){
   } else if (t === "radar"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
-    if (tapAt) setPin("Here");
+    if (tapAt) setPin("");
     startRadar(true);
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
