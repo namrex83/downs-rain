@@ -185,6 +185,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button></div></div>
+    <div class="field"><span class="eyebrow">Loop days</span><button id="fPlay" class="playbtn" aria-pressed="false">Play</button></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
@@ -783,6 +784,7 @@ function setTab(t, first){
   $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar";
   if (t !== "radar") rClear();
   if (t !== "storms") sLoop(false);
+  if (t !== "fc") fLoop(false);
   $("dayField").hidden = t === "rain" && view === "week";
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
@@ -823,17 +825,33 @@ document.addEventListener("touchend", e => {
   if (i >= 0 && i < TAB_ORDER.length) setTab(TAB_ORDER[i]);
 }, {passive: true});
 $("tRadar").onclick = () => tab !== "radar" && setTab("radar");
-$("fDay").onchange = () => fDraw();
+$("fDay").onchange = () => { fLoop(false); fDraw(); };
+// "Loop days": shows each forecast day in turn (switching to Daily), pausing a moment on the last
+let fTimer = null, fHold = 0;
+function fLoop(on){
+  clearInterval(fTimer); fTimer = null;
+  $("fPlay").setAttribute("aria-pressed", on); $("fPlay").textContent = on ? "Pause" : "Play";
+  if (!on || !F) return;
+  if (fSumN) fSetSum(0, true);
+  $("fDay").value = String(fStart); fDraw();
+  fTimer = setInterval(() => {
+    const i = +$("fDay").value, last = F.days.length - 1;
+    if (i >= last && fHold++ < 1) return;
+    fHold = 0; $("fDay").value = String(i >= last ? fStart : i + 1); fDraw();
+  }, 1200);
+}
+$("fPlay").onclick = () => fLoop(!fTimer);
 function fSetSum(n, quiet){
   fSumN = n;
   [...$("fSum").children].forEach(x => x.setAttribute("aria-pressed", +x.dataset.n === n));
   $("fDayField").hidden = n > 0; fitMap();
   if (!quiet) fDraw();
 }
-$("fSum").onclick = e => { const b = e.target.closest("button"); if (b && F) fSetSum(+b.dataset.n); };
+$("fSum").onclick = e => { const b = e.target.closest("button"); if (b && F) { fLoop(false); fSetSum(+b.dataset.n); } };
 $("fModel").onclick = e => {
   const b = e.target.closest("button"); if (!b || b.dataset.m === fModel) return;
   fModel = b.dataset.m; try { localStorage.setItem("fModel", fModel); } catch(_){}
+  fLoop(false);
   startForecast();
 };
 $("sModel").onclick = e => {
