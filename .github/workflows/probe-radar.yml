@@ -1,0 +1,28 @@
+name: Probe BOM radar images (one-off test)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Try BOM radar image addresses
+        run: |
+          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+          REF="https://namrex83.github.io/downs-rain/"
+          echo "== latest frames on the FTP site"
+          curl -s --max-time 30 ftp://ftp.bom.gov.au/anon/gen/radar/ | grep -o 'IDR108[0-9]\.T\.[0-9]*\.png' | sort | tail -16
+          LAST=$(curl -s --max-time 30 ftp://ftp.bom.gov.au/anon/gen/radar/ | grep -o 'IDR1082\.T\.[0-9]*\.png' | sort | tail -1)
+          echo "== last 256 km frame: $LAST"
+          for u in "https://www.bom.gov.au/radar/$LAST" "http://www.bom.gov.au/radar/$LAST" "https://reg.bom.gov.au/radar/$LAST" \
+                   "https://www.bom.gov.au/products/radar_transparencies/IDR1082.background.png" \
+                   "https://www.bom.gov.au/products/radar_transparencies/IDR1082.locations.png" \
+                   "https://reg.bom.gov.au/products/radar_transparencies/IDR1082.background.png" \
+                   "https://www.bom.gov.au/products/IDR1082.loop.shtml"; do
+            echo "-- $u"
+            curl -s -o /tmp/out -D - --max-time 30 -A "$UA" -e "$REF" "$u" | grep -iE '^HTTP|^content-type|^access-control|^location|^cache-control' ; file /tmp/out | cut -c1-120
+          done
+          echo "== frame names in the BOM loop page"
+          curl -s --max-time 30 -A "$UA" -e "$REF" "https://www.bom.gov.au/products/IDR1082.loop.shtml" | grep -oE 'IDR108[0-9]\.T\.[0-9]+\.png|/radar/[^"]+\.png' | sort -u | tail -12
