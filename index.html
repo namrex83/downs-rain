@@ -32,6 +32,9 @@ label,.eyebrow{font:600 .7rem/1 var(--body);text-transform:uppercase;letter-spac
 select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
+.rSlide{flex:1 1 180px}
+.rimg{clip-path:inset(3.5% 0 3.5% 0)}   /* hide BOM's title and time bars along the top and bottom */
+.rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
 #dayField{order:3;flex:1 1 100%}
@@ -93,6 +96,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   label,.eyebrow{font-size:.6rem}
   .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
   select{font-size:.85rem;min-height:34px;padding:4px 8px}
+  /* four tabs: put them on their own full-width row under the title */
+  header{flex-wrap:wrap;align-items:flex-start}
+  header>div:first-child{flex:1 1 100%}
+  header .seg{flex:1 1 100%}
+  header .seg button{flex:1;min-height:38px;font-size:.92rem}
   #dayField{order:3;flex:1 1 100%}
   #dayField select{font-size:1rem;min-height:42px}
   #map{min-height:240px}
@@ -110,8 +118,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div><h1>Downs <span>Radar Rain</span></h1>
     <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
+    <p class="sub" id="subRadar" hidden>Live Toowoomba 256 km radar from the Bureau of Meteorology.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
-    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tFc" aria-pressed="false">Forecast</button></div>
+    <div class="seg"><button id="tRain" aria-pressed="true">Rain</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tFc" aria-pressed="false">Forecast</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -133,6 +142,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label><input type="range" id="sHour" min="0" max="0" value="0"></div>
   </div>
 
+  <div class="controls radarOnly" hidden>
+    <div class="field"><span class="eyebrow">Loop</span>
+      <div class="seg"><button id="rPlay" aria-pressed="true">Play</button><button id="rLatest" aria-pressed="false">Latest</button></div></div>
+    <div class="field rSlide"><label for="rFrame" id="rLbl">Radar time</label><input type="range" id="rFrame" min="0" max="0" value="0"></div>
+  </div>
+
   <div class="controls fcOnly" hidden>
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
@@ -142,6 +157,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
+  <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
+  <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
@@ -151,6 +168,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
+  </section>
+  <section class="panel radarOnly" hidden>
+    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 256 km range, a new picture every 5 minutes, shown over the last hour. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rain tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -170,8 +190,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
-let tab = "rain";   // "rain", "storms" or "fc" (forecast)
-try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (t === "storms" || t === "fc") tab = t; } catch(e){}
+let tab = "rain";   // "rain", "radar", "storms" or "fc" (forecast)
+try { const t = location.hash.slice(1) || localStorage.getItem("tab"); if (t === "storms" || t === "fc" || t === "radar") tab = t; } catch(e){}
 
 const HOME = [-27.24, 151.255];   // opening view: Jandowae to Brookstead, Warra to Oakey
 const map = L.map("map", {zoomControl: true}).setView(HOME, 9);
@@ -336,7 +356,7 @@ function setPin(label){
     .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? null : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -374,7 +394,7 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -624,13 +644,72 @@ async function startForecast(){
   fDraw();
 }
 
+// Live radar: BOM's Toowoomba 256 km pictures (IDR1082) straight from the BOM website, a new one every
+// 5 minutes. Each is a square centred on the radar, the same area as the rain maps (idx.bounds).
+const R_URL = t => `https://www.bom.gov.au/radar/IDR1082.T.${t}.png`;
+const R_COLOURS = ["#f5f5ff","#b4b4ff","#7878ff","#1414ff","#00d8c3","#009690","#006666","#ffff00","#ffc800","#ff9600","#ff6400","#ff0000","#c80000","#780000","#280000"];
+const R_RATES = [0.5, 1, 2, 3, 5, 8, 12, 17, 27, 42, 63, 98, 155, 250, 360];
+let rFrames = [], rLayers = [], rPos = 0, rTimer = null, rRefresh = null, rPause = 0;
+const utcStamp = d => d.toISOString().replace(/[-:T]/g, "").slice(0, 12);
+const qTimeShort = d => d.toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"}).replace(" ", "");
+const tryImg = src => new Promise(ok => { const im = new Image(); im.onload = () => ok(true); im.onerror = () => ok(false); im.src = src; });
+async function rNewest(){
+  // the newest picture: try each of the last 12 minutes (pictures appear a few minutes after each scan)
+  const now = new Date(); now.setUTCSeconds(0, 0);
+  const cand = [...Array(12)].map((_, i) => new Date(now - i * 60000));
+  const ok = await Promise.all(cand.map(d => tryImg(R_URL(utcStamp(d)))));
+  return cand.find((d, i) => ok[i]) || null;
+}
+function rShow(i){
+  rPos = i;
+  rLayers.forEach((l, k) => l.setOpacity(k === i ? 0.8 : 0));
+  const d = rFrames[i], ago = Math.round((Date.now() - d) / 60000);
+  $("rFrame").value = i;
+  $("rLbl").textContent = `Radar · ${qTimeShort(d)}`;
+  $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rFrames.length - 1 ? ", the latest" : ""}. For rainfall totals, see the Rain tab.`;
+}
+function rPlay(on){
+  $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "Pause" : "Play";
+  clearInterval(rTimer); rTimer = null;
+  if (!on) return;
+  rTimer = setInterval(() => {
+    if (rPos === rFrames.length - 1 && rPause++ < 3) return;   // linger on the latest picture
+    rPause = 0; rShow((rPos + 1) % rFrames.length);
+  }, 500);
+}
+function rClear(){
+  rPlay(false); clearInterval(rRefresh); rRefresh = null;
+  rLayers.forEach(l => map.removeLayer(l)); rLayers = [];
+}
+async function startRadar(){
+  rClear();
+  $("rLegend").innerHTML = R_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${R_RATES[i]}${i === R_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
+  const newest = await rNewest();
+  if (tab !== "radar") return;
+  if (!newest){ $("rTap").textContent = "Couldn't load the BOM radar just now. Check your connection, or try again in a few minutes."; fitMap(); return; }
+  rFrames = [...Array(12)].map((_, i) => new Date(newest - (11 - i) * 300000));   // the last hour, 5 minutes apart
+  const [s, w, n, e] = idx.bounds;
+  rLayers = rFrames.map(d => L.imageOverlay(R_URL(utcStamp(d)), [[s, w], [n, e]], {opacity: 0, interactive: false, className: "rimg"}).addTo(map));
+  $("rFrame").max = rFrames.length - 1;
+  rShow(rFrames.length - 1); rPlay(true); fitMap();
+  rRefresh = setInterval(async () => {   // pick up new pictures while the tab is open
+    const latest = await rNewest();
+    if (tab === "radar" && latest && latest > rFrames[rFrames.length - 1]) startRadar();
+  }, 120000);
+}
+$("rPlay").onclick = () => rPlay(!rTimer);
+$("rLatest").onclick = () => { rPlay(false); rShow(rFrames.length - 1); };
+$("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
+
 function setTab(t, first){
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc");
-  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly"}[t];
-  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly").forEach(el => el.hidden = !el.classList.contains(only));
-  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc";
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar");
+  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly"}[t];
+  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly").forEach(el => el.hidden = !el.classList.contains(only));
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar";
+  if (t !== "radar") rClear();
   $("dayField").hidden = t === "rain" && view === "week";
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
@@ -638,6 +717,11 @@ function setTab(t, first){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
     if (S) sDraw(); else if (first || !S) startStorms();
+  } else if (t === "radar"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
+    if (pin) { map.removeLayer(pin); pin = null; }
+    startRadar();
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
@@ -652,6 +736,7 @@ function setTab(t, first){
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
+$("tRadar").onclick = () => tab !== "radar" && setTab("radar");
 $("fDay").onchange = () => fDraw();
 $("fModel").onclick = e => {
   const b = e.target.closest("button"); if (!b || b.dataset.m === fModel) return;
