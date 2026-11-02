@@ -789,6 +789,20 @@ function setTab(t, first){
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
+// on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
+const TAB_ORDER = ["fc", "storms", "radar", "rain"];
+let swX = null, swY = 0, swT = 0;
+document.addEventListener("touchstart", e => {
+  swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;
+  if (swX != null) { swY = e.touches[0].clientY; swT = Date.now(); }
+}, {passive: true});
+document.addEventListener("touchend", e => {
+  if (swX == null) return;
+  const t = e.changedTouches[0], dx = t.clientX - swX, dy = t.clientY - swY; swX = null;
+  if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy) || Date.now() - swT > 700) return;   // a clear sideways flick only
+  const i = TAB_ORDER.indexOf(tab) + (dx < 0 ? 1 : -1);
+  if (i >= 0 && i < TAB_ORDER.length) setTab(TAB_ORDER[i]);
+}, {passive: true});
 $("tRadar").onclick = () => tab !== "radar" && setTab("radar");
 $("fDay").onchange = () => fDraw();
 function fSetSum(n, quiet){
