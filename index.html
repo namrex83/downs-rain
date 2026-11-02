@@ -173,7 +173,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls stormOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="sField"><button data-f="sev" aria-pressed="true">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="mix" aria-pressed="false">Combined</button></div></div>
+      <div class="seg" id="sField"><button data-f="mix" aria-pressed="true">Combined</button><button data-f="sev" aria-pressed="false">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button></div></div>
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
@@ -510,7 +510,7 @@ $("vWeek").onclick = () => setView("week");
 // ================================================================ Storms tab
 // data/storms.json (made by storms.py from the GFS model) holds lifted index (x10), CAPE and
 // deep-layer shear on a half-degree grid, hourly. We colour it in the browser.
-let S = null, sOverlay = null, sField = "sev", sWorst = true, sDays = [];
+let S = null, sOverlay = null, sField = "mix", sWorst = true, sDays = [];
 const SCALES = {
   // severity = sqrt(2 x CAPE) x shear (m/s): fuel times organisation ("WMAXSHEAR" in storm research).
   // Fine steps from 1000 to 2000, where big Downs storm days sit, so the worst areas stand out.
