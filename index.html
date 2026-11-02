@@ -851,7 +851,7 @@ $("rRange").onclick = e => {
   // tapping a range frames it like BOM's loop: 128 and 256 km show their whole area around Toowoomba,
   // 512 km the whole of South East Queensland (opening the tab keeps the shared view)
   if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);
-  else map.fitBounds(rBounds());
+  else map.setView([idx.radar.lat, idx.radar.lon], rRange === 128 ? 8.5 : 7.75);   // about 150 / 250 km across on a phone
   startRadar(false);
 };
 $("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
