@@ -483,8 +483,8 @@ function category(li, cape, sh, cin){
 }
 
 // the field to show: one hour, or the worst value of each point across the chosen day
-function fieldValues(field){
-  const hours = sWorst ? S.times.map((t, i) => qDate(t) === $("sDay").value ? i : -1).filter(i => i >= 0) : [+$("sHour").value];
+function fieldValues(field, only){   // only: a list of hours to use instead of the chosen day/hour
+  const hours = only || (sWorst ? S.times.map((t, i) => qDate(t) === $("sDay").value ? i : -1).filter(i => i >= 0) : [+$("sHour").value]);
   const n = S.lats.length * S.lons.length, out = new Array(n).fill(null);
   for (const h of hours) for (let k = 0; k < n; k++){
     let v;
@@ -565,16 +565,24 @@ function sReadTap(){
   if (tab !== "storms" || !tapAt) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   if (!S){ setPin("No data"); return; }
-  const li = sample(fieldValues("li"), tapAt.lat, tapAt.lng), cape = sample(fieldValues("cape"), tapAt.lat, tapAt.lng),
-        sh = sample(fieldValues("shear"), tapAt.lat, tapAt.lng);
+  // in "worst of day", read every number from the one hour that is worst here (by severity), so the numbers
+  // match the colour, rather than each number's own worst from different hours
+  let hrs = null, when = "";
+  if (sWorst){
+    const day = S.times.map((t, i) => qDate(t) === $("sDay").value ? i : -1).filter(i => i >= 0);
+    const worst = day.reduce((b, h) => (sample(fieldValues("sev", [h]), tapAt.lat, tapAt.lng) ?? -1) > (sample(fieldValues("sev", [b]), tapAt.lat, tapAt.lng) ?? -1) ? h : b, day[0]);
+    hrs = [worst]; when = ` (worst of the day, about ${qHour(S.times[worst])})`;
+  }
+  const li = sample(fieldValues("li", hrs), tapAt.lat, tapAt.lng), cape = sample(fieldValues("cape", hrs), tapAt.lat, tapAt.lng),
+        sh = sample(fieldValues("shear", hrs), tapAt.lat, tapAt.lng);
   if (li == null && cape == null){ setPin("Outside"); $("sTap").textContent = `No storm data at ${where} (outside the forecast area).`; return; }
   const liT = li == null ? "–" : li.toFixed(1).replace("-", "−");
-  const sev = sample(fieldValues("sev"), tapAt.lat, tapAt.lng);
-  const cin = S.cin ? sample(fieldValues("cin"), tapAt.lat, tapAt.lng) : null;
+  const sev = sample(fieldValues("sev", hrs), tapAt.lat, tapAt.lng);
+  const cin = S.cin ? sample(fieldValues("cin", hrs), tapAt.lat, tapAt.lng) : null;
   const pinTxt = {sev: `Sev ${Math.round(sev ?? 0)}`, li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
     mix: (["None", ...SCALES.mix.names])[Math.round(sample(fieldValues("mix"), tapAt.lat, tapAt.lng) ?? 0)]}[sField];
   setPin(pinTxt);
-  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt${cin == null ? "" : ` · cap <b>${Math.round(cin)}</b> J/kg`}<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
+  $("sTap").innerHTML = `At ${where}${when}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt${cin == null ? "" : ` · cap <b>${Math.round(cin)}</b> J/kg`}<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
 }
 
 function sHourLabel(){
