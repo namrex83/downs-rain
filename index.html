@@ -221,7 +221,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel outOnly" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
     <div id="outLinks" class="outlinks"></div>
-    <p class="note">These open on the Bureau's website. Outlooks give the chance of a wetter or drier, warmer or cooler than usual season, not amounts on particular days.</p>
+    <p class="note">These open on the Bureau's website (the SAM graph on NOAA's). Outlooks give the chance of a wetter or drier, warmer or cooler than usual season, not amounts on particular days.</p>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -874,9 +874,9 @@ const OUTLOOK_LINKS = [
   {title: "Rainfall outlook", text: "Chance of above-median rainfall over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/rainfall/median/seasonal/1"},
   {title: "Maximum temperature outlook", text: "Chance of above-median daytime temperatures over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/temperature/maximum/median/seasonal/0"},
   {heading: "Climate drivers"},
-  {title: "El Niño / La Niña (ENSO)", text: "ENSO Outlook: the state of the Pacific and the chance of El Niño or La Niña", url: "https://www.bom.gov.au/climate/enso/outlook/"},
-  {title: "Indian Ocean Dipole (IOD)", text: "Indian Ocean temperatures and their pull on rain over inland Australia", url: "https://www.bom.gov.au/climate/iod/"},
-  {title: "Southern Annular Mode (SAM)", text: "The belt of westerly winds to the south and its effect on eastern rainfall", url: "https://www.bom.gov.au/climate/sam/"},
+  {title: "El Niño / La Niña (ENSO)", text: "Current reading: NINO 3.4 sea-surface temperature index graph (BOM)", url: "https://www.bom.gov.au/climate/enso/indices.shtml?bookmark=nino34"},
+  {title: "Indian Ocean Dipole (IOD)", text: "Current reading: IOD index graph (BOM)", url: "https://www.bom.gov.au/climate/enso/indices.shtml?bookmark=iod"},
+  {title: "Southern Annular Mode (SAM)", text: "Current reading: daily SAM index graph and 2-week forecast (NOAA, where it's called the Antarctic Oscillation)", url: "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_ao_index/aao/aao.shtml"},
   {title: "Madden–Julian Oscillation (MJO)", text: "The tropical pulse of cloud and rain that passes every 30 to 60 days", url: "https://www.bom.gov.au/climate/mjo/"},
 ];
 $("outLinks").innerHTML = OUTLOOK_LINKS.map(l => l.heading ? `<div class="eyebrow" style="margin-top:6px">${l.heading}</div>`
