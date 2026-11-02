@@ -164,7 +164,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls radarOnly" hidden>
     <div class="field"><span class="eyebrow">Range</span>
-      <div class="seg" id="rRange"><button data-km="256" aria-pressed="true">256 km</button><button data-km="512" aria-pressed="false">512 km</button></div></div>
+      <div class="seg" id="rRange"><button data-km="128" aria-pressed="false">128 km</button><button data-km="256" aria-pressed="true">256 km</button><button data-km="512" aria-pressed="false">512 km</button></div></div>
     <div class="field"><span class="eyebrow">Loop</span>
       <div class="seg"><button id="rPlay" aria-pressed="true">Play</button><button id="rLatest" aria-pressed="false">Latest</button></div></div>
     <div class="field rSlide"><label for="rFrame" id="rLbl">Radar time</label><input type="range" id="rFrame" min="0" max="0" value="0"></div>
@@ -194,7 +194,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note" id="notes"></p>
   </section>
   <section class="panel radarOnly" hidden>
-    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 256 km or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). The 512 km view shows weather coming from further away, in less detail. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rain tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
+    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rain tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -679,11 +679,13 @@ async function startForecast(){
   fDraw();
 }
 
-// Live radar: BOM's Toowoomba pictures straight from the BOM website, 256 km (IDR1082) or 512 km (IDR1081)
-// range, normally a new one every 5 minutes. Each is a square centred on the radar, 2 x range across.
-const R_CODES = {256: "IDR1082", 512: "IDR1081"};
+// Live radar: BOM's Toowoomba pictures straight from the BOM website, 128 km (IDR1083, most detail),
+// 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
+// centred on the radar, 2 x range across.
+const R_CODES = {128: "IDR1083", 256: "IDR1082", 512: "IDR1081"};
+const R_VIEW = 8.5;   // the Radar tab opens on the Downs a little wider than the other tabs
 let rRange = 256;
-try { if (localStorage.getItem("rRange") === "512") rRange = 512; } catch(e){}
+try { const r = +localStorage.getItem("rRange"); if (R_CODES[r]) rRange = r; } catch(e){}
 const R_URL = t => `https://www.bom.gov.au/radar/${R_CODES[rRange]}.T.${t}.png`;
 function rBounds(){
   const {lat, lon} = idx.radar, dlat = rRange / 110.57, dlon = rRange / (111.32 * Math.cos(lat * Math.PI / 180));
@@ -731,7 +733,7 @@ async function startRadar(fit){
   const newest = await rNewest();
   if (tab !== "radar") return;
   if (!newest){ $("rTap").textContent = "Couldn't load the BOM radar just now. Check your connection, or try again in a few minutes."; fitMap(); return; }
-  if (fit) map.fitBounds(rBounds());   // the whole radar circle
+  if (fit) map.setView(HOME, R_VIEW);   // open on the Downs; zoom out to see the whole range
   // the last hour, 5 minutes apart; keep the pictures that exist (some ranges come less often)
   const cand = [...Array(12)].map((_, i) => new Date(newest - (11 - i) * 300000));
   const ok = await Promise.all(cand.map(d => tryImg(R_URL(utcStamp(d)))));
@@ -749,7 +751,7 @@ $("rPlay").onclick = () => rPlay(!rTimer);
 $("rRange").onclick = e => {
   const b = e.target.closest("button"); if (!b || +b.dataset.km === rRange) return;
   rRange = +b.dataset.km; try { localStorage.setItem("rRange", rRange); } catch(_){}
-  startRadar(true);
+  startRadar(false);   // keep the map where it is
 };
 $("rLatest").onclick = () => { rPlay(false); rShow(rFrames.length - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
