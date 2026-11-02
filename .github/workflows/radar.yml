@@ -641,6 +641,11 @@ jobs:
                       lim = int(round(70 / k))                              # ignore moves faster than ~140 km/h
                       sub = corr[h - lim:h + lim + 1, h - lim:h + lim + 1]
                       iy, ix = np.unravel_index(np.argmax(sub), sub.shape)
+                      top = np.argsort(sub.ravel())[::-1][:6]
+                      log("  motion peaks (east km, north km, strength): " + ", ".join(
+                          f"({(j % sub.shape[1] - lim) * k:.0f}, {-(j // sub.shape[1] - lim) * k:.0f}, {sub.ravel()[j] / (corr.std() + 1e-9):.1f})" for j in top))
+                      same = float(((new > 0) & (new == old))[c - h:c + h, c - h:c + h].mean())
+                      log(f"  wet {wet:.3f}; share of the window wet with exactly the same value in both pictures: {same:.3f}")
                       def refine(m, i):   # parabola through the peak and its neighbours, for sub-pixel accuracy
                           if 0 < i < len(m) - 1:
                               d = m[i - 1] - 2 * m[i] + m[i + 1]
