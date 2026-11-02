@@ -1,87 +1,9 @@
 [
 {
-"name": "Belgrae Park Alert",
-"lat": -26.97,
-"lon": 151.496,
-"approx_km": 2.6
-},
-{
-"name": "Beruna Al",
-"lat": -26.632,
-"lon": 150.92,
-"approx_km": 3.6
-},
-{
-"name": "Bowenville (DDCGI)",
-"lat": -27.368,
-"lon": 151.468,
-"approx_km": 2.2
-},
-{
-"name": "Brigalow (DPI)",
-"lat": -26.814,
-"lon": 150.864,
-"approx_km": 1.4
-},
-{
-"name": "Brigalow Bridge Alert",
-"lat": -26.882,
-"lon": 150.79,
-"approx_km": 1.3
-},
-{
-"name": "Burncluith Bridge Al",
-"lat": -26.706,
-"lon": 150.672,
-"approx_km": 2.8
-},
-{
-"name": "Chinchilla Al",
-"lat": -26.7,
-"lon": 150.664,
-"approx_km": 2.9
-},
-{
-"name": "Clydesdale Alert",
-"lat": -27.182,
-"lon": 151.494,
-"approx_km": 2.4
-},
-{
 "name": "Cooranga (DDCGI)",
 "lat": -26.892,
 "lon": 151.022,
 "approx_km": 1.1
-},
-{
-"name": "Daandine (DDCGI)",
-"lat": -27.044,
-"lon": 151.016,
-"approx_km": 1.0
-},
-{
-"name": "Dalby Alert",
-"lat": -27.18,
-"lon": 151.262,
-"approx_km": 1.0
-},
-{
-"name": "Dalby East (DDCGI)",
-"lat": -27.238,
-"lon": 151.326,
-"approx_km": 0.7
-},
-{
-"name": "Dalby South",
-"lat": -27.272,
-"lon": 151.262,
-"approx_km": 1.0
-},
-{
-"name": "Formartin (DDCGI)",
-"lat": -27.458,
-"lon": 151.39,
-"approx_km": 3.3
 },
 {
 "name": "Glenesk (DDi)",
@@ -90,76 +12,16 @@
 "approx_km": 0.5
 },
 {
-"name": "Horse Creek Al",
-"lat": -26.504,
-"lon": 150.724,
-"approx_km": 5.1
-},
-{
-"name": "Jandowae Al",
-"lat": -26.764,
-"lon": 151.106,
-"approx_km": 2.0
-},
-{
-"name": "Jandowae-Macalister Road Al",
-"lat": -26.87,
-"lon": 151.078,
-"approx_km": 1.7
-},
-{
 "name": "Jimbour (DDCGI)",
 "lat": -26.946,
 "lon": 151.132,
 "approx_km": 0.6
 },
 {
-"name": "Jimbour North",
-"lat": -26.918,
-"lon": 151.2,
-"approx_km": 0.6
-},
-{
-"name": "Jimbour West Tm",
-"lat": -26.87,
-"lon": 151.078,
-"approx_km": 1.7
-},
-{
-"name": "Jinghi Jinghi Alert",
-"lat": -26.672,
-"lon": 151.042,
-"approx_km": 3.1
-},
-{
 "name": "Kupunn (DDCGI)",
 "lat": -27.244,
 "lon": 151.094,
 "approx_km": 1.5
-},
-{
-"name": "Macalister",
-"lat": -27.058,
-"lon": 151.096,
-"approx_km": 1.1
-},
-{
-"name": "Macalister (DDCGI)",
-"lat": -27.066,
-"lon": 151.108,
-"approx_km": 1.3
-},
-{
-"name": "Maclee (Macalister)",
-"lat": -27.064,
-"lon": 151.104,
-"approx_km": 1.1
-},
-{
-"name": "Moola Park",
-"lat": -27.078,
-"lon": 151.542,
-"approx_km": 3.0
 },
 {
 "name": "Nandi (DDCGI)",
@@ -174,39 +36,9 @@
 "approx_km": 0.6
 },
 {
-"name": "Portable Qfdn (Wieambilla)",
-"lat": -27.09,
-"lon": 150.492,
-"approx_km": 4.6
-},
-{
-"name": "St Ruth (DDCGI)",
-"lat": -27.374,
-"lon": 151.352,
-"approx_km": 2.3
-},
-{
-"name": "St Ruth Tm",
-"lat": -27.39,
-"lon": 151.262,
-"approx_km": 2.6
-},
-{
-"name": "Tangalooma (Macalister)",
-"lat": -26.992,
-"lon": 151.096,
-"approx_km": 0.9
-},
-{
 "name": "Warra (DDCGI)",
 "lat": -26.87,
 "lon": 150.92,
 "approx_km": 0.6
-},
-{
-"name": "Warra Alert",
-"lat": -26.926,
-"lon": 150.922,
-"approx_km": 0.8
 }
 ]
