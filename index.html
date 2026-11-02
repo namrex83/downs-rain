@@ -124,7 +124,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls stormOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="sField"><button data-f="li" aria-pressed="true">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="mix" aria-pressed="false">Combined</button></div></div>
+      <div class="seg" id="sField"><button data-f="sev" aria-pressed="true">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="mix" aria-pressed="false">Combined</button></div></div>
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
@@ -156,7 +156,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
-    <p class="note"><b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
+    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
   <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm and forecast maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
@@ -241,6 +241,7 @@ const part = (d, o) => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {.
 const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const wd = d => `${part(d, {weekday:"short"})} ${part(d, {day:"numeric"})}`;
 const span = (a, b) => `${wd(a)}${a.slice(0, 7) === b.slice(0, 7) ? "" : " " + part(a, {month:"short"})} – ${wd(b)} ${part(b, {month:"short"})}`;
+const STORM_OPACITY = 0.78;  // storm colours sit stronger over the satellite map so the top shades stay distinct
 const OVERLAY_OPACITY = 0.6; // fixed see-through level for the rain layer
 const rainDay = end => span(addDays(end, -1), end);
 const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.getUTCHours() >= 9) t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };   // Queensland time
@@ -386,8 +387,12 @@ $("vWeek").onclick = () => setView("week");
 // ================================================================ Storms tab
 // data/storms.json (made by storms.py from the GFS model) holds lifted index (x10), CAPE and
 // deep-layer shear on a half-degree grid, hourly. We colour it in the browser.
-let S = null, sOverlay = null, sField = "li", sWorst = true, sDays = [];
+let S = null, sOverlay = null, sField = "sev", sWorst = true, sDays = [];
 const SCALES = {
+  // severity = sqrt(2 x CAPE) x shear (m/s): fuel times organisation ("WMAXSHEAR" in storm research).
+  // Fine steps from 1000 to 2000, where big Downs storm days sit, so the worst areas stand out.
+  sev: {title: "Severity potential · CAPE × shear", stops: [400,700,1000,1200,1400,1600,1800,2000,2500,3000], sign: 1,
+       colors: ["#fff3b0","#ffe066","#ffc233","#ff9a1f","#ff6a00","#f03b20","#c4002f","#a0007a","#6a0dad","#3b0764"]},
   li: {title: "Lifted index (°C) · lower is more unstable", stops: [0,-2,-4,-6,-8,-10], sign: -1,
        colors: ["#fde68a","#fbbf24","#f97316","#dc2626","#a21caf","#5b21b6"]},
   cape: {title: "CAPE (J/kg) · storm fuel", stops: [250,500,1000,1500,2500,3500], sign: 1,
@@ -417,6 +422,7 @@ function fieldValues(field){
   for (const h of hours) for (let k = 0; k < n; k++){
     let v;
     if (field === "mix") v = category(S.li[h][k], S.cape[h][k], S.shear[h][k]);
+    else if (field === "sev") v = S.cape[h][k] == null || S.shear[h][k] == null ? null : Math.sqrt(2 * S.cape[h][k]) * S.shear[h][k] * 0.5144;
     else { v = S[field][h][k]; if (v != null && field === "li") v /= 10; }
     if (v == null) continue;
     const cur = out[k];
@@ -465,7 +471,7 @@ function sDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (sOverlay) map.removeLayer(sOverlay);
-  sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}).addTo(map);
+  sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: STORM_OPACITY, interactive: false}).addTo(map);
   sLegend(); sReadTap();
 }
 
@@ -482,6 +488,12 @@ function verdict(li, cape, sh){
   const org = sh == null ? "" : sh < 20 ? "weak shear, so storms would be short-lived" : sh < 30 ? "moderate shear" : sh < 40 ? "enough shear for organised storms" : "strong shear, enough for supercells";
   return `Air ${inst}${li <= -2 && org ? "; " + org : ""}.`;
 }
+function sevWords(v){
+  if (v == null) return "";
+  const t = v < 400 ? "low: storms, if any, unlikely to be severe" : v < 1000 ? "severe storms possible (hail, strong winds)"
+    : v < 1600 ? "significant severe potential (large hail, damaging winds)" : "high-end potential (giant hail, destructive winds)";
+  return `Severity ${Math.round(v)}: ${t}. This is how bad storms could get here if they form, not whether they will.`;
+}
 function sReadTap(){
   if (tab !== "storms" || !tapAt) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
@@ -490,10 +502,11 @@ function sReadTap(){
         sh = sample(fieldValues("shear"), tapAt.lat, tapAt.lng);
   if (li == null && cape == null){ setPin("Outside"); $("sTap").textContent = `No storm data at ${where} (outside the forecast area).`; return; }
   const liT = li == null ? "–" : li.toFixed(1).replace("-", "−");
-  const pinTxt = {li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
+  const sev = sample(fieldValues("sev"), tapAt.lat, tapAt.lng);
+  const pinTxt = {sev: `Sev ${Math.round(sev ?? 0)}`, li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
     mix: (["None", ...SCALES.mix.names])[Math.round(sample(fieldValues("mix"), tapAt.lat, tapAt.lng) ?? 0)]}[sField];
   setPin(pinTxt);
-  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt<span class="verdict">${verdict(li, cape, sh)}</span>`;
+  $("sTap").innerHTML = `At ${where}${sWorst ? " (worst of the day)" : ""}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
 }
 
 function sHourLabel(){
