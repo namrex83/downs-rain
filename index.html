@@ -158,7 +158,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
-    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
+    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
   <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm and forecast maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
@@ -401,8 +401,9 @@ const SCALES = {
        colors: ["#fde68a","#fbbf24","#f97316","#dc2626","#a21caf","#5b21b6"]},
   shear: {title: "Deep-layer shear (knots) · storm organisation", stops: [20,30,40,50,60], sign: 1,
        colors: ["#bae6fd","#60a5fa","#2563eb","#7c3aed","#c026d3"]},
-  mix: {title: "Where the ingredients overlap", cats: true, stops: [1,2,3], sign: 1,
-       colors: ["#fde047","#f97316","#dc2626"], names: ["Storms possible", "Organised storms", "Severe ingredients"]}
+  mix: {title: "Where the ingredients overlap", cats: true, stops: [1,2,3,4,5], sign: 1,
+       colors: ["#fde047","#f97316","#dc2626","#c026d3","#4c1d95"],
+       names: ["Storms possible", "Organised storms", "Severe", "Significant severe", "High-end severe"]}
 };
 const hex = c => [1,3,5].map(i => parseInt(c.slice(i, i+2), 16));
 const qld = t => new Date((t + 36000) * 1000);   // Queensland time, no daylight saving
@@ -412,7 +413,11 @@ const qHour = t => { const h = qld(t).getUTCHours(); return `${h % 12 || 12}${h 
 // one category per point per hour for the "Combined" view
 function category(li, cape, sh){
   if (li == null || cape == null || cape < 250 || li > -10) return 0;   // li is x10
-  if (cape >= 1000 && li <= -40 && sh != null && sh >= 40) return 3;
+  if (cape >= 1000 && li <= -40 && sh != null && sh >= 40){
+    // grade the severe areas by severity (sqrt(2 x CAPE) x shear in m/s) so the hot spots show
+    const sev = Math.sqrt(2 * cape) * sh * 0.5144;
+    return sev >= 1700 ? 5 : sev >= 1300 ? 4 : 3;
+  }
   if (cape >= 500 && sh != null && sh >= 25) return 2;
   return 1;
 }
