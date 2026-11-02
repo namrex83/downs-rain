@@ -406,7 +406,8 @@ function setPin(label){
     .bindTooltip(label, {permanent:true, direction:"top", offset:[0,-16], className:"pinlabel"}).addTo(map);
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? null : readTap();
+// on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? (tapAt && setPin("Here")) : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -809,7 +810,8 @@ $("rPlay").onclick = () => rPlay(!rTimer);
 $("rRange").onclick = e => {
   const b = e.target.closest("button"); if (!b || +b.dataset.km === rRange) return;
   rRange = +b.dataset.km; try { localStorage.setItem("rRange", rRange); } catch(_){}
-  startRadar(false);   // keep the map where it is
+  if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);   // 512 km: show the whole of South East Queensland
+  startRadar(false);   // 128 and 256 km keep the map where it is
 };
 $("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
@@ -834,7 +836,7 @@ function setTab(t, first){
   } else if (t === "radar"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
-    if (pin) { map.removeLayer(pin); pin = null; }
+    if (tapAt) setPin("Here");
     startRadar(true);
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
