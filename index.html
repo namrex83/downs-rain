@@ -42,6 +42,11 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
 .rSlide{flex:1 1 180px}
+.outlinks{display:flex;flex-direction:column;gap:10px}
+.outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
+.outlinks a b{display:block;font-size:1rem}
+.outlinks a span{display:block;font-size:.82rem;color:var(--ink-2)}
+.outlinks a::after{content:"↗";margin-left:auto;color:var(--accent);font-weight:700}
 .rimg{clip-path:inset(4.5% 0 4.5% 0)}
 .rpred{filter:saturate(.75) brightness(1.05)}   /* predicted frames look slightly washed out */   /* hide BOM's title and time bars along the top and bottom */
 .rSlide input{width:100%}
@@ -104,6 +109,7 @@ header .seg button::before{content:"";display:block;width:20px;height:20px;margi
 #tStorm::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E")}
 #tRadar::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E")}
 #tRain::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E")}
+#tOut::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22/%3E%3Cpath%20d%3D%22M3%2010h18M8%203v4M16%203v4%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22/%3E%3Cpath%20d%3D%22M3%2010h18M8%203v4M16%203v4%22/%3E%3C/svg%3E")}
 input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-height:28px}
 #sHourField{flex:1 1 100%}
 .sHourRow{display:flex;align-items:center;gap:10px}
@@ -149,9 +155,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div><h1>Darling Downs <span>Weather Desk</span></h1>
     <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
+    <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
     <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -211,6 +218,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel radarOnly" hidden>
     <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next hour: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
+  <section class="panel outOnly" hidden>
+    <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
+    <div id="outLinks" class="outlinks"></div>
+    <p class="note">These open on the Bureau's website. Outlooks give the chance of a wetter or drier, warmer or cooler than usual season, not amounts on particular days.</p>
+  </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
@@ -230,7 +242,7 @@ const $ = id => document.getElementById(id);
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
 let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
-try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
+try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "outlook"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
 
 // Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
 // tabs keeps wherever the map has been moved to
@@ -857,13 +869,21 @@ $("rRange").onclick = e => {
 $("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
 
+// Outlook tab: links to long-range outlooks (add more here)
+const OUTLOOK_LINKS = [
+  {title: "Rainfall outlook", text: "Chance of above-median rainfall over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/rainfall/median/seasonal/1"},
+  {title: "Maximum temperature outlook", text: "Chance of above-median daytime temperatures over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/temperature/maximum/median/seasonal/0"},
+];
+$("outLinks").innerHTML = OUTLOOK_LINKS.map(l => `<a href="${l.url}" target="_blank" rel="noopener"><div><b>${l.title}</b><span>${l.text}</span></div></a>`).join("");
+
 function setTab(t, first){
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar");
-  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly"}[t];
-  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly").forEach(el => el.hidden = !el.classList.contains(only));
-  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar";
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tOut").setAttribute("aria-pressed", t === "outlook");
+  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly"}[t];
+  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly").forEach(el => el.hidden = !el.classList.contains(only));
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook";
+  $("map").hidden = t === "outlook";   // the Outlook tab is just links
   if (t !== "radar") rClear();
   map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
@@ -880,6 +900,9 @@ function setTab(t, first){
     gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
     if (tapAt) setPin("");
     startRadar(true);
+  } else if (t === "outlook"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers();
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
@@ -889,12 +912,14 @@ function setTab(t, first){
     if (idx) show();
   }
   townsForZoom(); fitMap();
+  if (t !== "outlook") map.invalidateSize();
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
+$("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 // on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
-const TAB_ORDER = ["fc", "storms", "radar", "rain"];
+const TAB_ORDER = ["fc", "storms", "radar", "rain", "outlook"];
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
   swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;
