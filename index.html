@@ -627,18 +627,16 @@ function setTab(t, first){
   if (t === "storms"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
-    map.fitBounds([[-31.5, 147], [-23.5, 154]]);
     if (S) sDraw(); else if (first || !S) startStorms();
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
-    map.fitBounds([[-29.3, 149.6], [-25.4, 153.2]]);
     if (F) fDraw(); else startForecast();
   } else {
     if (ring) ring.addTo(map);
-    if (!first) map.setView(HOME, 9);
     if (idx) show();
   }
+  if (!first) map.setView(HOME, 9);   // every tab opens on the same Downs view
   townsForZoom(); fitMap();
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
