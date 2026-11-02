@@ -104,6 +104,10 @@ header .seg button::before{content:"";display:block;width:20px;height:20px;margi
 #tRain::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E")}
 input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-height:28px}
 #sHourField{flex:1 1 100%}
+.sHourRow{display:flex;align-items:center;gap:10px}
+.sHourRow input{flex:1}
+.playbtn{font:700 .9rem var(--body);border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:999px;min-height:38px;padding:0 16px;cursor:pointer}
+.playbtn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
 .slegend{display:flex}
 .slegend div{flex:1;min-width:0}
@@ -164,7 +168,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
     <div class="field"><span class="eyebrow">When</span>
       <div class="seg"><button id="sWorst" aria-pressed="true">Worst of day</button><button id="sHourly" aria-pressed="false">By hour</button></div></div>
-    <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label><input type="range" id="sHour" min="0" max="0" value="0"></div>
+    <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label>
+      <div class="sHourRow"><button id="sPlay" class="playbtn" aria-pressed="false">Play</button><input type="range" id="sHour" min="0" max="0" value="0"></div></div>
   </div>
 
   <div class="controls radarOnly" hidden>
@@ -777,6 +782,7 @@ function setTab(t, first){
   document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly").forEach(el => el.hidden = !el.classList.contains(only));
   $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar";
   if (t !== "radar") rClear();
+  if (t !== "storms") sLoop(false);
   $("dayField").hidden = t === "rain" && view === "week";
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
@@ -840,11 +846,24 @@ $("sField").onclick = e => {
   sField = b.dataset.f; [...$("sField").children].forEach(x => x.setAttribute("aria-pressed", x === b)); sDraw();
 };
 const setWhen = worst => { sWorst = worst; $("sWorst").setAttribute("aria-pressed", worst); $("sHourly").setAttribute("aria-pressed", !worst);
-  $("sHourField").hidden = worst; fitMap(); sDraw(); };
+  $("sHourField").hidden = worst; if (worst) sLoop(false); fitMap(); sDraw(); };
+// "By hour" loop: steps through the chosen day's hours, pausing a moment on the last one
+let sTimer = null, sHold = 0;
+function sLoop(on){
+  clearInterval(sTimer); sTimer = null;
+  $("sPlay").setAttribute("aria-pressed", on); $("sPlay").textContent = on ? "Pause" : "Play";
+  if (!on) return;
+  sTimer = setInterval(() => {
+    const el = $("sHour"), v = +el.value;
+    if (v >= +el.max && sHold++ < 2) return;
+    sHold = 0; el.value = v >= +el.max ? el.min : v + 1; sHourLabel(); sDraw();
+  }, 800);
+}
+$("sPlay").onclick = () => sLoop(!sTimer);
 $("sWorst").onclick = () => setWhen(true);
 $("sHourly").onclick = () => setWhen(false);
 $("sDay").onchange = () => { sSetHourRange(); sDraw(); };
-$("sHour").oninput = () => { sHourLabel(); sDraw(); };
+$("sHour").oninput = () => { sLoop(false); sHourLabel(); sDraw(); };
 
 init(); setTab(tab, true);
 })();
