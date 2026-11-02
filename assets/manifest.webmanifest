@@ -1,6 +1,6 @@
 {
   "name": "Darling Downs Weather Desk",
-  "short_name": "Weather Desk",
+  "short_name": "Namrex Weather",
   "start_url": "../index.html",
   "display": "browser",
   "background_color": "#eef3f8",
