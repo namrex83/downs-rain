@@ -615,51 +615,69 @@ jobs:
           
           
           def estimate_motion(src, names):
-              """How fast and which way the rain is moving, measured from the radar itself: the shift that best lines
-              up the newest picture with the one about 30 minutes earlier (phase correlation over ~200 km around
-              the radar). Written to data/motion.json for the Radar tab's next-hour prediction."""
-              frames = [(parse_frame_time(nm), nm) for nm in names]
-              frames = [(t, nm) for t, nm in frames if t]
-              if len(frames) < 2:
-                  return
-              t_new, nm_new = frames[-1]
-              older = [(abs((t_new - t).total_seconds() / 60 - 30), t, nm) for t, nm in frames[:-1] if 20 <= (t_new - t).total_seconds() / 60 <= 45]
-              out = {"time": t_new.isoformat(timespec="minutes"), "u_kmh": None, "v_kmh": None}
-              if older:
-                  _, t_old, nm_old = min(older)
-                  new, _ = decode_rate(src.get(FTP_RADAR_DIR, nm_new))
-                  old, _ = decode_rate(src.get(FTP_RADAR_DIR, nm_old))
-                  n = new.shape[0]; k = km_per_px(n); h = int(round(200 / k)); c = n // 2
-                  a, b = np.log1p(new[c - h:c + h, c - h:c + h]), np.log1p(old[c - h:c + h, c - h:c + h])
-                  wet = float(((a > 0.4) | (b > 0.4)).mean())
-                  out["wet_fraction"] = round(wet, 3)
-                  if wet >= 0.01:
-                      win = np.outer(np.hanning(2 * h), np.hanning(2 * h))
-                      fa, fb = np.fft.fft2(a * win), np.fft.fft2(b * win)
-                      r = fa * np.conj(fb); r /= np.abs(r) + 1e-9
-                      corr = np.fft.fftshift(np.fft.ifft2(r).real)
-                      lim = int(round(70 / k))                              # ignore moves faster than ~140 km/h
-                      sub = corr[h - lim:h + lim + 1, h - lim:h + lim + 1]
-                      iy, ix = np.unravel_index(np.argmax(sub), sub.shape)
-                      top = np.argsort(sub.ravel())[::-1][:6]
-                      log("  motion peaks (east km, north km, strength): " + ", ".join(
-                          f"({(j % sub.shape[1] - lim) * k:.0f}, {-(j // sub.shape[1] - lim) * k:.0f}, {sub.ravel()[j] / (corr.std() + 1e-9):.1f})" for j in top))
-                      same = float(((new > 0) & (new == old))[c - h:c + h, c - h:c + h].mean())
-                      log(f"  wet {wet:.3f}; share of the window wet with exactly the same value in both pictures: {same:.3f}")
-                      def refine(m, i):   # parabola through the peak and its neighbours, for sub-pixel accuracy
-                          if 0 < i < len(m) - 1:
-                              d = m[i - 1] - 2 * m[i] + m[i + 1]
-                              return i + (0.5 * (m[i - 1] - m[i + 1]) / d if d else 0)
-                          return i
-                      dy, dx = refine(sub[:, ix], iy) - lim, refine(sub[iy, :], ix) - lim
-                      hours = (t_new - t_old).total_seconds() / 3600
-                      out.update({"u_kmh": round(dx * k / hours, 1), "v_kmh": round(-dy * k / hours, 1),
-                                  "quality": round(float(sub.max() / (corr.std() + 1e-9)), 1),
-                                  "from": t_old.isoformat(timespec="minutes")})
+              """How fast and which way the rain is moving, measured from the radar itself, for the Radar tab's
+              next-hour prediction (data/motion.json). For each of the three newest pictures, the picture about 30
+              minutes earlier is compared at every shift up to ~70 km (smoothed, normalised cross-correlation over
+              ~200 km around the radar); the three are added up and the best shift kept. Only a clear-cut answer is
+              kept: if no shift stands out (as with broad, featureless rain) there is no prediction."""
+              frames = sorted((t, nm) for t, nm in ((parse_frame_time(nm), nm) for nm in names) if t)
+              out = {"time": frames[-1][0].isoformat(timespec="minutes") if frames else None, "u_kmh": None, "v_kmh": None}
+              pairs = []
+              for t_new, nm_new in frames[-3:]:
+                  older = [(abs((t_new - t).total_seconds() / 60 - 30), t, nm) for t, nm in frames if 20 <= (t_new - t).total_seconds() / 60 <= 45]
+                  if older:
+                      _, t_old, nm_old = min(older)
+                      pairs.append((t_new, nm_new, t_old, nm_old))
+              cache = {}
+              def field(nm):
+                  if nm not in cache:
+                      cache[nm] = decode_rate(src.get(FTP_RADAR_DIR, nm))[0]
+                  return cache[nm]
+              total, hours, k, lim, wet = None, [], None, None, []
+              for t_new, nm_new, t_old, nm_old in pairs:
+                  new, old = field(nm_new), field(nm_old)
+                  n = new.shape[0]; k = km_per_px(n); h = int(round(200 / k)); c = n // 2; lim = int(round(70 / k))
+                  def smooth(f):   # log rain rate, softened with two passes of a 5-pixel box blur
+                      g = np.log1p(f[c - h:c + h, c - h:c + h]).astype(np.float64)
+                      for _ in range(2):
+                          for ax in (0, 1):
+                              q = np.cumsum(np.pad(g, [(3, 2) if i == ax else (0, 0) for i in (0, 1)], mode="edge"), axis=ax)
+                              g = (np.take(q, range(5, q.shape[ax]), axis=ax) - np.take(q, range(0, q.shape[ax] - 5), axis=ax)) / 5
+                      return g
+                  a, b = smooth(new), smooth(old)
+                  wet.append(float(((a > 0.3) | (b > 0.3)).mean()))
+                  a, b = a - a.mean(), b - b.mean()
+                  win = np.outer(np.hanning(2 * h), np.hanning(2 * h))
+                  xc = np.fft.fftshift(np.fft.ifft2(np.fft.fft2(a * win) * np.conj(np.fft.fft2(b * win))).real)
+                  xc /= (np.sqrt(((a * win) ** 2).sum() * ((b * win) ** 2).sum()) + 1e-9)   # -1..1, 1 = perfect match
+                  sub = xc[h - lim:h + lim + 1, h - lim:h + lim + 1] * (3600 / (t_new - t_old).total_seconds())  # per hour gap
+                  total = sub if total is None else total + sub
+                  hours.append((t_new - t_old).total_seconds() / 3600)
+              if total is not None and np.mean(wet) >= 0.01:
+                  total /= len(pairs)
+                  iy, ix = np.unravel_index(np.argmax(total), total.shape)
+                  yy, xx = np.mgrid[0:total.shape[0], 0:total.shape[1]]
+                  # how much the winner stands out from moves well away from it (over ~15 km different in 30 minutes)
+                  far = np.hypot(yy - iy, xx - ix) * k > 15
+                  clear = float(total.max() / max(total[far].max(), 1e-9)) if far.any() else 1.0
+                  def refine(m, i):   # parabola through the peak and its neighbours, for sub-pixel accuracy
+                      if 0 < i < len(m) - 1:
+                          d = m[i - 1] - 2 * m[i] + m[i + 1]
+                          return i + (0.5 * (m[i - 1] - m[i + 1]) / d if d else 0)
+                      return i
+                  dy, dx = refine(total[:, ix], iy) - lim, refine(total[iy, :], ix) - lim
+                  gap = float(np.mean(hours))
+                  match = float(total.max() * gap)                              # back to a plain 0..1 match
+                  log(f"  rain motion: {dx * k / gap:.0f} km/h east, {-dy * k / gap:.0f} km/h north; match {match:.2f}, "
+                      f"stands out by {clear:.2f}x, wet {np.mean(wet):.3f}, {len(pairs)} picture pairs")
+                  out.update({"match": round(match, 2), "clear": round(clear, 2), "wet_fraction": round(float(np.mean(wet)), 3)})
+                  if match >= 0.5 and clear >= 1.02:   # a strong match that is better than moves 15+ km away
+                      out.update({"u_kmh": round(dx * k / gap, 1), "v_kmh": round(-dy * k / gap, 1), "quality": round(clear * 10, 1)})
+                  else:
+                      log("  rain motion: no clear-cut movement, so no prediction")
               os.makedirs(DATA, exist_ok=True)
               with open(os.path.join(DATA, "motion.json"), "w") as f:
                   json.dump(out, f)
-              log(f"  rain motion: {out.get('u_kmh')}, {out.get('v_kmh')} km/h (east, north)")
           
           
           def write_check_image(src, sample_png, off):
