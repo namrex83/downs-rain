@@ -165,6 +165,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
     <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
+    <div class="field" id="weekField" hidden><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><span class="eyebrow">Gauges</span>
@@ -349,26 +350,34 @@ async function init(){
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
     idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
   sel.value = "today";   // open on the running total since 9am
-  sel.onchange = show; if (tab === "rain") show();
+  sel.onchange = show;
+  // 7-day periods: the latest, then each week before it, back to the first finished day
+  const ends = [];
+  for (let end = idx.days[idx.days.length - 1]; end && addDays(end, -6) <= idx.days[idx.days.length - 1] && end >= idx.days[0]; end = addDays(end, -7)) ends.push(end);
+  $("weekSel").innerHTML = ends.map((d, i) => `<option value="${i ? d : "latest"}">${span(addDays(d, -7), d)}${i ? "" : " (latest)"}</option>`).join("");
+  $("weekSel").onchange = show;
+  if (tab === "rain") show();
 }
 
 async function show(){ if (tab !== "rain") return; await draw(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
 async function draw(){
   const week = view === "week";
+  const past = week && $("weekSel").value && $("weekSel").value !== "latest";   // an earlier week, added up here
   const day = week ? "week" : $("day").value;
-  $("dayField").hidden = week;
+  $("dayField").hidden = week; $("weekField").hidden = !week;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
-  try { meta = await getJSON(`data/${day}.json`); }
+  try { meta = past ? await buildWeek($("weekSel").value) : await getJSON(`data/${day}.json`); }
   catch(e){
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
   $("mRaw").disabled = today && !prov; $("mCorr").disabled = today && !prov;
-  const img = today ? (prov && mode !== "raw" ? "data/today_corr.png" : "data/today.png") : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`);
+  const img = past ? gridImage(mode === "raw" ? meta.grid_raw : meta.grid, meta.grid_w, meta.grid_h)
+    : (today ? (prov && mode !== "raw" ? "data/today_corr.png" : "data/today.png") : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`)) + bust();
   const [s,w,n,e] = meta.bounds;
   if (overlay) map.removeLayer(overlay);
-  overlay = L.imageOverlay(img + bust(), [[s,w],[n,e]], {opacity: OVERLAY_OPACITY, interactive:false}).addTo(map);
+  overlay = L.imageOverlay(img, [[s,w],[n,e]], {opacity: OVERLAY_OPACITY, interactive:false}).addTo(map);
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
   if (prov){
     const g = meta.gauges || [];
@@ -426,6 +435,45 @@ function drawGauges(){
 $("gSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; gaugesOn = b.dataset.g === "1";
   try { localStorage.setItem("gaugesOn", gaugesOn ? "1" : "0"); } catch(_){} drawGauges(); declutter(); };
 map.on("zoomend", () => { if (tab === "rain") { drawGauges(); declutter(); } });
+// Earlier weeks are added up here from the finished days' files, like the job does for the latest week,
+// so no extra files are kept. Their map is drawn from the 2 km tap-to-read grid, smoothed.
+const dayFiles = {};
+const dayJSON = d => dayFiles[d] || (dayFiles[d] = getJSON(`data/${d}.json`));
+async function buildWeek(end){
+  const want = [...Array(7)].map((_, i) => addDays(end, i - 6)), have = want.filter(d => idx.days.includes(d));
+  if (!have.length) throw new Error("no days");
+  const ms = await Promise.all(have.map(dayJSON)), n = ms[0].grid.length;
+  const add = key => { const out = new Array(n).fill(0);
+    for (const m of ms){ const g = m[key] || m.grid; for (let k = 0; k < n; k++) out[k] = out[k] < 0 || g[k] < 0 ? -1 : out[k] + g[k]; }
+    return out; };
+  const gauges = {};
+  for (const m of ms) for (const g of m.gauges || []){
+    if (g.radar_mm == null || g.ignored) continue;
+    const t = gauges[g.name] || (gauges[g.name] = {name: g.name, lat: g.lat, lon: g.lon, source: g.source, mm: 0, radar_mm: 0, corrected_mm: 0, days: 0});
+    for (const k of ["mm", "radar_mm", "corrected_mm"]) t[k] = Math.round((t[k] + (g[k] || 0)) * 10) / 10;
+    t.days++;
+  }
+  return {days: have, missing: want.filter(d => !have.includes(d)), from: want[0], to: end, bounds: ms[0].bounds,
+          grid_w: ms[0].grid_w, grid_h: ms[0].grid_h, grid: add("grid"), grid_raw: add("grid_raw"), gauges: Object.values(gauges)};
+}
+function gridImage(vals, W, H){   // colour a tap-to-read grid (mm x10), 3x larger with bilinear smoothing
+  const f = 3, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height), ramp = idx.ramp.map(hex);
+  for (let y = 0; y < cv.height; y++){
+    const gy = Math.min(H - 1.001, Math.max(0, (y + .5) / f - .5)), r = Math.floor(gy), dy = gy - r;
+    for (let x = 0; x < cv.width; x++){
+      const gx = Math.min(W - 1.001, Math.max(0, (x + .5) / f - .5)), c = Math.floor(gx), dx = gx - c;
+      const q = [vals[r*W + c], vals[r*W + c + 1], vals[(r+1)*W + c], vals[(r+1)*W + c + 1]];
+      if (q.some(v => v < 0)) continue;
+      const v = (q[0] * (1-dx) * (1-dy) + q[1] * dx * (1-dy) + q[2] * (1-dx) * dy + q[3] * dx * dy) / 10;
+      let k = -1; idx.breaks.forEach((b, i) => { if (v >= b) k = i; });
+      if (k < 0) continue;
+      const o = (y * cv.width + x) * 4; img.data[o] = ramp[k][0]; img.data[o+1] = ramp[k][1]; img.data[o+2] = ramp[k][2]; img.data[o+3] = 225;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv.toDataURL();
+}
 const gaugeMarker = x => L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c2621", weight:1.5, fillColor:"#fff", fillOpacity:1})
   .bindTooltip(`${fmt(x.mm)}`, {permanent:true, direction:"right", className:"glabel", offset:[6,0]})
   .bindPopup(`<b>${x.name}</b><br>Gauge ${fmt(x.mm)} mm<br>Radar ${x.radar_mm==null?"out of range":fmt(x.radar_mm)+" mm"}`)
@@ -900,6 +948,7 @@ function setTab(t, first){
   if (t !== "storms") sLoop(false);
   if (t !== "fc") fLoop(false);
   $("dayField").hidden = t === "rain" && view === "week";
+  $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
