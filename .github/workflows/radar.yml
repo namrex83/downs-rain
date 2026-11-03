@@ -385,11 +385,18 @@ jobs:
               return out
           
           
+          def site_key(name):
+              """Name as matched against the secret: case, spacing and a "(DDCGI)" tag don't matter,
+              so "Jimbour (DDCGI)" from a pasted list finds "Jimbour"."""
+              n = name.lower().replace("(ddcgi)", "")
+              return " ".join(n.split())
+          
+          
           def private_sites():
               """Exact positions of private gauges, {name: [lat, lon]}, from the PRIVATE_GAUGES secret (JSON).
               These gauges are used in the correction but never written to anything the page shows."""
               try:
-                  return {k: (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}").items()}
+                  return {site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}").items()}
               except (ValueError, TypeError, IndexError):
                   log("  PRIVATE_GAUGES secret isn't valid JSON; private gauges skipped")
                   return {}
@@ -414,8 +421,8 @@ jobs:
                           continue
                       if secret is None:
                           secret = private_sites()
-                      if parts[1] in secret:
-                          lat, lon = secret[parts[1]]
+                      if site_key(parts[1]) in secret:
+                          lat, lon = secret[site_key(parts[1])]
                           out.append({"name": parts[1], "lat": lat, "lon": lon, "mm": mm, "source": "mine", "private": True})
                       else:
                           out.append({"name": parts[1], "lat": None, "lon": None, "mm": mm, "source": "mine", "private": True, "unplaced": True})
