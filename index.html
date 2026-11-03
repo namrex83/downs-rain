@@ -887,7 +887,8 @@ async function startRadar(fit){
     if (m.u_kmh != null && (m.quality ?? 0) >= 6 && Math.abs(latest - new Date(m.time)) < 3 * 36e5){
       const speed = Math.hypot(m.u_kmh, m.v_kmh), from = (Math.atan2(-m.u_kmh, -m.v_kmh) * 180 / Math.PI + 360) % 360;
       const compass = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(from / 45) % 8];
-      rMotion = {...m, words: speed < 3 ? "which is barely moving" : `about ${Math.round(speed)} km/h from the ${compass}`};
+      rMotion = {...m, words: (speed < 3 ? "which is barely moving" : `about ${Math.round(speed)} km/h from the ${compass}`)
+        + (m.basis === "earlier" && m.measured ? ` (as measured at ${qTimeShort(new Date(m.measured))}; the rain since has been too changeable to measure)` : "")};
       const [[s0, w0], [n0, e0]] = rBounds(), coslat = Math.cos(idx.radar.lat * Math.PI / 180);
       for (let lead = 10; lead <= 60; lead += 10){
         const dLat = m.v_kmh * lead / 60 / 110.57, dLon = m.u_kmh * lead / 60 / (111.32 * coslat);

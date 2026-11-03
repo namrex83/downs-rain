@@ -683,8 +683,26 @@ jobs:
                   log(f"  rain motion: {dx * k / gap:.0f} km/h east, {-dy * k / gap:.0f} km/h north; match {match:.2f}, "
                       f"stands out by {clear:.2f}x, wet {np.mean(wet):.3f}, {len(pairs)} picture pairs")
                   out.update({"match": round(match, 2), "clear": round(clear, 2), "wet_fraction": round(float(np.mean(wet)), 3)})
+                  u, v = round(dx * k / gap, 1), round(-dy * k / gap, 1)
+                  # the last clear-cut reading, if under 3 hours old: storms that grow and change shape between pictures
+                  # make a weak match, but the rain usually keeps moving the same way
+                  prev = {}
+                  try:
+                      prev = json.load(open(os.path.join(DATA, "motion.json"))).get("good") or {}
+                  except (OSError, ValueError):
+                      pass
+                  recent = prev and (frames[-1][0] - dt.datetime.fromisoformat(prev["time"])).total_seconds() < 3 * 3600
                   if match >= 0.5 and clear >= 1.02:   # a strong match that is better than moves 15+ km away
-                      out.update({"u_kmh": round(dx * k / gap, 1), "v_kmh": round(-dy * k / gap, 1), "quality": round(clear * 10, 1)})
+                      out.update({"u_kmh": u, "v_kmh": v, "quality": round(clear * 10, 1), "basis": "radar"})
+                      out["good"] = {"time": out["time"], "u_kmh": u, "v_kmh": v}
+                  elif recent and match >= 0.1 and math.hypot(u - prev["u_kmh"], v - prev["v_kmh"]) <= 20:
+                      log("  rain motion: weak match, but it agrees with the last clear reading, so it's used")
+                      out.update({"u_kmh": u, "v_kmh": v, "quality": 8, "basis": "radar, agrees with earlier"})
+                      out["good"] = prev
+                  elif recent:
+                      log(f"  rain motion: no clear-cut movement now; using the reading from {prev['time']}")
+                      out.update({"u_kmh": prev["u_kmh"], "v_kmh": prev["v_kmh"], "quality": 7, "basis": "earlier", "measured": prev["time"]})
+                      out["good"] = prev
                   else:
                       log("  rain motion: no clear-cut movement, so no prediction")
               os.makedirs(DATA, exist_ok=True)
