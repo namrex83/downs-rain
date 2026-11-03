@@ -1,1 +1,1 @@
-{"time": "2026-11-03T12:19+00:00", "u_kmh": 61.2, "v_kmh": 13.4, "match": 0.51, "clear": 1.48, "wet_fraction": 0.255, "quality": 14.8, "basis": "radar", "good": {"time": "2026-11-03T12:19+00:00", "u_kmh": 61.2, "v_kmh": 13.4}}
+{"time": "2026-11-03T13:34+00:00", "u_kmh": 54.5, "v_kmh": 8.1, "match": 0.47, "clear": 1.07, "wet_fraction": 0.141, "quality": 8, "basis": "radar, agrees with earlier", "good": {"time": "2026-11-03T12:19+00:00", "u_kmh": 61.2, "v_kmh": 13.4}}
