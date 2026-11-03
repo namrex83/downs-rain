@@ -430,11 +430,10 @@ async function draw(){
     g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
   drawGauges(); declutter();
 }
-// Rain gauges on the Rainfall map: the local network (data/gauge_sites.json) plus every gauge the day was
-// corrected with. Filled dots have a reading for the day; values show when zoomed in, or tap a dot.
+// Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Private local gauges
+// are used in the correction but never sent to the page. Values show when zoomed in, or tap a dot.
 let gaugeSites = [], gaugesOn = true;
 try { gaugesOn = localStorage.getItem("gaugesOn") !== "0"; } catch(e){}
-getJSON("data/gauge_sites.json").then(j => { gaugeSites = j; if (tab === "rain") drawGauges(); }).catch(() => {});
 function drawGauges(){
   gaugeLayer.clearLayers();
   [...$("gSeg").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.g === "1") === gaugesOn));

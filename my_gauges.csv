@@ -1,14 +1,14 @@
 # Local rain gauge readings, used to correct that rain day (date = the morning of the 9am reading).
-# The owner sends phone photos of the Oz Forecast "Local Stations" lists (from Dalby and from Warra);
-# each reading is entered here with that gauge's position from data/gauge_sites.json, and the radar job
-# re-corrects the day on its next run. Use the "To 9am" column when the photo is taken after 9am; before
-# 9am use ">9am Yest." (rain so far). Leave out "-" and readings marked "?". With no photo the day is
-# corrected with the BOM gauges only.
+# Line format: date,name,lat,lon,mm. Private gauges leave lat and lon empty (date,name,,,mm): their exact
+# positions are kept only in the PRIVATE_GAUGES GitHub secret, and they are never written to anything the
+# page shows (no dot, no table row, not in the data files), just used in the correction.
+# The owner sends photos of the Oz Forecast station totals; enter each reading on its own line, using the
+# "To 9am" column after 9am (before 9am, ">9am Yest." = rain so far). Leave out "-" and "?" readings.
 # date,name,lat,lon,mm
-2026-11-02,Gauge near Jandowae,-26.81,151.18,24
-2026-11-03,Cooranga (DDCGI),-26.892,151.022,2.4
-2026-11-03,Jimbour (DDCGI),-26.946,151.132,1.6
-2026-11-03,Pirrinuan (DDCGI),-27.056,151.246,0.8
-2026-11-03,Glenesk (DDi),-27.2,151.216,1.6
-2026-11-03,Nandi (DDCGI),-27.266,151.17,2.6
-2026-11-03,Kupunn (DDCGI),-27.244,151.094,1.6
+2026-11-02,Gauge near Jandowae,,,24
+2026-11-03,Cooranga (DDCGI),,,2.4
+2026-11-03,Jimbour (DDCGI),,,1.6
+2026-11-03,Pirrinuan (DDCGI),,,0.8
+2026-11-03,Glenesk (DDi),,,1.6
+2026-11-03,Nandi (DDCGI),,,2.6
+2026-11-03,Kupunn (DDCGI),,,1.6

@@ -43,6 +43,7 @@ jobs:
           import ftplib
           import io
           import json
+          import hashlib
           import math
           import os
           import re
@@ -384,22 +385,56 @@ jobs:
               return out
           
           
+          def private_sites():
+              """Exact positions of private gauges, {name: [lat, lon]}, from the PRIVATE_GAUGES secret (JSON).
+              These gauges are used in the correction but never written to anything the page shows."""
+              try:
+                  return {k: (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}").items()}
+              except (ValueError, TypeError, IndexError):
+                  log("  PRIVATE_GAUGES secret isn't valid JSON; private gauges skipped")
+                  return {}
+          
+          
           def read_my_gauges(day):
-              """Optional my_gauges.csv with lines: date,name,lat,lon,mm (date = the 9am reading day)."""
+              """Optional my_gauges.csv with lines: date,name,lat,lon,mm (date = the 9am reading day). A line with
+              no lat/lon (date,name,,,mm) is a private gauge: its position comes from the PRIVATE_GAUGES secret."""
               p = os.path.join(ROOT, "my_gauges.csv")
               out = []
               if not os.path.exists(p):
                   return out
+              secret = None
               for line in open(p):
                   parts = [x.strip() for x in line.split(",")]
                   if len(parts) != 5 or parts[0] != day:
                       continue
                   try:
-                      out.append({"name": parts[1], "lat": float(parts[2]), "lon": float(parts[3]),
-                                  "mm": float(parts[4]), "source": "mine"})
+                      mm = float(parts[4])
+                      if parts[2] or parts[3]:
+                          out.append({"name": parts[1], "lat": float(parts[2]), "lon": float(parts[3]), "mm": mm, "source": "mine"})
+                          continue
+                      if secret is None:
+                          secret = private_sites()
+                      if parts[1] in secret:
+                          lat, lon = secret[parts[1]]
+                          out.append({"name": parts[1], "lat": lat, "lon": lon, "mm": mm, "source": "mine", "private": True})
+                      else:
+                          out.append({"name": parts[1], "lat": None, "lon": None, "mm": mm, "source": "mine", "private": True, "unplaced": True})
                   except ValueError:
                       pass
+              placed = [g for g in out if not g.get("unplaced")]
+              if len(placed) < len(out):
+                  log(f"  {len(out) - len(placed)} private reading(s) for {day} have no position in the secret yet, so aren't used")
               return out
+          
+          
+          def usable(gauges):
+              """Gauges with a position (private readings waiting for the secret are left out)."""
+              return [g for g in gauges if not g.get("unplaced")]
+          
+          
+          def public(gauges):
+              """What may be written for the page: private gauges are left out entirely."""
+              return [g for g in gauges if not g.get("private")]
           
           
           def correct(radar, gauges):
@@ -492,7 +527,11 @@ jobs:
           
           
           def gauge_key(gauges):
-              return sorted([g["name"], g["lat"], g["lon"], g["mm"]] for g in gauges)
+              """A fingerprint of a day's own readings, stored with the day so a change triggers a re-correction.
+              A hash, so private gauges' positions aren't written out."""
+              if not gauges:
+                  return ""
+              return hashlib.sha1(json.dumps(sorted([g["name"], g["lat"], g["lon"], g["mm"]] for g in gauges)).encode()).hexdigest()[:16]
           
           
           def recorrect_changed_days():
@@ -507,18 +546,18 @@ jobs:
                       continue
                   meta = json.load(open(mp))
                   mine = read_my_gauges(day)
-                  if gauge_key(mine) == meta.get("my_gauges", []):
+                  if gauge_key(mine) == (meta.get("my_gauges") or ""):
                       continue
                   radar = np.load(radar_total_path(day))["radar"].astype(np.float32)
                   bom = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
                          for g in meta.get("gauges", []) if g.get("source") == "BOM"]
-                  gauges = bom + mine
+                  gauges = bom + usable(mine)
                   field, bias, overall, npairs = correct(radar, gauges)
                   meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
                   meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
-                               "gauges": gauges, "my_gauges": gauge_key(mine)})
+                               "gauges": public(gauges), "my_gauges": gauge_key(mine)})
                   write_outputs(day, radar, field, meta)
-                  log(f"Re-corrected {day} with {len(mine)} of your gauge reading(s): radar x{bias:.2f} at Dalby")
+                  log(f"Re-corrected {day} with {len(usable(mine))} of your gauge reading(s): radar x{bias:.2f} at Dalby")
           
           
           def write_outputs(day, radar, field, meta):
@@ -613,12 +652,12 @@ jobs:
               out = {"date": day, "bounds": list(bounds()), **info, "grid_w": int(raw.shape[1]), "grid_h": int(raw.shape[0]),
                      "grid": raw.flatten().tolist()}
               try:
-                  gauges = fetch_bom_gauges(day, positions) + read_my_gauges(day)
+                  gauges = fetch_bom_gauges(day, positions) + usable(read_my_gauges(day))
                   if any(g["mm"] >= 0.5 for g in gauges):
                       field, bias, overall, npairs = correct(accum, gauges)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
                       out.update({"provisional": True, "grid_raw": out["grid"], "grid": enc(field).flatten().tolist(),
-                                  "bias": round(bias, 2), "gauges_used": npairs, "gauges": gauges})
+                                  "bias": round(bias, 2), "gauges_used": npairs, "gauges": public(gauges)})
               except Exception as e:
                   log(f"  provisional correction skipped: {e}")
               with open(os.path.join(DATA, "today.json"), "w") as f:
@@ -788,11 +827,11 @@ jobs:
                       win = st["windows"].pop(day)
                       radar = load_accum(day, win["n"])
                       mine = read_my_gauges(day)
-                      gauges = fetch_bom_gauges(day, positions) + mine
+                      gauges = fetch_bom_gauges(day, positions) + usable(mine)
                       field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
-                              "gauges_used": npairs, "gauges": gauges, "my_gauges": gauge_key(mine)}
+                              "gauges_used": npairs, "gauges": public(gauges), "my_gauges": gauge_key(mine)}
                       save_radar_total(day, radar)
                       write_outputs(day, radar, field, meta)
                       st["done"] = (st["done"] + [day])[-14:]
@@ -815,7 +854,7 @@ jobs:
                   cur = window_for(now)
                   if cur in st["windows"]:
                       w = st["windows"][cur]
-                      written = f"{cur}:{w['frames']}:{gauge_key(read_my_gauges(cur))}"   # also redo it when readings are entered
+                      written = f"{cur}:{w['frames']}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           write_today(cur, load_accum(cur, w["n"]),
                                       {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")}, positions)
@@ -841,6 +880,8 @@ jobs:
           restore-keys: radar-state-v2-
 
       - name: Process radar
+        env:
+          PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
         run: python radar.py
 
       - name: Save working state
