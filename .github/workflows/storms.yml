@@ -15,7 +15,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install requests
+        run: pip install requests eccodes numpy
 
       - name: Get storm forecast
         run: python storms.py
