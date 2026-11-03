@@ -30,7 +30,7 @@ LAT_N, LAT_S = -23.0, -32.0       # Emerald/Rocky down to Port Macquarie
 LON_W, LON_E = 146.0, 155.0       # west of Roma out to the coast
 STEP = 0.5                        # degrees between grid points (about 50 km)
 HOURS = 54                        # forecast hours to keep (covers tomorrow afternoon from any run)
-CHUNK = 100                       # grid points per request
+CHUNK = 25                        # grid points per request (small: each point asks for a whole wind profile)
 URL = "https://api.open-meteo.com/v1/gfs"
 MODELS = ["gfs_global", "gfs_seamless"]   # GFS 0.25°; fall back to the blended set
 VARS = ["lifted_index", "cape", "wind_speed_10m", "wind_direction_10m",
@@ -50,7 +50,7 @@ OPTIONAL = [["convective_inhibition"],                    # the cap
             [f"{n}_{p}hPa" for p in LEVELS for n in ("wind_speed", "wind_direction", "geopotential_height")
              if f"{n}_{p}hPa" not in VARS]]
 n_optional = len(OPTIONAL)
-PAUSE = 25        # seconds between requests: the profile winds make each request "heavier" for Open-Meteo
+PAUSE = 8         # seconds between requests: the profile winds make each request "heavier" for Open-Meteo
 
 
 def fetch(points, model):
@@ -62,7 +62,12 @@ def fetch(points, model):
         "wind_speed_unit": "kn", "timeformat": "unixtime", "cell_selection": "nearest",
     }
     for attempt in range(4):
-        r = requests.get(URL, params=params, timeout=90)
+        try:
+            r = requests.get(URL, params=params, timeout=180)
+        except requests.exceptions.RequestException as e:
+            print(f"  {model}: {type(e).__name__}, trying again", flush=True)
+            time.sleep(15 * (attempt + 1))
+            continue
         if r.status_code == 429:              # over Open-Meteo's per-minute limit: wait it out
             print("  rate limited, waiting a minute", flush=True)
             time.sleep(65)
