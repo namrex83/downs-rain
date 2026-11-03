@@ -11,6 +11,8 @@ storms.py's GFS file, every 3 hours out to 3 days:
   shear  difference between the 10 m and 500 hPa winds (knots)
   cin    the cap (J/kg, as a positive number): ECMWF's most-unstable CIN if the open data has it,
          else estimated from the 925, 850 and 700 hPa temperatures
+  srh    0-3 km storm-relative helicity (m2/s2) from the 1000-400 hPa winds (see helicity.py);
+         positive = helps southern-hemisphere supercells rotate
 """
 import datetime as dt
 import json
@@ -18,6 +20,8 @@ import os
 import sys
 
 import numpy as np
+
+from helicity import srh
 
 LAT_N, LAT_S = -23.0, -32.0       # same area as the GFS storm maps
 LON_W, LON_E = 146.0, 155.0
@@ -108,13 +112,37 @@ def cap_estimate(t2, td2, ps, temps):
     return cin
 
 
+WIND_LEVELS = [1000, 925, 850, 700, 600, 500, 400]   # hPa, for the helicity wind profile
+
+
+def srh_grid(ps, u10, v10, levels):
+    """0-3 km helicity at every grid point. levels = {hPa: (u, v, gh)}; ps surface pressure (hPa).
+    The ground's height is found from where the surface pressure sits among the level heights."""
+    lv = sorted(levels)                                   # 400 ... 1000
+    lnp = np.log(np.array(lv, dtype=float))
+    out = np.full(ps.shape, np.nan)
+    for idx in np.ndindex(ps.shape):
+        gh = np.array([levels[p][2][idx] for p in lv])
+        ground = float(np.interp(np.log(ps[idx]), lnp, gh))   # height of the surface pressure
+        z, u, v = [10.0], [float(u10[idx])], [float(v10[idx])]
+        for p in reversed(lv):                            # bottom up
+            h = float(levels[p][2][idx]) - ground
+            if h < 50:
+                continue
+            z.append(h); u.append(float(levels[p][0][idx])); v.append(float(levels[p][1][idx]))
+        val = srh(z, u, v) if len(z) >= 4 else None
+        if val is not None:
+            out[idx] = val
+    return out
+
+
 def run():
     from ecmwf.opendata import Client
     client = Client(source="ecmwf")
     when = client.latest(type="fc", stream="oper", param="2t", step=72)
     tag = when.strftime("%Y-%m-%dT%HZ")
     old = json.load(open(OUT)) if os.path.exists(OUT) else {}
-    if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and "--force" not in sys.argv:   # files made before the cap was added are redone
+    if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and old.get("helicity_v") == 1 and "--force" not in sys.argv:   # files made before the cap was added are redone
         print(f"Already have the {tag} storm run")
         return
     base = dict(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS)
@@ -122,7 +150,12 @@ def run():
     client.retrieve(**base, param=["2t", "2d", "sp", "10u", "10v"], target="sfc.grib2")
     client.retrieve(**base, param=["t", "u", "v"], levtype="pl", levelist=500, target="pl.grib2")
     client.retrieve(**base, param="t", levtype="pl", levelist=[925, 850, 700], target="low.grib2")
-    have_cape = have_cin = True
+    have_cape = have_cin = have_wind = True
+    try:
+        client.retrieve(**base, param=["u", "v", "gh"], levtype="pl", levelist=WIND_LEVELS, target="wind.grib2")
+    except Exception as e:
+        print(f"  no wind profile in the open data ({e}); no helicity maps", flush=True)
+        have_wind = False
     try:
         client.retrieve(**base, param="mucape", target="cape.grib2")
     except Exception as e:
@@ -138,9 +171,10 @@ def run():
     low, _ = read("low.grib2")
     cape = read("cape.grib2")[0] if have_cape else {}
     cins = read("cin.grib2")[0] if have_cin else {}
+    wind = read("wind.grib2")[0] if have_wind else {}
     get = lambda d, name, step, level=None: next((v for (n, lv, s), v in d.items()
                                                  if n == name and s == step and (level is None or lv == level)), None)
-    times, li, cp, sh, cn = [], [], [], [], []
+    times, li, cp, sh, cn, hl = [], [], [], [], [], []
     for step in STEPS:
         t2, td2, ps = get(sfc, "2t", step), get(sfc, "2d", step), get(sfc, "sp", step)
         u10, v10 = get(sfc, "10u", step), get(sfc, "10v", step)
@@ -159,13 +193,20 @@ def run():
             if all(v is not None for v in temps.values()):
                 c = cap_estimate(t2, td2, ps / 100, temps)
         cn.append(np.round(np.abs(np.nan_to_num(c))).astype(int).flatten().tolist() if c is not None else [None] * t2.size)
+        levels = {p: (get(wind, "u", step, p), get(wind, "v", step, p), get(wind, "gh", step, p)) for p in WIND_LEVELS}
+        if have_wind and all(x is not None for trio in levels.values() for x in trio):
+            g = srh_grid(ps / 100, u10, v10, levels)
+            hl.append([None if np.isnan(x) else int(round(x)) for x in g.flatten()])
+        else:
+            hl.append([None] * t2.size)
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
                    "model": "ECMWF IFS (open data, 0.25°)",
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
-                   "times": times, "li": li, "cape": cp, "shear": sh, "cin": cn}, f, separators=(",", ":"))
-    for p in ("sfc.grib2", "pl.grib2", "low.grib2", "cape.grib2", "cin.grib2"):
+                   "times": times, "helicity_v": 1, "li": li, "cape": cp, "shear": sh, "cin": cn,
+                   **({"srh": hl} if any(x is not None for row in hl for x in row) else {})}, f, separators=(",", ":"))
+    for p in ("sfc.grib2", "pl.grib2", "low.grib2", "cape.grib2", "cin.grib2", "wind.grib2"):
         if os.path.exists(p):
             os.remove(p)
     lowest = min(min(x) for x in li) / 10 if li else None

@@ -63,6 +63,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
+#sField{max-width:100%;overflow-x:auto;scrollbar-width:none}#sField::-webkit-scrollbar{display:none}#sField button{flex:0 0 auto;white-space:nowrap}
 #dayField{order:3;flex:1 1 100%}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
   -webkit-appearance:none;appearance:none;cursor:pointer;
@@ -185,7 +186,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls stormOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="sField"><button data-f="mix" aria-pressed="true">Combined</button><button data-f="sev" aria-pressed="false">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button></div></div>
+      <div class="seg" id="sField"><button data-f="mix" aria-pressed="true">Combined</button><button data-f="scp" aria-pressed="false">Supercell</button><button data-f="sev" aria-pressed="false">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="srh" aria-pressed="false">Helicity</button></div></div>
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
@@ -248,7 +249,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
-    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It is turned down where the air near the ground isn't unstable, and where a cap of stable air holds storms back (the inhibition, or "cap", in the tap readout; over about 50 J/kg is a real lid, as after a clear night). It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
+    <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It is turned down where the air near the ground isn't unstable, and where a cap of stable air holds storms back (the inhibition, or "cap", in the tap readout; over about 50 J/kg is a real lid, as after a clear night). It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Helicity</b> (0–3 km storm-relative helicity): how much the winds in the lowest 3 km turn and strengthen with height, which is what spins a storm's updraft. Worked out for the storm that rotates clockwise (the Southern Hemisphere supercell, usually moving left of the upper winds), so higher numbers mean more rotation. 100+ m²/s² supports supercells; 150–250+ strong rotation; high helicity with moist air near the ground is the tornado signal. <b>Supercell</b> (supercell composite): CAPE × helicity × shear in one number, the best single guide here to where supercells could form. Under 1 unlikely; 1–4 supercells possible; 4–8 likely if storms fire; 8+ a classic big supercell day. It is cut where a cap holds storms back. <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
   <p class="note"><b>Disclaimer:</b> These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts. They are provided as is, with no guarantee of accuracy or that the site will be available, and no responsibility is accepted for any loss from using them. Storm and forecast maps are raw weather-model output, not warnings: for warnings use the Bureau of Meteorology.</p>
@@ -588,6 +589,10 @@ const SCALES = {
        colors: ["#fde68a","#fbbf24","#f97316","#dc2626","#a21caf","#5b21b6"]},
   shear: {title: "Deep-layer shear (knots) · storm organisation", stops: [20,30,40,50,60], sign: 1,
        colors: ["#bae6fd","#60a5fa","#2563eb","#7c3aed","#c026d3"]},
+  srh: {title: "Helicity 0–3 km (m²/s²) · storm rotation", stops: [50,100,150,250,350,500], sign: 1,
+       colors: ["#d9f99d","#86efac","#2dd4bf","#0284c7","#4338ca","#86198f"]},
+  scp: {title: "Supercell composite · CAPE × helicity × shear", stops: [0.5,1,2,4,8,12], sign: 1,
+       colors: ["#fde68a","#fb923c","#ef4444","#be123c","#a21caf","#4c1d95"]},
   mix: {title: "Where the ingredients overlap", cats: true, stops: [1,2,3,4,5], sign: 1,
        colors: ["#fde047","#f97316","#dc2626","#c026d3","#4c1d95"],
        names: ["Storms possible", "Organised storms", "Severe", "Significant severe", "High-end severe"]}
@@ -606,6 +611,16 @@ function severity(li, cape, sh, cin){
   const fLi = li == null ? 1 : Math.min(1, Math.max(0, -li / 20));   // li is x10
   const fCap = cin == null ? 1 : Math.min(1, Math.max(0.25, 1 - (cin - 50) / 200));
   return Math.sqrt(2 * cape) * sh * 0.5144 * fLi * fCap;
+}
+// supercell composite parameter (SCP, Thompson et al.): CAPE/1000 x helicity/50 x shear term, where the
+// shear term is 0 below 20 kt and full at 40 kt (10 and 20 m/s), and it's cut where a cap over 40 J/kg holds.
+// 1+ supports supercells; 4+ strongly; 8+ is a classic big supercell day. Helicity here is already
+// sign-flipped so positive = southern-hemisphere (clockwise) rotation.
+function scp(cape, hel, sh, cin){
+  if (cape == null || hel == null || sh == null) return null;
+  const ms = sh * 0.5144, fSh = ms < 10 ? 0 : Math.min(ms, 20) / 20;
+  const fCap = cin == null || cin <= 40 ? 1 : 40 / cin;
+  return Math.max(0, cape / 1000 * hel / 50 * fSh * fCap);
 }
 function category(li, cape, sh, cin){
   if (li == null || cape == null || cape < 250 || li > -10) return 0;   // li is x10
@@ -626,6 +641,8 @@ function fieldValues(field, only){   // only: a list of hours to use instead of 
     let v;
     if (field === "mix") v = category(S.li[h][k], S.cape[h][k], S.shear[h][k], S.cin ? S.cin[h][k] : null);
     else if (field === "sev") v = severity(S.li[h][k], S.cape[h][k], S.shear[h][k], S.cin ? S.cin[h][k] : null);
+    else if (field === "scp") v = S.srh ? scp(S.cape[h][k], S.srh[h][k], S.shear[h][k], S.cin ? S.cin[h][k] : null) : null;
+    else if (!S[field]) v = null;
     else { v = S[field][h][k]; if (v != null && field === "li") v /= 10; }
     if (v == null) continue;
     const cur = out[k];
@@ -676,6 +693,8 @@ function sDraw(){
   if (sOverlay) map.removeLayer(sOverlay);
   sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: STORM_OPACITY, interactive: false}).addTo(map);
   sLegend(); sReadTap();
+  if ((sField === "srh" || sField === "scp") && !S.srh)
+    $("sTap").innerHTML = `<span class="empty">No helicity in this ${sModel === "ecmwf" ? "ECMWF" : "GFS"} forecast yet. It appears after the storm job next runs on GitHub.</span>`;
 }
 
 function sLegend(){
@@ -697,6 +716,12 @@ function sevWords(v){
     : v < 1600 ? "significant severe potential (large hail, damaging winds)" : "high-end potential (giant hail, destructive winds)";
   return `Severity ${Math.round(v)}: ${t}. This is how bad storms could get here if they form, not whether they will.`;
 }
+function scpWords(sc, hel){
+  if (sc == null) return "";
+  const rot = hel < 50 ? "little low-level spin" : hel < 100 ? "some low-level spin" : hel < 200 ? "good low-level spin for rotating storms" : "strong low-level spin";
+  const t = sc < 0.5 ? "supercells unlikely" : sc < 1 ? "marginal for supercells" : sc < 4 ? "supports supercells" : sc < 8 ? "strongly supports supercells" : "classic big supercell set-up";
+  return `Supercell composite ${sc.toFixed(1)}: ${t}; ${rot}. It needs something to set storms off (a trough, the range, a sea breeze), and the BOM warnings are the ones to act on.`;
+}
 function sReadTap(){
   if (tab !== "storms" || !tapAt) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
@@ -715,10 +740,12 @@ function sReadTap(){
   const liT = li == null ? "–" : li.toFixed(1).replace("-", "−");
   const sev = sample(fieldValues("sev", hrs), tapAt.lat, tapAt.lng);
   const cin = S.cin ? sample(fieldValues("cin", hrs), tapAt.lat, tapAt.lng) : null;
-  const pinTxt = {sev: `Sev ${Math.round(sev ?? 0)}`, li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
+  const hel = S.srh ? sample(fieldValues("srh", hrs), tapAt.lat, tapAt.lng) : null;
+  const sc = hel == null ? null : scp(cape, hel, sh, cin);
+  const pinTxt = {scp: sc == null ? "–" : `SCP ${sc.toFixed(1)}`, srh: hel == null ? "–" : `${Math.round(hel)} m²/s²`, sev: `Sev ${Math.round(sev ?? 0)}`, li: `LI ${liT}`, cape: `${Math.round(cape ?? 0)} J/kg`, shear: `${Math.round(sh ?? 0)} kt`,
     mix: (["None", ...SCALES.mix.names])[Math.round(sample(fieldValues("mix"), tapAt.lat, tapAt.lng) ?? 0)]}[sField];
   setPin(pinTxt);
-  $("sTap").innerHTML = `At ${where}${when}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt${cin == null ? "" : ` · cap <b>${Math.round(cin)}</b> J/kg`}<span class="verdict">${sField === "sev" ? sevWords(sev) : verdict(li, cape, sh)}</span>`;
+  $("sTap").innerHTML = `At ${where}${when}: lifted index <b>${liT}</b> · CAPE <b>${Math.round(cape ?? 0)}</b> J/kg · shear <b>${Math.round(sh ?? 0)}</b> kt${cin == null ? "" : ` · cap <b>${Math.round(cin)}</b> J/kg`}${hel == null ? "" : ` · helicity <b>${Math.round(hel)}</b> m²/s² · supercell <b>${sc.toFixed(1)}</b>`}<span class="verdict">${sField === "sev" ? sevWords(sev) : sField === "scp" || sField === "srh" ? scpWords(sc, hel) : verdict(li, cape, sh)}</span>`;
 }
 
 function sHourLabel(){
