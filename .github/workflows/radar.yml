@@ -465,7 +465,7 @@ jobs:
                   g["_px"] = (c, r)
                   used.append(g)
               pairs = [g for g in used if g["mm"] >= 0.5 and g["radar_mm"] >= 0.5]
-              clamp = lambda b: np.clip(b, 0.33, 3.0)
+              clamp = lambda b: np.clip(b, 0.15, 3.0)   # radar can read 5x+ high in storms and bright-band rain
               # overall factor, pulled towards 1 when the gauges measured only a little rain
               overall = float(clamp((sum(g["mm"] for g in pairs) + BIAS_PRIOR_MM)
                                     / (sum(g["radar_mm"] for g in pairs) + BIAS_PRIOR_MM)))
