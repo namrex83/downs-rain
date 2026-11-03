@@ -1,7 +1,7 @@
 # Local rain gauge readings, used to correct that rain day (date = the morning of the 9am reading).
 # Line format: date,name,lat,lon,mm. Private gauges leave lat and lon empty (date,name,,,mm): their exact
 # positions are kept only in the PRIVATE_GAUGES GitHub secret, and they are never written to anything the
-# page shows (no dot, no table row, not in the data files), just used in the correction.
+# page shows: they're listed by name in the gauge table, but get no dot on the map and no lat/lon in the data files.
 # The owner sends photos of the Oz Forecast station totals; enter each reading on its own line, using the
 # "To 9am" column after 9am (before 9am, ">9am Yest." = rain so far). Leave out "-" and "?" readings.
 # date,name,lat,lon,mm

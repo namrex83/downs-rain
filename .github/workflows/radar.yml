@@ -393,12 +393,13 @@ jobs:
           
           
           def private_sites():
-              """Exact positions of private gauges, {name: [lat, lon]}, from the PRIVATE_GAUGES secret (JSON).
-              These gauges are used in the correction but never written to anything the page shows."""
+              """Positions of local gauges, {name: (lat, lon)}, from the PRIVATE_GAUGES secret (JSON {name: [lat, lon]}).
+              They're used in the correction and listed by name in the gauge table, but their positions are
+              never written to anything public (no dot on the map, no lat/lon in the data files)."""
               try:
                   return {site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}").items()}
               except (ValueError, TypeError, IndexError):
-                  log("  PRIVATE_GAUGES secret isn't valid JSON; private gauges skipped")
+                  log("  PRIVATE_GAUGES secret isn't valid JSON; local gauges skipped")
                   return {}
           
           
@@ -430,7 +431,7 @@ jobs:
                       pass
               placed = [g for g in out if not g.get("unplaced")]
               if len(placed) < len(out):
-                  log(f"  {len(out) - len(placed)} private reading(s) for {day} have no position in the secret yet, so aren't used")
+                  log(f"  {len(out) - len(placed)} private reading(s) for {day} have no position in the PRIVATE_GAUGES secret yet, so aren't used")
               return out
           
           
@@ -439,9 +440,15 @@ jobs:
               return [g for g in gauges if not g.get("unplaced")]
           
           
+          def waiting(gauges):
+              """Local readings with no position yet: listed in the table as "not used", not in the correction."""
+              return [g for g in gauges if g.get("unplaced")]
+          
+          
           def public(gauges):
-              """What may be written for the page: private gauges are left out entirely."""
-              return [g for g in gauges if not g.get("private")]
+              """What may be written for the page: local (private) gauges go in the table without their positions,
+              so the page can't put them on the map."""
+              return [{k: v for k, v in g.items() if k not in ("lat", "lon")} if g.get("private") else g for g in gauges]
           
           
           def correct(radar, gauges):
@@ -562,7 +569,7 @@ jobs:
                   field, bias, overall, npairs = correct(radar, gauges)
                   meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
                   meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
-                               "gauges": public(gauges), "my_gauges": gauge_key(mine)})
+                               "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine)})
                   write_outputs(day, radar, field, meta)
                   log(f"Re-corrected {day} with {len(usable(mine))} of your gauge reading(s): radar x{bias:.2f} at Dalby")
           
@@ -624,7 +631,7 @@ jobs:
                   for g in m.get("gauges", []):
                       if g.get("radar_mm") is None or g.get("ignored"):
                           continue
-                      t = gauges.setdefault(g["name"], {"name": g["name"], "lat": g["lat"], "lon": g["lon"],
+                      t = gauges.setdefault(g["name"], {"name": g["name"], "lat": g.get("lat"), "lon": g.get("lon"),
                                                         "source": g.get("source"), "mm": 0.0, "radar_mm": 0.0,
                                                         "corrected_mm": 0.0, "days": 0})
                       for k in ("mm", "radar_mm", "corrected_mm"):
@@ -659,12 +666,13 @@ jobs:
               out = {"date": day, "bounds": list(bounds()), **info, "grid_w": int(raw.shape[1]), "grid_h": int(raw.shape[0]),
                      "grid": raw.flatten().tolist()}
               try:
-                  gauges = fetch_bom_gauges(day, positions) + usable(read_my_gauges(day))
+                  mine = read_my_gauges(day)
+                  gauges = fetch_bom_gauges(day, positions) + usable(mine)
                   if any(g["mm"] >= 0.5 for g in gauges):
                       field, bias, overall, npairs = correct(accum, gauges)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
                       out.update({"provisional": True, "grid_raw": out["grid"], "grid": enc(field).flatten().tolist(),
-                                  "bias": round(bias, 2), "gauges_used": npairs, "gauges": public(gauges)})
+                                  "bias": round(bias, 2), "gauges_used": npairs, "gauges": public(gauges + waiting(mine))})
               except Exception as e:
                   log(f"  provisional correction skipped: {e}")
               with open(os.path.join(DATA, "today.json"), "w") as f:
@@ -838,7 +846,7 @@ jobs:
                       field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
-                              "gauges_used": npairs, "gauges": public(gauges), "my_gauges": gauge_key(mine)}
+                              "gauges_used": npairs, "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine)}
                       save_radar_total(day, radar)
                       write_outputs(day, radar, field, meta)
                       st["done"] = (st["done"] + [day])[-14:]
