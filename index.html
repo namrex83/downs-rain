@@ -42,6 +42,16 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .seg button{font:600 .9rem var(--body);border:0;background:var(--panel);color:var(--ink-2);padding:0 12px;min-height:40px;cursor:pointer}
 .rSlide{flex:1 1 180px}
+/* BOM-style radar timeline: play, a -90 min to +90 min bar with "Now", and jump to now */
+.rTimeline{display:flex;align-items:stretch;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(20,50,90,.06)}
+.tlbtn{border:0;background:var(--panel);color:var(--accent);font-size:1.2rem;min-width:56px;cursor:pointer}
+.tlplay{background:var(--accent);color:var(--accent-ink)}
+.tlmid{flex:1;min-width:0;padding:6px 12px 6px}
+.tltime{text-align:right;font:600 .95rem var(--body)}
+.tlmid input{width:100%;margin:2px 0 0}
+.tlticks{position:relative;height:18px;font-size:.78rem;color:var(--ink-2)}
+.tlticks span{position:absolute;top:0;white-space:nowrap}
+#rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
 .outlinks{display:flex;flex-direction:column;gap:10px}
 .outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
 .outlinks a b{display:block;font-size:1rem}
@@ -187,9 +197,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="controls radarOnly" hidden>
     <div class="field"><span class="eyebrow">Range</span>
       <div class="seg" id="rRange"><button data-km="128" aria-pressed="false">128 km</button><button data-km="256" aria-pressed="true">256 km</button><button data-km="512" aria-pressed="false">512 km</button></div></div>
-    <div class="field"><span class="eyebrow">Loop</span>
-      <div class="seg"><button id="rPlay" aria-pressed="true">Play</button><button id="rLatest" aria-pressed="false">Latest</button></div></div>
-    <div class="field rSlide"><label for="rFrame" id="rLbl">Radar time</label><input type="range" id="rFrame" min="0" max="0" value="0"></div>
   </div>
 
   <div class="controls fcOnly" hidden>
@@ -204,6 +211,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
+  <div class="rTimeline radarOnly" id="rTimeline" hidden>
+    <button id="rPlay" class="tlbtn tlplay" aria-pressed="true" aria-label="Pause">❚❚</button>
+    <div class="tlmid">
+      <div class="tltime" id="rLbl">Radar</div>
+      <input type="range" id="rFrame" min="0" max="0" value="0" aria-label="Radar time">
+      <div class="tlticks"><span id="rStartTick">−90 mins</span><span id="rNowTick">Now</span><span id="rEndTick">+90 mins</span></div>
+    </div>
+    <button id="rLatest" class="tlbtn" aria-label="Jump to now">⏭</button>
+  </div>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
@@ -217,7 +233,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note" id="notes"></p>
   </section>
   <section class="panel radarOnly" hidden>
-    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next hour: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
+    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last hour of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel outOnly" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
@@ -543,7 +559,7 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -845,15 +861,15 @@ function rShow(i){
   $("rFrame").value = i;
   if (i >= rNReal){
     const ahead = Math.round((d - rFrames[rNReal - 1]) / 60000);
-    $("rLbl").textContent = `Predicted · ${qTimeShort(d)} (+${ahead} min)`;
+    $("rLbl").textContent = `Predicted ${qTimeShort(d)}`;
     $("rTap").innerHTML = `<b>Prediction</b> for about <b>${qTimeShort(d)}</b>, ${ahead} minutes after the latest picture: the rain moved along at its current speed and direction, ${rMotion.words}. It can't show storms growing, weakening, turning or new ones forming.`;
     return;
   }
-  $("rLbl").textContent = `Radar · ${qTimeShort(d)}`;
+  $("rLbl").textContent = qTimeShort(d);
   $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rNReal - 1 ? ", the latest" : ""}. For rainfall totals, see the Rainfall tab.`;
 }
 function rPlay(on){
-  $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "Pause" : "Play";
+  $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "❚❚" : "▶"; $("rPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   clearInterval(rTimer); rTimer = null;
   if (!on) return;
   rTimer = setInterval(() => {
@@ -874,7 +890,7 @@ async function startRadar(fit){
   if (tab !== "radar") return;
   if (!newest){ $("rTap").textContent = "Couldn't load the BOM radar just now. Check your connection, or try again in a few minutes."; fitMap(); return; }
   // the last hour, 5 minutes apart; keep the pictures that exist (some ranges come less often)
-  const cand = [...Array(12)].map((_, i) => new Date(newest - (11 - i) * 300000));
+  const cand = [...Array(19)].map((_, i) => new Date(newest - (18 - i) * 300000));   // the last 90 minutes
   const ok = await Promise.all(cand.map(d => tryImg(R_URL(utcStamp(d)))));
   if (tab !== "radar") return;
   rFrames = cand.filter((d, i) => ok[i] || i === cand.length - 1);
@@ -890,7 +906,7 @@ async function startRadar(fit){
       rMotion = {...m, words: (speed < 3 ? "which is barely moving" : `about ${Math.round(speed)} km/h from the ${compass}`)
         + (m.basis === "earlier" && m.measured ? ` (as measured at ${qTimeShort(new Date(m.measured))}; the rain since has been too changeable to measure)` : "")};
       const [[s0, w0], [n0, e0]] = rBounds(), coslat = Math.cos(idx.radar.lat * Math.PI / 180);
-      for (let lead = 10; lead <= 60; lead += 10){
+      for (let lead = 10; lead <= 90; lead += 10){   // the next 90 minutes
         const dLat = m.v_kmh * lead / 60 / 110.57, dLon = m.u_kmh * lead / 60 / (111.32 * coslat);
         rFrames.push(new Date(+latest + lead * 60000));
         rLayers.push(L.imageOverlay(R_URL(utcStamp(latest)), [[s0 + dLat, w0 + dLon], [n0 + dLat, e0 + dLon]], {opacity: 0, interactive: false, className: "rimg rpred"}).addTo(map));
@@ -899,6 +915,11 @@ async function startRadar(fit){
   } catch(e){}
   if (tab !== "radar") { rClear(); return; }
   $("rFrame").max = rFrames.length - 1;
+  // place "Now" under the slider where the latest real picture is
+  const pred = rFrames.length > rNReal, frac = rFrames.length > 1 ? (rNReal - 1) / (rFrames.length - 1) : 1;
+  $("rNowTick").style.left = `calc(${frac * 100}% + ${(0.5 - frac) * 16}px)`;
+  $("rEndTick").hidden = !pred; $("rNowTick").hidden = !pred;
+  $("rStartTick").textContent = `−${Math.round((rFrames[rNReal - 1] - rFrames[0]) / 60000)} mins`;
   rShow(rNReal - 1); rPlay(true); fitMap();
   rRefresh = setInterval(async () => {   // pick up new pictures while the tab is open
     const latest = await rNewest();
