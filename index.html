@@ -404,7 +404,7 @@ async function draw(){
     if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
     $("notes").textContent = `Provisional: the rain since 9am ${part(addDays(meta.date, -1), {weekday:"long"})}, corrected with the gauge readings so far (BOM gauges, and any local readings entered). It's corrected properly once the day finishes at 9am ${part(meta.date, {weekday:"long"})}.`;
     $("gauges").innerHTML = `<thead><tr><th>Gauge (so far)</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+      g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
     drawGauges(); declutter();
     return;
   }
@@ -420,14 +420,14 @@ async function draw(){
     $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
     $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "";
     $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-      g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+      g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
     drawGauges(); declutter();
     return;
   }
   $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
   if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n">Map</th></tr></thead><tbody>` +
-    g.slice().sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
   drawGauges(); declutter();
 }
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
