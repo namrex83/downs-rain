@@ -51,6 +51,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .tlmid input{width:100%;margin:2px 0 0}
 .tlticks{position:relative;height:18px;font-size:.78rem;color:var(--ink-2)}
 .tlticks span{position:absolute;top:0;white-space:nowrap}
+.rnote a{color:var(--accent);font-weight:600;white-space:nowrap}
 #rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
 .outlinks{display:flex;flex-direction:column;gap:10px}
 .outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
@@ -220,6 +221,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     </div>
     <button id="rLatest" class="tlbtn" aria-label="Jump to now">⏭</button>
   </div>
+  <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
