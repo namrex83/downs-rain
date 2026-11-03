@@ -867,7 +867,8 @@ jobs:
           
                   # running since-9am map, refreshed on every run that added new scans
                   cur = window_for(now)
-                  if cur in st["windows"]:
+                  # (until the previous day is finished at 9:25am, its running map stays up rather than the new day's)
+                  if cur in st["windows"] and not any(d < cur for d in st["windows"]):
                       w = st["windows"][cur]
                       written = f"{cur}:{w['frames']}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
