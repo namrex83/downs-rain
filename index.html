@@ -1050,9 +1050,10 @@ const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Off
 function fChartDraw(){
   if (!FC) return;
   const {lines, omNote, pinned} = FC, cum = fcMode === "cum";
-  const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
+  // the chart covers the same days as the map: 3, 7, 9 or 15 days (Daily shows them all)
+  const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort().slice(0, fSumN || undefined);
   // each line's value per day in this mode: running total, or that day's own rain
-  const val = l => Object.fromEntries(l.pts.map((p, k) => [p[0], cum ? p[1] : p[1] - (k ? l.pts[k - 1][1] : 0)]));
+  const val = l => Object.fromEntries(l.pts.map((p, k) => [p[0], cum ? p[1] : p[1] - (k ? l.pts[k - 1][1] : 0)]).filter(([d]) => days.includes(d)));
   const vals = lines.map(val);
   const medOf = d => { const v = vals.map(x => x[d]).filter(x => x != null).sort((a, b) => a - b);
     return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
@@ -1079,8 +1080,8 @@ function fChartDraw(){
   $("fTap").classList.add("merged");
   const last = med.length ? med[med.length - 1][1] : null;
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
-    <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${fmt(cum ? l.tot : Math.max(...Object.values(vals[k])))}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
-    <div class="cfoot"><span>${cum ? "Totals to the end of each run" : "Wettest day in each run"}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">Each day</button></div></div>`;
+    <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${Object.keys(vals[k]).length ? fmt(Math.max(...Object.values(vals[k]))) : "–"}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
+    <div class="cfoot"><span>${cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">Each day</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   // touch / hover readout
   const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
