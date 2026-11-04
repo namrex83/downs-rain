@@ -230,7 +230,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls soilOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button></div></div>
+      <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button><button data-o="avg" aria-pressed="false">7-day average</button></div></div>
   </div>
 
   <div id="map"></div>
@@ -1146,10 +1146,18 @@ function oSample(vals, lat, lon){
   for (const [rr, cc, w] of q){ const v = vals[rr*nc + cc]; if (v != null && w > 0){ sum += v*w; wt += w; } }
   return wt > 0 ? sum / wt / 10 : null;
 }
-const oWhen = i => oShow === "8am" ? `${part(qDate(O.times[i]), {weekday: "long", day: "numeric", month: "short"})}, 8am` : wTimeText(O.times[i]);
+// the average of the next seven 8am readings at each grid point, like CSD's "next 7 day predicted average"
+// (which matches the average of 8am readings, not of all hours)
+function oAvg(){
+  if (O._avg) return O._avg;
+  const now = Date.now() / 1000, use = o8().filter(i => O.times[i] > now - 4 * 3600).slice(0, 7);
+  return O._avg = O.t[use[0]].map((_, k) => { let s = 0, n = 0; for (const i of use){ const v = O.t[i][k]; if (v != null){ s += v; n++; } } return n ? Math.round(s / n) : null; });
+}
+const oVals = i => oShow === "avg" ? oAvg() : O.t[i];
+const oWhen = i => oShow === "avg" ? "Next 7 days · average of the 8am readings" : oShow === "8am" ? `${part(qDate(O.times[i]), {weekday: "long", day: "numeric", month: "short"})}, 8am` : wTimeText(O.times[i]);
 function oDraw(){
   if (!O || tab !== "soil") return;
-  const i = oI(), vals = O.t[i], cols = O_COLOURS.map(hex);
+  const i = oI(), vals = oVals(i), cols = O_COLOURS.map(hex);
   const s = O.lats[O.lats.length - 1], n = O.lats[0], w = O.lons[0], e = O.lons[O.lons.length - 1];
   const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
   const CW = 400, CH = Math.round(CW * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
@@ -1169,6 +1177,7 @@ function oDraw(){
   if (oOverlay) map.removeLayer(oOverlay);
   oOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
   $("oLbl").textContent = oWhen(i);
+  $("oTimeline").style.opacity = oShow === "avg" ? .45 : "";   // the average doesn't change with the slider
   oReadTap();
 }
 // cotton planting guide at a spot: 14+ at 8am for 3 days in a row (and the day after not dropping below 12)
@@ -1182,14 +1191,15 @@ function oPlanting(lat, lon){
 }
 function oReadTap(){
   if (tab !== "soil" || !tapAt || !O) return;
-  const i = oI(), v = oSample(O.t[i], tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
+  const i = oI(), v = oSample(oVals(i), tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   if (v == null){ setPin("Outside"); $("oTap").textContent = `No soil temperature forecast at ${where} (outside the forecast area).`; return; }
   setPin(`${v.toFixed(1)}°C`);
   const pl = oPlanting(tapAt.lat, tapAt.lng);
   const list = pl.days.map(x => `${part(x.d, {weekday: "short"})} ${x.v.toFixed(1)}`).join(" · ");
+  const avg = oSample(oAvg(), tapAt.lat, tapAt.lng);
   const verdict = pl.from ? `Cotton planting guide (14°C+ at 8am, 3 days running): <b>met from ${part(pl.from, {weekday: "long"})}</b>.`
     : `Cotton planting guide (14°C+ at 8am, 3 days running): <b>not met</b> in the forecast.`;
-  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">8am at 10 cm: ${list}. ${verdict}</span>`;
+  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">Next 7-day average (8am): <b>${avg == null ? "–" : avg.toFixed(1)}°C</b>. 8am at 10 cm: ${list}. ${verdict}</span>`;
 }
 function oTicks(){
   const n = O.times.length - 1, days = [];
@@ -1223,15 +1233,16 @@ function oLoop(on){
   if (!on || !O) return;
   oTimer = setInterval(() => {
     const el = $("oTime"), v = +el.value;
+    if (oShow === "avg") return;
     if (oShow === "8am"){ const e8 = o8(), k = e8.indexOf(v); el.value = e8[k + 1 < e8.length ? k + 1 : 0]; }
     else el.value = v >= +el.max ? 0 : v + 1;
     oDraw();
   }, 800);
 }
 $("oPlay").onclick = () => oLoop(!oTimer);
-$("oTime").oninput = () => { oLoop(false); oSnap(); oDraw(); };
+$("oTime").oninput = () => { oLoop(false); if (oShow === "avg") { oShow = "8am"; [...$("oShow").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.o === "8am")); } oSnap(); oDraw(); };
 $("oShow").onclick = e => { const b = e.target.closest("button"); if (!b || !O) return;
-  oShow = b.dataset.o; [...$("oShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); oSnap(); oDraw(); };
+  oShow = b.dataset.o; [...$("oShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); if (oShow === "avg") oLoop(false); oSnap(); oDraw(); };
 
 // Live radar: BOM's Toowoomba pictures straight from the BOM website, 128 km (IDR1083, most detail),
 // 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
