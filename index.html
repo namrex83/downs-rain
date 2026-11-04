@@ -54,7 +54,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rnote a{color:var(--accent);font-weight:600;white-space:nowrap}
 .warrow{pointer-events:none}
 .warrow svg{display:block;width:20px;height:20px;margin:-10px 0 0 -10px;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff)}
-#wTicks span{transform:translateX(-2px)}
+#wTicks span,#tTicks span{transform:translateX(-2px)}
 #rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
 .outlinks{display:flex;flex-direction:column;gap:10px}
 .outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
@@ -122,6 +122,7 @@ header .seg button::before{content:"";display:block;width:20px;height:20px;margi
   -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
 #tFc::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E")}
 #tWind::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h10a3%203%200%201%200-3-3%22/%3E%3Cpath%20d%3D%22M3%2012h15a3%203%200%201%201-3%203%22/%3E%3Cpath%20d%3D%22M3%2016h7%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h10a3%203%200%201%200-3-3%22/%3E%3Cpath%20d%3D%22M3%2012h15a3%203%200%201%201-3%203%22/%3E%3Cpath%20d%3D%22M3%2016h7%22/%3E%3C/svg%3E")}
+#tTemp::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14%2014.8V5a2%202%200%200%200-4%200v9.8a4%204%200%201%200%204%200z%22/%3E%3Cpath%20d%3D%22M12%209v7%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14%2014.8V5a2%202%200%200%200-4%200v9.8a4%204%200%201%200%204%200z%22/%3E%3Cpath%20d%3D%22M12%209v7%22/%3E%3C/svg%3E")}
 #tStorm::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E")}
 #tRadar::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E")}
 #tRain::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E")}
@@ -174,8 +175,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
     <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p>
-    <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tWind" aria-pressed="false">Wind</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
+    <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p>
+    <p class="sub" id="subTemp" hidden>Temperature forecast from the ECMWF weather model.</p></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tWind" aria-pressed="false">Wind</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -220,6 +222,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button></div></div>
   </div>
 
+  <div class="controls tempOnly" hidden>
+    <div class="field"><span class="eyebrow">Show</span>
+      <div class="seg" id="tShow"><button data-t="now" aria-pressed="true">By time</button><button data-t="max" aria-pressed="false">Day max</button><button data-t="min" aria-pressed="false">Day min</button></div></div>
+  </div>
+
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -243,6 +250,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="tlticks" id="wTicks"></div>
     </div>
   </div>
+  <div class="rTimeline tempOnly" id="tTimeline" hidden>
+    <button id="tPlay" class="tlbtn tlplay" aria-pressed="false" aria-label="Play">▶</button>
+    <div class="tlmid">
+      <div class="tltime" id="tLbl">Temperature</div>
+      <input type="range" id="tTime" min="0" max="0" value="0" aria-label="Forecast time">
+      <div class="tlticks" id="tTicks"></div>
+    </div>
+  </div>
+  <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
+  <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="legend" id="tLegend"></div></div>
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
@@ -270,6 +287,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel windOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="wInfo"></p>
     <p class="note">Wind 10 m above the ground, the model's average speed (gusts are the strongest bursts it expects between times, often half as strong again). Arrows point the way the wind is blowing. The model's grid squares are about 25 km across, so it shows the broad pattern, not gullies, ranges or storm outflow: check the wind on the spot before spraying or burning. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
+  </section>
+  <section class="panel tempOnly" hidden>
+    <p class="note" style="color:var(--ink-2)" id="tInfo"></p>
+    <p class="note">Air temperature 2 m above the ground, as in a weather screen. Day max and min are picked from the model's 3-hourly times (6-hourly after day 6), so the real top and bottom of the day can be a degree or two past them. The model's grid squares are about 25 km across: frost hollows, creek flats and hill tops run colder or warmer than it shows, and on still, clear nights the ground can frost when the screen reads 2–4°C. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
@@ -547,7 +568,7 @@ function setPin(label){
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -580,13 +601,14 @@ function locateMe(btn){
       : "Couldn't get your location just now. Try again in the open, away from buildings.";
     if (tab === "storms") $("sTap").textContent = $("tap").textContent;
     if (tab === "wind") $("wTap").textContent = $("tap").textContent;
+    if (tab === "temp") $("tTap").textContent = $("tap").textContent;
   }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
 }
 function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -987,6 +1009,104 @@ $("wTime").oninput = () => { wLoop(false); wDraw(); };
 $("wShow").onclick = e => { const b = e.target.closest("button"); if (!b || !W) return;
   wShow = b.dataset.w; [...$("wShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); wDraw(); };
 
+// Temp tab: data/temp.json (temp.py, ECMWF 2 m temperature, degC x10, same times as the wind). "Day max"
+// and "Day min" take the highest or lowest of the chosen Queensland day's times at each grid point.
+let T = null, tOverlay = null, tShow = "now", tTimer = null;
+const T_STOPS = [-99, 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42];
+const T_COLOURS = ["#2c3e9e", "#3f63c9", "#5a8fe0", "#7fb7ea", "#a8d8e8", "#cfeccf", "#e8f5a8", "#fbe98a", "#fcd16a", "#f9b14e",
+                   "#f28c3a", "#e5632c", "#cf3b26", "#a8202a", "#7a1238", "#4b0a3f"];
+const tI = () => +$("tTime").value;
+const tDayIdx = i => T.times.map((t, j) => qDate(t) === qDate(T.times[i]) ? j : -1).filter(j => j >= 0);
+function tVals(i){
+  if (tShow === "now") return T.t[i];
+  const key = `${tShow}:${qDate(T.times[i])}`;
+  if (T._day[key]) return T._day[key];
+  const idx = tDayIdx(i), pick = tShow === "max" ? Math.max : Math.min;
+  return T._day[key] = T.t[idx[0]].map((_, k) => pick(...idx.map(j => T.t[j][k])));
+}
+function tSample(vals, lat, lon){
+  const nr = T.lats.length, nc = T.lons.length, step = T.lats[0] - T.lats[1];
+  const fy = (T.lats[0] - lat) / step, fx = (lon - T.lons[0]) / (T.lons[1] - T.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  return (vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx
+        + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx) / 10;
+}
+const tWhen = i => tShow === "now" ? wTimeText(T.times[i])
+  : `${part(qDate(T.times[i]), {weekday: "long", day: "numeric", month: "short"})} · ${tShow === "max" ? "highest" : "lowest"}`;
+function tDraw(){
+  if (!T || tab !== "temp") return;
+  const i = tI(), vals = tVals(i), cols = T_COLOURS.map(hex);
+  const s = T.lats[T.lats.length - 1], n = T.lats[0], w = T.lons[0], e = T.lons[T.lons.length - 1];
+  const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const CW = 400, CH = Math.round(CW * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
+  const cv = document.createElement("canvas"); cv.width = CW; cv.height = CH;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(CW, CH);
+  for (let y = 0; y < CH; y++){
+    const my = merc(n) - (y + .5) / CH * (merc(n) - merc(s));
+    const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
+    for (let x = 0; x < CW; x++){
+      const v = tSample(vals, lat, w + (x + .5) / CW * (e - w));
+      if (v == null) continue;
+      let k = 0; T_STOPS.forEach((b, j) => { if (v >= b) k = j; });
+      const o = (y*CW + x) * 4; img.data[o] = cols[k][0]; img.data[o+1] = cols[k][1]; img.data[o+2] = cols[k][2]; img.data[o+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  if (tOverlay) map.removeLayer(tOverlay);
+  tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
+  $("tLbl").textContent = tWhen(i);
+  $("tLegendTitle").textContent = {now: "Temperature (°C)", max: "Highest temperature of the day (°C)", min: "Lowest temperature of the day (°C)"}[tShow];
+  tReadTap();
+}
+function tReadTap(){
+  if (tab !== "temp" || !tapAt || !T) return;
+  const i = tI(), v = tSample(tVals(i), tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
+  if (v == null){ setPin("Outside"); $("tTap").textContent = `No temperature forecast at ${where} (outside the forecast area).`; return; }
+  const deg = `${Math.round(v)}°C`.replace("-", "−");
+  setPin(deg);
+  let extra = "";
+  if (tShow !== "now"){   // say when in the day it happens
+    const idx = tDayIdx(i), at = idx.reduce((b, j) => (tShow === "max" ? tSample(T.t[j], tapAt.lat, tapAt.lng) > tSample(T.t[b], tapAt.lat, tapAt.lng)
+      : tSample(T.t[j], tapAt.lat, tapAt.lng) < tSample(T.t[b], tapAt.lat, tapAt.lng)) ? j : b, idx[0]);
+    extra = `, about ${qHour(T.times[at])}`;
+  }
+  $("tTap").innerHTML = `${tWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1).replace("-", "−")}°C</b>${extra}${v <= 2 && tShow !== "max" ? " · frost likely on still, clear nights" : ""}.`;
+}
+function tTicks(){
+  const n = T.times.length - 1, days = [];
+  T.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
+  $("tTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
+}
+async function startTemp(){
+  $("tLegend").innerHTML = T_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${i === 0 ? "<0" : T_STOPS[i]}${i === T_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  try { T = await getJSON("data/temp.json"); }
+  catch(e){ T = null; $("tTap").innerHTML = `<span class="empty">No temperature forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
+  T._day = {};
+  $("tTime").max = T.times.length - 1;
+  const now = Date.now() / 1000;
+  $("tTime").value = T.times.reduce((b, t, i) => Math.abs(t - now) < Math.abs(T.times[b] - now) ? i : b, 0);
+  tTicks();
+  const run = new Date(T.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
+  $("tInfo").textContent = `${T.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time: every 3 hours for 6 days, then every 6 hours. Updated twice a day.`;
+  fitMap(); tDraw();
+}
+function tLoop(on){
+  clearInterval(tTimer); tTimer = null;
+  $("tPlay").setAttribute("aria-pressed", on); $("tPlay").textContent = on ? "❚❚" : "▶"; $("tPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  if (!on || !T) return;
+  tTimer = setInterval(() => {
+    const el = $("tTime"); let v = +el.value;
+    if (tShow === "now") v = v >= +el.max ? 0 : v + 1;
+    else { const d = qDate(T.times[v]); while (v <= +el.max && qDate(T.times[v]) === d) v++; if (v > +el.max) v = 0; }   // a day at a time
+    el.value = v; tDraw();
+  }, 800);
+}
+$("tPlay").onclick = () => tLoop(!tTimer);
+$("tTime").oninput = () => { tLoop(false); tDraw(); };
+$("tShow").onclick = e => { const b = e.target.closest("button"); if (!b || !T) return;
+  tShow = b.dataset.t; [...$("tShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); tDraw(); };
+
 // Live radar: BOM's Toowoomba pictures straight from the BOM website, 128 km (IDR1083, most detail),
 // 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
 // centred on the radar, 2 x range across.
@@ -1123,15 +1243,16 @@ function setTab(t, first){
   if (t !== "radar" && tab === "radar" && viewBeforeRadar && !first) { map.setView(viewBeforeRadar.c, viewBeforeRadar.z, {animate: false}); viewBeforeRadar = null; }
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tWind").setAttribute("aria-pressed", t === "wind"); $("tOut").setAttribute("aria-pressed", t === "outlook");
-  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly"}[t];
-  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly, .windOnly").forEach(el => el.hidden = !el.classList.contains(only));
-  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook"; $("subWind").hidden = t !== "wind";
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tWind").setAttribute("aria-pressed", t === "wind"); $("tTemp").setAttribute("aria-pressed", t === "temp"); $("tOut").setAttribute("aria-pressed", t === "outlook");
+  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly", temp: "tempOnly"}[t];
+  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly, .windOnly, .tempOnly").forEach(el => el.hidden = !el.classList.contains(only));
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook"; $("subWind").hidden = t !== "wind"; $("subTemp").hidden = t !== "temp";
   $("map").hidden = t === "outlook";   // the Outlook tab is just links
   if (t !== "radar") rClear();
   map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
   if (t !== "fc") fLoop(false);
+  if (t !== "temp") { tLoop(false); if (tOverlay) map.removeLayer(tOverlay); }
   if (t !== "wind") { wLoop(false); if (wOverlay) map.removeLayer(wOverlay); wArrows.clearLayers(); }
   $("dayField").hidden = t === "rain" && view === "week";
   $("weekField").hidden = !(t === "rain" && view === "week");
@@ -1146,6 +1267,10 @@ function setTab(t, first){
     gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
     if (tapAt) setPin("");
     startRadar(true);
+  } else if (t === "temp"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
+    if (T) tDraw(); else startTemp();
   } else if (t === "wind"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
@@ -1168,9 +1293,10 @@ $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
 $("tWind").onclick = () => tab !== "wind" && setTab("wind");
+$("tTemp").onclick = () => tab !== "temp" && setTab("temp");
 $("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 // on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
-const TAB_ORDER = ["fc", "wind", "storms", "radar", "rain", "outlook"];
+const TAB_ORDER = ["fc", "wind", "temp", "storms", "radar", "rain", "outlook"];
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
   swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;

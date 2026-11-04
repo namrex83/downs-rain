@@ -65,6 +65,8 @@ def run():
     from ecmwf.opendata import Client
     client = Client(source="ecmwf")
     when = latest_run(client)
+    if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
+        when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
     if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
         print(f"Already have the {tag} run")
