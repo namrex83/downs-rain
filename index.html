@@ -61,6 +61,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .transport .tpplay{background:color-mix(in srgb, var(--accent) 12%, var(--panel));width:52px}
 .transport .tpplay svg{width:24px;height:24px}
 .tlmid .transport{margin:6px auto 2px}
+/* on a computer the play controls sit beside the time slider, to keep the timeline short */
+@media (min-width:900px){
+  .tlmid{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:16px;align-items:center}
+  .tlmid .transport{grid-column:1;grid-row:1 / span 3;margin:0}
+  .tlmid .tltime, .tlmid input, .tlmid .tlticks{grid-column:2}
+}
 .chartbox:empty{display:none}
 .chartbox svg{display:block;width:100%;height:auto}
 .chartbox .ck{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:2px 10px;font-size:.74rem;margin-top:2px;color:var(--ink-2)}
@@ -83,7 +89,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 @media (min-width:1000px){
   .wrap{max-width:1440px}   /* every tab uses the full width on a computer */
   body.fcwide #mapRow{display:flex;flex-direction:row;gap:14px;align-items:stretch}
-  body.fcwide #map{flex:1 1 auto;min-width:0;height:calc(100vh - 230px);min-height:420px}
+  body.fcwide #map{flex:1 1 auto;min-width:0;height:calc(100vh - 290px);min-height:340px}
   body.fcwide #fChart{flex:0 0 420px;margin:0;align-self:stretch;overflow:auto}
   body.fcwide #fChart svg{max-height:calc(100vh - 420px)}
 }
@@ -696,17 +702,32 @@ function locateMe(btn){
 }
 function fitMap(){
   const el = $("map");
-  if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
+  // on a computer the Forecast tab has its own side-by-side layout; the other tabs size the map like phones do,
+  // so the map, timeline, readout and colour key all fit on the screen when the tab opens
+  if (innerWidth > 600 && (tab === "fc" || tab === "outlook")) { el.style.height = ""; el.style.minHeight = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
   const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  el.style.minHeight = tab === "fc" ? "180px" : "";
-  el.style.height = Math.max(tab === "fc" ? 180 : 240, innerHeight - top - legend - 10) + "px";
+  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : 240;
+  el.style.minHeight = least + "px";
+  let h = Math.max(least, innerHeight - top - legend - 10);
+  el.style.height = h + "px";
+  // second pass: take off whatever still hangs below the screen (gaps between boxes, wrapped lines)
+  const last = Math.max(...ids.map(id => $(id)).filter(e => e && e.offsetHeight && !e.closest("[hidden]")).map(e => e.getBoundingClientRect().bottom + scrollY), 0);
+  const over = last - innerHeight + 8;
+  if (over > 0) { h = Math.max(least, h - over); el.style.height = h + "px"; }
   map.invalidateSize();
 }
 fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
-let rw = innerWidth; addEventListener("resize", () => { if (innerWidth !== rw) { rw = innerWidth; fitMap(); } });
+// refit when a box under the map changes size (readouts fill in after the map is drawn)
+if (window.ResizeObserver) {
+  let queued = false;
+  const ro = new ResizeObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; fitMap(); }); } });
+  ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline", "fChart", "wDays", "tDays"].forEach(id => $(id) && ro.observe($(id)));   // the day buttons sit above the map
+}
+let rw = innerWidth, rh = innerHeight;   // phones: refit on a width change only (the address bar changes the height)
+addEventListener("resize", () => { if (innerWidth !== rw || (innerWidth > 600 && innerHeight !== rh)) { rw = innerWidth; rh = innerHeight; fitMap(); } });
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
 const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); show(); };
