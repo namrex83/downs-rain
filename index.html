@@ -413,7 +413,7 @@ async function init(){
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
     idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
-  sel.value = "today";   // open on the running total since 9am
+  sel.value = idx.days.length ? idx.days[idx.days.length - 1] : "today";   // open on the latest day finished at 9am
   sel.onchange = show;
   // 7-day periods: the latest, then each week before it, back to the first finished day
   const ends = [];
