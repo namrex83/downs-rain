@@ -1530,6 +1530,19 @@ $("sDay").onchange = () => { sSetHourRange(); sDraw(); };
 $("sHour").oninput = () => { sLoop(false); sHourLabel(); sDraw(); };
 
 init(); setTab(tab, true);
+
+// On opening, ask for the phone's location: if it's inside the area the maps cover, centre the map on it at
+// the usual zoom (so someone opening in Brisbane gets the same sized area around Brisbane) and put the pin
+// there. If location is refused, unavailable or outside the area, the map stays on the Darling Downs.
+const COVER = {s: -30.5, n: -24.5, w: 148.0, e: 154.5};   // the smallest of the forecast areas (wind, temp, soil)
+if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
+  const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+  if (ll.lat < COVER.s || ll.lat > COVER.n || ll.lng < COVER.w || ll.lng > COVER.e) return;
+  if (tab === "radar") viewBeforeRadar = {c: ll, z: HOME_ZOOM};   // the radar keeps its own view; the others open here
+  else map.setView(ll, HOME_ZOOM, {animate: false});
+  if (!accCircle) accCircle = L.circle(ll, {radius: pos.coords.accuracy, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
+  if (!tapAt) { tapAt = ll; readAnyTap(); }   // don't move a pin the person has already put down
+}, () => {}, {enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60000});
 })();
 </script>
 </body>
