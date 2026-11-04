@@ -85,14 +85,14 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #ptr.ready{background:var(--accent);color:var(--accent-ink)}
 #ptr.spin svg{animation:ptrspin .8s linear infinite}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
-/* On a computer every map tab is two columns: a big map on the left, and on the right a panel with the
-   timeline, readout, chart and colour key (the boxes that sit under the map on a phone) */
+/* On a computer: the map is a square in the left half (it stays in view while you scroll), and the controls,
+   timeline, readouts, chart, key, notes and disclaimer are in the right half. The page script moves the boxes
+   into the two columns on a wide screen and back again on a narrow one. */
 @media (min-width:1000px){
-  .wrap{max-width:1440px}   /* every tab uses the full width on a computer */
-  #mapRow{flex-direction:row !important;gap:14px;align-items:flex-start}
-  #map{flex:1 1 auto;min-width:0}
-  #side{flex:0 0 410px;display:flex;flex-direction:column;gap:12px;overflow:auto}
-  #side #fChart{margin:0}
+  .wrap{max-width:1500px}
+  #cols{display:flex;gap:16px;align-items:flex-start}
+  #leftCol{flex:0 0 auto;position:sticky;top:10px}
+  #rightCol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px}
 }
 #mapRow{display:flex;flex-direction:column;gap:12px}
 #side{display:flex;flex-direction:column;gap:12px}
@@ -393,15 +393,33 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-// the boxes under the map (timelines, readouts, chart, colour keys) go into one panel beside it; on a phone the
-// panel just sits under the map as before, on a computer it's a column to the right
-(() => {
-  const row = document.getElementById("mapRow"), side = document.createElement("div"); side.id = "side";
+// the boxes under the map (timelines, readouts, chart, colour keys) are gathered into one panel (#side), which
+// on a phone sits just under the map as before. On a computer (1000 px or wider) the page becomes two columns:
+// the map on the left, and on the right everything else in its usual order, with #side where the map was.
+const twoCol = (() => {
+  const wrap = document.querySelector(".wrap"), row = document.getElementById("mapRow"), side = document.createElement("div"); side.id = "side";
   side.appendChild(document.getElementById("fChart"));
   let n = row.nextElementSibling;
   while (n && !n.matches("section.panel")) { const next = n.nextElementSibling; side.appendChild(n); n = next; }
   row.appendChild(side);
+  const order = [...wrap.children].filter(e => e.tagName !== "HEADER");   // the page's own order, to put back
+  const cols = document.createElement("div"); cols.id = "cols";
+  const left = document.createElement("div"); left.id = "leftCol"; const right = document.createElement("div"); right.id = "rightCol";
+  cols.append(left, right);
+  let wide = null;
+  return () => {
+    const w = innerWidth >= 1000;
+    if (w === wide) return; wide = w;
+    if (w) {
+      wrap.insertBefore(cols, order[0]);
+      for (const e of order) { if (e === row) { left.appendChild(row); right.appendChild(side); } else right.appendChild(e); }
+    } else {
+      for (const e of order) wrap.appendChild(e);
+      row.appendChild(side); cols.remove();
+    }
+  };
 })();
+twoCol();
 const TP_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg>', TP_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 // the first / back / play / forward / last controls: step(k) is called with "first", "prev", "next" or "last"
 function tpBind(id, step){ $(id).addEventListener("click", e => { const b = e.target.closest("button[data-k]"); if (b) step(b.dataset.k); }); }
@@ -713,14 +731,14 @@ function locateMe(btn){
 }
 function fitMap(){
   const el = $("map");
-  // on a computer the Forecast tab has its own side-by-side layout; the other tabs size the map like phones do,
-  // so the map, timeline, readout and colour key all fit on the screen when the tab opens
-  if (innerWidth >= 1000) {   // a computer: the map fills the screen height, with the panel beside it
-    const h = Math.max(320, innerHeight - (el.getBoundingClientRect().top + scrollY) - 14);
-    el.style.minHeight = ""; el.style.height = h + "px"; $("side").style.maxHeight = h + "px";
+  twoCol();
+  if (innerWidth >= 1000) {   // a computer: a square map in the left half, as big as the screen height allows
+    const top = $("cols").getBoundingClientRect().top + scrollY, half = ($("cols").clientWidth - 16) / 2;
+    const size = Math.round(Math.max(320, Math.min(half, innerHeight - top - 14)));
+    el.style.minHeight = ""; el.style.width = size + "px"; el.style.height = size + "px";
     map.invalidateSize(); return;
   }
-  $("side").style.maxHeight = "";
+  el.style.width = "";
   const top = el.getBoundingClientRect().top + scrollY;
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
   const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
@@ -1116,7 +1134,9 @@ function fChartDraw(){
     return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
   const top = Math.max(cum ? 5 : 2, ...vals.flatMap(x => Object.values(x)));
   const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const W0 = 340, H0 = innerWidth >= 1000 ? 230 : 128, L0 = 30, R0 = 8, T0 = 8, B0 = 20;   // taller beside the map on a computer
+  // on a phone 340 wide; on a computer the chart is as wide as its column but about 300 px tall
+  const cw = $("fChart").parentElement.clientWidth || 340, H0 = innerWidth >= 1000 ? 230 : 128;
+  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / 300)) : 340, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
   const X = i => L0 + (W0 - L0 - R0) * (i + (cum ? 1 : 0.5)) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
@@ -1779,7 +1799,7 @@ const DISCLAIMER = {
   outlook: "These links open other organisations' websites; their outlooks and graphs belong to them, and outlooks give the chances of wetter or drier, warmer or cooler than usual, not amounts on particular days."
 };
 let viewBeforeRadar = null;
-const fcZoom = () => HOME_ZOOM - (innerWidth >= 1000 ? 1.25 : 1.75);   // about Emerald to Grafton; a little closer on a wide screen
+const fcZoom = () => HOME_ZOOM - (innerWidth >= 1000 ? 1.5 : 1.75);   // about Emerald to Grafton; a little closer on a wide screen
 let fcView = null, mainView = null;
 function setTab(t, first){
   // Forecast has its own wider view (the models cover a big area); the other tabs share the closer one
