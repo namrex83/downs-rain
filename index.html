@@ -55,6 +55,11 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .warrow{pointer-events:none}
 .warrow svg{display:block;width:20px;height:20px;margin:-10px 0 0 -10px;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff)}
 #wTicks span,#tTicks span,#oTicks span{transform:translateX(-2px)}
+.daybar{display:flex;gap:4px;margin-top:6px}
+.daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
+.daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
+.daybar button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.daybar button[aria-pressed=true] span{color:inherit;opacity:.85}
 #rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
 .outlinks{display:flex;flex-direction:column;gap:10px}
 .outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
@@ -274,8 +279,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
   <div class="tap soilOnly" id="oTap" hidden>Tap the map to read the soil temperature at any spot.</div>
   <div class="soilOnly" id="oLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Soil temperature at 10 cm (°C) · green is 14°C+</div><div class="legend" id="oLegend"></div></div>
+  <div class="daybar tempOnly" id="tDays" hidden></div>
   <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
   <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="legend" id="tLegend"></div></div>
+  <div class="daybar windOnly" id="wDays" hidden></div>
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
@@ -629,7 +636,7 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "wDays", "tTap", "tLegendBox", "tTimeline", "tDays", "oTap", "oLegendBox", "oTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -978,7 +985,7 @@ function wDraw(){
   if (wOverlay) map.removeLayer(wOverlay);
   wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
   wDrawArrows();
-  $("wLbl").textContent = wTimeText(W.times[i]);
+  $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]);
   $("wLegendTitle").textContent = (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
   wReadTap();
 }
@@ -1006,7 +1013,7 @@ function wReadTap(){
 function wTicks(){
   const n = W.times.length - 1, days = [];
   W.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
-  $("wTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
+  $("wTicks").innerHTML = days.filter(x => n - x.i > 1 && x.d >= qDate(Date.now() / 1000)).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
 }
 async function startWind(){
   $("wLegend").innerHTML = W_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${W_STOPS[i]}${i === W_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
@@ -1018,7 +1025,7 @@ async function startWind(){
   // open on the forecast time nearest now
   const now = Date.now() / 1000;
   $("wTime").value = W.times.reduce((b, t, i) => Math.abs(t - now) < Math.abs(W.times[b] - now) ? i : b, 0);
-  wTicks();
+  wTicks(); dayBar("wDays", W.times, "wTime", wDraw, () => wLoop(false));
   const run = new Date(W.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
   $("wInfo").textContent = `${W.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time: every 3 hours for 6 days, then every 6 hours. Updated twice a day.`;
   fitMap(); wDraw();
@@ -1033,6 +1040,22 @@ $("wPlay").onclick = () => wLoop(!wTimer);
 $("wTime").oninput = () => { wLoop(false); wDraw(); };
 $("wShow").onclick = e => { const b = e.target.closest("button"); if (!b || !W) return;
   wShow = b.dataset.w; [...$("wShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); wDraw(); };
+
+// Day buttons under a timeline (Wind and Temp): one per Queensland day in the forecast. Tapping one jumps
+// the slider to that day at the same time of day (or the nearest time it has), and the current day is lit.
+function dayBar(box, times, slider, draw, stop){
+  const today = qDate(Date.now() / 1000), days = [...new Set(times.map(qDate))].filter(d => d >= today);
+  $(box).innerHTML = days.map(d => `<button data-d="${d}" aria-pressed="false">${part(d, {weekday: "short"})}<span>${part(d, {day: "numeric"})}</span></button>`).join("");
+  $(box).onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    stop();
+    const hour = qld(times[+$(slider).value]).getUTCHours();
+    const idx = times.map((t, i) => qDate(t) === b.dataset.d ? i : -1).filter(i => i >= 0);
+    $(slider).value = idx.reduce((best, i) => Math.abs(qld(times[i]).getUTCHours() - hour) < Math.abs(qld(times[best]).getUTCHours() - hour) ? i : best, idx[0]);
+    draw();
+  };
+}
+function dayBarLight(box, t){ [...$(box).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.d === qDate(t))); }
 
 // Temp tab: data/temp.json (temp.py, ECMWF 2 m temperature, degC x10, same times as the wind). "Day max"
 // and "Day min" take the highest or lowest of the chosen Queensland day's times at each grid point.
@@ -1080,7 +1103,7 @@ function tDraw(){
   ctx.putImageData(img, 0, 0);
   if (tOverlay) map.removeLayer(tOverlay);
   tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
-  $("tLbl").textContent = tWhen(i);
+  $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]);
   $("tLegendTitle").textContent = {now: "Temperature (°C)", max: "Highest temperature of the day (°C)", min: "Lowest temperature of the day (°C)"}[tShow];
   tReadTap();
 }
@@ -1101,7 +1124,7 @@ function tReadTap(){
 function tTicks(){
   const n = T.times.length - 1, days = [];
   T.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
-  $("tTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
+  $("tTicks").innerHTML = days.filter(x => n - x.i > 1 && x.d >= qDate(Date.now() / 1000)).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
 }
 async function startTemp(){
   $("tLegend").innerHTML = T_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${i === 0 ? "<0" : T_STOPS[i]}${i === T_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
@@ -1111,7 +1134,7 @@ async function startTemp(){
   $("tTime").max = T.times.length - 1;
   const now = Date.now() / 1000;
   $("tTime").value = T.times.reduce((b, t, i) => Math.abs(t - now) < Math.abs(T.times[b] - now) ? i : b, 0);
-  tTicks();
+  tTicks(); dayBar("tDays", T.times, "tTime", tDraw, () => tLoop(false));
   const run = new Date(T.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
   $("tInfo").textContent = `${T.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time: every 3 hours for 6 days, then every 6 hours. Updated twice a day.`;
   fitMap(); tDraw();
@@ -1219,7 +1242,7 @@ function oReadTap(){
 function oTicks(){
   const n = O.times.length - 1, days = [];
   O.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
-  $("oTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
+  $("oTicks").innerHTML = days.filter(x => n - x.i > 1 && x.d >= qDate(Date.now() / 1000)).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
 }
 function oSnap(){   // in "8am each day" and "Day average", keep the slider on a day's 8am
   if (oShow !== "8am" && oShow !== "day") return;
