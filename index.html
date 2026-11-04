@@ -61,11 +61,19 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .transport .tpplay{background:color-mix(in srgb, var(--accent) 12%, var(--panel));width:52px}
 .transport .tpplay svg{width:24px;height:24px}
 .tlmid .transport{margin:6px auto 2px}
+.chartbox:empty{display:none}
+.chartbox svg{display:block;width:100%;height:auto}
+.chartbox .ck{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.8rem;margin-top:4px;color:var(--ink-2)}
+.chartbox .ck i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
 .daybar button b{display:block;font:600 .68rem/1.2 var(--mono);color:var(--ink);white-space:nowrap;letter-spacing:-.03em;margin-top:2px}
 .daybar button b:empty{display:none}
+.daybar button{position:relative}
+.daybar button[data-flag]::after{content:attr(data-flag);position:absolute;top:2px;right:3px;font-size:.66rem;line-height:1}
+.daybar button[data-flag="❄"]{box-shadow:inset 0 -3px 0 #4a7fd6}
+.daybar button[data-flag="🔥"]{box-shadow:inset 0 -3px 0 #d9534f}
 .daybar button[aria-pressed=true] b{color:inherit}
 .daybar button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .daybar button[aria-pressed=true] span{color:inherit;opacity:.85}
@@ -234,7 +242,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls windOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button></div></div>
+      <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button><button data-w="spray" aria-pressed="false">Spray</button></div></div>
   </div>
 
   <div class="controls tempOnly" hidden>
@@ -294,6 +302,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
+  <div class="tap fcOnly chartbox" id="fChart" hidden></div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
@@ -927,6 +936,48 @@ function fReadTap(){
   const when = `10am ${span(addDays(F.days[a], -1), F.days[b - 1]).replace(" – ", " – 10am ")}${fSumN ? ` (${b - a} day${b - a === 1 ? "" : "s"}${b - a < fSumN ? ", all this model run covers" : ""})` : ""}`;
   setPin(v == null ? "Outside" : `${fmt(v)} mm`);
   $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}.`;
+  fChart();
+}
+// Rain chart at the pin: each model's running total, day by day, for as far as it goes (like the multi-model
+// charts on Meteologix). All three model files are loaded the first time.
+const F_ALL = {}, F_COL = {gfs: "#e07b39", ecmwf: "#2a7de1", aifs: "#8e44ad"};
+function gSample(o, vals, lat, lon){
+  const nr = o.lats.length, nc = o.lons.length, step = o.lats[0] - o.lats[1];
+  const fy = (o.lats[0] - lat) / step, fx = (lon - o.lons[0]) / (o.lons[1] - o.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  return (vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx) / 10;
+}
+async function fChart(){
+  if (tab !== "fc" || !tapAt) return;
+  const at = tapAt;
+  for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
+  if (at !== tapAt || tab !== "fc") return;
+  const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
+  const open = d => d > today || (d === today && nowQ.getUTCHours() < 10);   // forecast days not finished yet
+  const lines = [];
+  for (const [m, o] of Object.entries(F_ALL)){
+    if (!o) continue;
+    let tot = 0; const pts = [];
+    o.days.forEach((d, k) => { if (!open(d)) return; const v = gSample(o, o.mm10[k], at.lat, at.lng); if (v == null) return; tot += v; pts.push([d, tot]); });
+    if (pts.length) lines.push({m, pts, tot});
+  }
+  if (!lines.length) { $("fChart").hidden = true; return; }
+  const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
+  const top = Math.max(5, ...lines.map(l => l.tot)), step = [5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
+  const W0 = 340, H0 = 170, L0 = 34, R0 = 8, T0 = 10, B0 = 22;
+  const X = i => L0 + (W0 - L0 - R0) * (i + 1) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
+  let g = "";
+  for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
+  days.forEach((d, i) => { if (i % 2 === 0 || days.length <= 8) g += `<text x="${X(i)}" y="${H0 - 7}" text-anchor="${i === days.length - 1 ? "end" : "middle"}" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(d, {weekday: "short"}).slice(0, 2)} ${part(d, {day: "numeric"})}</text>`; });
+  for (const l of lines){
+    const pts = [[L0, Y(0)], ...l.pts.map(p => [X(days.indexOf(p[0])), Y(p[1])])];
+    g += `<polyline points="${pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="${F_COL[l.m]}" stroke-width="${l.m === fModel ? 3 : 2}" stroke-linejoin="round"/>`;
+  }
+  $("fChart").hidden = false;
+  $("fChart").innerHTML = `<div class="eyebrow" style="margin-bottom:4px">Rain building up at the pin · each model, mm</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
+    <div class="ck">${lines.map(l => `<span><i style="background:${F_COL[l.m]}"></i>${F_NAME[l.m]} <b>${fmt(l.tot)}</b> mm (${l.pts.length} days)</span>`).join("")}</div>`;
+  fitMap();
 }
 async function startForecast(){
   [...$("fModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === fModel));
@@ -977,9 +1028,51 @@ function wAt(i, lat, lon){
           mean: wSample(W.spd[i], lat, lon)};
 }
 const wTimeText = t => qld(t).toLocaleString("en-AU", {timeZone: "UTC", weekday: "long", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(/\s(am|pm)/, "$1") + " AEST";
+// Spray view: each spot and time rated good / marginal / poor for spraying, from the wind (3-15 km/h is good),
+// Delta T (2-8 good, 8-10 or under 2 marginal, over 10 poor) and the chance of a surface inversion (still air
+// between 7pm and 7am). Temperature and dew point come from data/temp.json (same model, times and grid).
+let WT = null;
+const SPRAY_COLOURS = ["#3fa34d", "#f2c14e", "#d9534f"], SPRAY_NAMES = ["Good", "Marginal", "Poor"];
+function deltaT(t, td){
+  const rh = Math.min(100, 100 * Math.exp(17.625 * td / (243.04 + td)) / Math.exp(17.625 * t / (243.04 + t)));
+  const tw = t * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) + Math.atan(t + rh) - Math.atan(rh - 1.676331)
+           + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;   // wet bulb (Stull 2011)
+  return {dt: t - tw, rh};
+}
+function sprayRate(wind, t, td, hour){
+  const why = []; let lv = 0;
+  const up = (l, w) => { lv = Math.max(lv, l); why.push(w); };
+  const night = hour >= 19 || hour < 7;
+  if (night && wind < 11) up(2, "surface inversion likely (still air at night)");
+  if (wind < 3) up(2, "too calm (drift can hang)"); else if (wind > 20) up(2, "too windy"); else if (wind > 15) up(1, "breezy");
+  if (t != null && td != null){
+    const d = deltaT(t, td).dt;
+    if (d > 10) up(2, "Delta T over 10 (droplets evaporate)"); else if (d > 8) up(1, "Delta T 8–10"); else if (d < 2) up(1, "Delta T under 2 (droplets stay wet, drift risk)");
+  }
+  return {lv, why};
+}
+function wSprayAt(i, lat, lon){
+  const a = wAt(i, lat, lon); if (!a) return null;
+  const j = WT ? WT.times.indexOf(W.times[i]) : -1;
+  const t = j >= 0 ? wtSample(WT.t[j], lat, lon) : null, td = j >= 0 && WT.td ? wtSample(WT.td[j], lat, lon) : null;
+  return {...sprayRate(a.mean, t, td, qld(W.times[i]).getUTCHours()), a, t, td};
+}
+function wtSample(vals, lat, lon){
+  const nr = WT.lats.length, nc = WT.lons.length, step = WT.lats[0] - WT.lats[1];
+  const fy = (WT.lats[0] - lat) / step, fx = (lon - WT.lons[0]) / (WT.lons[1] - WT.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  return (vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx) / 10;
+}
+function wLegendFill(){
+  $("wLegend").innerHTML = wShow === "spray"
+    ? SPRAY_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${SPRAY_NAMES[i]}</span></div>`).join("")
+    : W_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${W_STOPS[i]}${i === W_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+}
 function wDraw(){
   if (!W || tab !== "wind") return;
-  const i = wI(), vals = wSpeeds(i), cols = W_COLOURS.map(hex);
+  const i = wI(), vals = wSpeeds(i), cols = W_COLOURS.map(hex), sCols = SPRAY_COLOURS.map(hex), spray = wShow === "spray";
+  wLegendFill();
   const s = W.lats[W.lats.length - 1], n = W.lats[0], w = W.lons[0], e = W.lons[W.lons.length - 1];
   const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
   const CW = 400, CH = Math.round(CW * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
@@ -989,10 +1082,16 @@ function wDraw(){
     const my = merc(n) - (y + .5) / CH * (merc(n) - merc(s));
     const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
     for (let x = 0; x < CW; x++){
-      const v = wSample(vals, lat, w + (x + .5) / CW * (e - w));
+      const lon = w + (x + .5) / CW * (e - w), o = (y*CW + x) * 4;
+      if (spray){
+        if (x % 2 || y % 2){ const src = ((y - y % 2) * CW + (x - x % 2)) * 4; for (let q = 0; q < 4; q++) img.data[o + q] = img.data[src + q]; continue; }   // every 2nd pixel, to keep it quick
+        const r = wSprayAt(i, lat, lon); if (!r) continue;
+        const c = sCols[r.lv]; img.data[o] = c[0]; img.data[o+1] = c[1]; img.data[o+2] = c[2]; img.data[o+3] = 255; continue;
+      }
+      const v = wSample(vals, lat, lon);
       if (v == null) continue;
       let k = 0; W_STOPS.forEach((b, j) => { if (v >= b) k = j; });
-      const o = (y*CW + x) * 4; img.data[o] = cols[k][0]; img.data[o+1] = cols[k][1]; img.data[o+2] = cols[k][2]; img.data[o+3] = 255;
+      img.data[o] = cols[k][0]; img.data[o+1] = cols[k][1]; img.data[o+2] = cols[k][2]; img.data[o+3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -1000,7 +1099,7 @@ function wDraw(){
   wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
   wDrawArrows();
   $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]); dayBarValues("wDays", windDay);
-  $("wLegendTitle").textContent = (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
+  $("wLegendTitle").textContent = spray ? "Spray conditions · wind, Delta T and inversion risk" : (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
   wReadTap();
 }
 function wDrawArrows(){
@@ -1023,7 +1122,16 @@ function wReadTap(){
   if (!a){ setPin("Outside"); $("wTap").textContent = `No wind forecast at ${where} (outside the forecast area).`; return; }
   const from = COMPASS[Math.round(a.from / 22.5) % 16], mean = Math.round(a.mean), g = a.gust == null ? null : Math.round(a.gust);
   setPin(`${Math.round(a.spd)} km/h ${from}`);
-  $("wTap").innerHTML = `${wTimeText(W.times[i]).replace(" AEST", "")} at ${where}: wind <b>${mean} km/h</b> from the <b>${from}</b>${g == null ? "" : ` · gusts <b>${g} km/h</b>`}${mean < 1 ? " (calm)" : ""}.`;
+  let sp = "";
+  if (wShow === "spray"){
+    const r = wSprayAt(i, tapAt.lat, tapAt.lng);
+    if (r){
+      const d = r.t != null && r.td != null ? deltaT(r.t, r.td) : null;
+      sp = `<span class="verdict">Spray: <b>${SPRAY_NAMES[r.lv]}</b>${d ? ` · Delta T <b>${d.dt.toFixed(1)}</b> · ${r.t.toFixed(0)}°C, humidity ${Math.round(d.rh)}%` : " (no temperature data for this time)"}${r.why.length ? ` · ${r.why.join("; ")}` : ""}. A guide only: check the label, the wind and Delta T on the spot.</span>`;
+      setPin(SPRAY_NAMES[r.lv]);
+    }
+  }
+  $("wTap").innerHTML = `${wTimeText(W.times[i]).replace(" AEST", "")} at ${where}: wind <b>${mean} km/h</b> from the <b>${from}</b>${g == null ? "" : ` · gusts <b>${g} km/h</b>`}${mean < 1 ? " (calm)" : ""}.${sp}`;
 }
 function wTicks(){
   const n = W.times.length - 1, days = [];
@@ -1031,11 +1139,12 @@ function wTicks(){
   $("wTicks").innerHTML = days.filter(x => n - x.i > 1 && x.d >= qDate(Date.now() / 1000)).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
 }
 async function startWind(){
-  $("wLegend").innerHTML = W_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${W_STOPS[i]}${i === W_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  wLegendFill();
+  try { WT = await getJSON("data/temp.json"); } catch(e){ WT = null; }   // for the spray view
   try { W = await getJSON("data/wind.json"); }
   catch(e){ W = null; $("wTap").innerHTML = `<span class="empty">No wind forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
   W._uv = {};
-  if (!W.gust) { wShow = "spd"; $("wShow").hidden = true; }
+  if (!W.gust) { if (wShow === "gust") wShow = "spd"; $("wShow").querySelector('[data-w="gust"]').hidden = true; }
   $("wTime").max = W.times.length - 1;
   // open on the forecast time nearest now
   const now = Date.now() / 1000;
@@ -1074,7 +1183,11 @@ function dayBar(box, times, slider, draw, stop){
 // each day's figures on its button, read at the pin (or Dalby before anywhere is tapped)
 function dayBarValues(box, fn){
   const at = tapAt || L.latLng(HOME[0], HOME[1]);
-  [...$(box).children].forEach(b => { b.querySelector("b").textContent = fn(b.dataset.d, at.lat, at.lng) || ""; });
+  [...$(box).children].forEach(b => {
+    const v = fn(b.dataset.d, at.lat, at.lng) || "", o = typeof v === "object" ? v : {text: v};
+    b.querySelector("b").textContent = o.text || "";
+    if (o.flag) { b.dataset.flag = o.flag; b.title = o.title; } else { delete b.dataset.flag; b.removeAttribute("title"); }
+  });
 }
 const dayIdx = (times, d) => times.map((t, i) => qDate(t) === d ? i : -1).filter(i => i >= 0);
 function windDay(d, lat, lon){   // the day's strongest wind, with its direction then
@@ -1084,7 +1197,12 @@ function windDay(d, lat, lon){   // the day's strongest wind, with its direction
 }
 function tempDay(d, lat, lon){   // the day's lowest / highest
   const v = dayIdx(T.times, d).map(i => tSample(T.t[i], lat, lon)).filter(x => x != null);
-  return v.length ? `${Math.round(Math.min(...v))}/${Math.round(Math.max(...v))}` : "";
+  if (!v.length) return "";
+  const lo = Math.min(...v), hi = Math.max(...v), text = `${Math.round(lo)}/${Math.round(hi)}`;
+  // frost: a screen minimum of 2°C or less usually means ground frost on still, clear nights; heat: 35°C or more
+  if (lo <= 2) return {text, flag: "❄", title: "Frost risk: lowest about " + Math.round(lo) + "°C"};
+  if (hi >= 35) return {text, flag: "🔥", title: "Hot: highest about " + Math.round(hi) + "°C"};
+  return text;
 }
 function dayBarLight(box, t){ [...$(box).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.d === qDate(t))); }
 
@@ -1199,7 +1317,7 @@ $("tShow").onclick = e => { const b = e.target.closest("button"); if (!b || !T) 
 
 // Soil tab: data/soil.json (soil.py, model soil temperature at 10 cm, degC x10, every 3 hours on Qld 2am,
 // 5am, 8am ...). "8am each day" shows the morning reading used for cotton planting.
-let O = null, oOverlay = null, oShow = "8am", oTimer = null;
+let O = null, oOverlay = null, oShow = "8am", oTimer = null, E = null;   // E: data/et0.json, daily evaporation
 const O_STOPS = [-99, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 35];
 const O_COLOURS = ["#283c8f", "#3456b8", "#4a7fd6", "#78a9e6", "#3fa34d", "#7cc35a", "#c3de6a", "#f1e36d", "#f8c75a", "#f5a24a",
                    "#ee7b3b", "#dc5330", "#bf3029", "#93192c", "#5e0f33"];
@@ -1279,7 +1397,15 @@ function oReadTap(){
   const dayList = oFullDays().map(d => { const x = oSample(oDayAvg(d), tapAt.lat, tapAt.lng); return x == null ? "" : `${part(d, {weekday: "short"})} ${x.toFixed(1)}`; }).filter(Boolean).join(" · ");
   const verdict = pl.from ? `Cotton planting guide (14°C+ at 8am, 3 days running): <b>met from ${part(pl.from, {weekday: "long"})}</b>.`
     : `Cotton planting guide (14°C+ at 8am, 3 days running): <b>not met</b> in the forecast.`;
-  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">Next 7-day average (8am): <b>${avg == null ? "–" : avg.toFixed(1)}°C</b>. 8am at 10 cm: ${list}. Day average: ${dayList}. ${verdict}</span>`;
+  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">Next 7-day average (8am): <b>${avg == null ? "–" : avg.toFixed(1)}°C</b>. 8am at 10 cm: ${list}. Day average: ${dayList}. ${verdict}</span>${oEvap()}`;
+}
+function oEvap(){   // daily evaporation (FAO-56 reference ETo) at the pin: today, and the total for the next 7 days
+  if (!E || !tapAt) return "";
+  const today = qDate(Date.now() / 1000), ks = E.days.map((d, k) => d >= today ? k : -1).filter(k => k >= 0).slice(0, 7);
+  const v = ks.map(k => gSample(E, E.mm10[k], tapAt.lat, tapAt.lng));
+  if (!v.length || v.some(x => x == null || isNaN(x))) return "";
+  const tot = v.reduce((a, b) => a + b, 0);
+  return `<span class="verdict">Evaporation (ETo): today <b>${v[0].toFixed(1)} mm</b> · next ${v.length} days <b>${Math.round(tot)} mm</b> (${ks.map((k, i) => `${part(E.days[k], {weekday: "short"})} ${v[i].toFixed(1)}`).join(" · ")}). The water a well-watered crop cover would use; multiply by your crop factor.</span>`;
 }
 function oTicks(){
   const n = O.times.length - 1, days = [];
@@ -1293,6 +1419,7 @@ function oSnap(){   // in "8am each day" and "Day average", keep the slider on a
 }
 async function startSoil(){
   $("oLegend").innerHTML = O_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${i === 0 ? "<8" : O_STOPS[i]}${i === O_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  try { E = await getJSON("data/et0.json"); } catch(e){ E = null; }
   try { O = await getJSON("data/soil.json"); }
   catch(e){ O = null; $("oTap").innerHTML = `<span class="empty">No soil temperature forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
   $("oTime").max = O.times.length - 1;

@@ -106,5 +106,39 @@ def run():
     sys.exit("No soil temperatures from any source")
 
 
+ET0_OUT = os.path.join("data", "et0.json")
+ET0_STEP = 0.5                    # evaporation changes slowly across the district
+
+
+def et0():
+    """Daily reference evaporation (FAO-56 ETo, mm, midnight to midnight Qld time) for 7 days from
+    Open-Meteo's best model, on a half-degree grid: data/et0.json (days, mm10 rows north to south)."""
+    lats = [round(LAT_N - i * ET0_STEP, 3) for i in range(int(round((LAT_N - LAT_S) / ET0_STEP)) + 1)]
+    lons = [round(LON_W + j * ET0_STEP, 3) for j in range(int(round((LON_E - LON_W) / ET0_STEP)) + 1)]
+    points = [(la, lo) for la in lats for lo in lons]
+    rows = []
+    for i in range(0, len(points), CHUNK):
+        part = points[i:i + CHUNK]
+        params = {"latitude": ",".join(str(p[0]) for p in part), "longitude": ",".join(str(p[1]) for p in part),
+                  "daily": "et0_fao_evapotranspiration", "forecast_days": DAYS, "timezone": "Australia/Brisbane",
+                  "cell_selection": "land"}
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params=params, headers=HEADERS, timeout=90)
+        r.raise_for_status()
+        d = r.json()
+        rows += d if isinstance(d, list) else [d]
+        time.sleep(1)
+    days = rows[0]["daily"]["time"]
+    mm10 = [[None if r["daily"]["et0_fao_evapotranspiration"][k] is None else int(round(r["daily"]["et0_fao_evapotranspiration"][k] * 10))
+             for r in rows] for k in range(len(days))]
+    with open(ET0_OUT, "w") as f:
+        json.dump({"made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "model": "Open-Meteo best match",
+                   "lats": lats, "lons": lons, "days": days, "mm10": mm10}, f, separators=(",", ":"))
+    print(f"Wrote {ET0_OUT}: {len(lats)}x{len(lons)} points, days {days[0]} to {days[-1]}")
+
+
 if __name__ == "__main__":
+    try:
+        et0()
+    except Exception as e:
+        print(f"Evaporation skipped: {e}")
     run()

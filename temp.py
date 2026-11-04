@@ -7,6 +7,7 @@ Run by .github/workflows/forecast.yml after each ECMWF 00z and 12z run. Uses ECM
 
   times  forecast times (unix seconds)
   t      2 m temperature, degC x10, rows north to south
+  td     2 m dew point, degC x10 (for humidity and Delta T on the Wind tab's spray view)
 """
 import datetime as dt
 import json
@@ -28,29 +29,32 @@ def run():
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("v") == 2 and "--force" not in sys.argv:
         print(f"Already have the {tag} temperature run")
         return
     print(f"Getting ECMWF {tag} 2 m temperatures", flush=True)
     client.retrieve(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS,
-                    param="2t", target="t2m.grib2")
+                    param=["2t", "2d"], target="t2m.grib2")
     temps, (lats, lons) = read("t2m.grib2")          # read() cuts out the storm area
     rows = np.where((lats <= LAT_N + 1e-6) & (lats >= LAT_S - 1e-6))[0]
     cols = np.where((lons >= LON_W - 1e-6) & (lons <= LON_E + 1e-6))[0]
-    times, t10 = [], []
+    times, t10, td10 = [], [], []
     for step in STEPS:
         k = next((v for (n, lv, s), v in temps.items() if n == "2t" and s == step), None)
         if k is None:
             print(f"  step {step}: temperature missing, skipped", flush=True)
             continue
+        d = next((v for (n, lv, s), v in temps.items() if n == "2d" and s == step), None)
         times.append(int((when + dt.timedelta(hours=step)).replace(tzinfo=dt.timezone.utc).timestamp()))
         t10.append(np.round((k[np.ix_(rows, cols)] - 273.15) * 10).astype(int).flatten().tolist())
+        td10.append(np.round((d[np.ix_(rows, cols)] - 273.15) * 10).astype(int).flatten().tolist() if d is not None else None)
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
                    "model": "ECMWF IFS (open data, 0.25°)",
                    "lats": [round(float(x), 3) for x in lats[rows]], "lons": [round(float(x), 3) for x in lons[cols]],
-                   "times": times, "t": t10}, f, separators=(",", ":"))
+                   "times": times, "t": t10, "v": 2,
+                   **({"td": td10} if all(x is not None for x in td10) else {})}, f, separators=(",", ":"))
     os.remove("t2m.grib2")
     print(f"Wrote {OUT}: {len(rows)}x{len(cols)} points x {len(times)} times; "
           f"range {min(min(x) for x in t10) / 10} to {max(max(x) for x in t10) / 10} C")
