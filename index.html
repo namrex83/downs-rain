@@ -64,6 +64,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .chartbox:empty{display:none}
 .chartbox svg{display:block;width:100%;height:auto}
 .chartbox .ck{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:2px 10px;font-size:.74rem;margin-top:2px;color:var(--ink-2)}
+.chartbox .cwrap{position:relative}
+.chartbox svg{touch-action:pan-y;cursor:crosshair}
+.chartbox .ctip{font-size:.74rem;line-height:1.4;color:var(--ink);background:color-mix(in srgb, var(--accent) 8%, var(--panel));border-radius:8px;padding:4px 7px;margin:2px 0 4px}
+.chartbox .ctip i{display:inline-block;width:9px;height:3px;border-radius:2px;vertical-align:middle;margin:0 3px 0 6px}
+.chartbox .cfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px;font-size:.72rem;color:var(--ink-3)}
+.chartbox .cmode button{min-height:28px;font-size:.74rem;padding:0 10px}
 .chartbox .chead{font-size:.86rem;line-height:1.3;margin-bottom:2px}
 .chartbox .ck i{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
 .daybar{display:flex;gap:4px;margin:0}
@@ -1034,30 +1040,64 @@ async function fChart(){
     if (none.length) omNote = ` ${none.join(", ")}: no data from Open-Meteo just now`;
   } catch(e){ omNote = " (the other models couldn't be loaded just now)"; }
   if (!lines.length) { $("fChart").hidden = true; return; }
+  FC = {lines, omNote, pinned};
+  fChartDraw();
+}
+// draws the chart from FC: "cum" = each model's running total, "day" = each day's rain (10am to 10am).
+// Touching or hovering over it shows that day's numbers for every model.
+let FC = null, fcMode = "cum";
+const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
+function fChartDraw(){
+  if (!FC) return;
+  const {lines, omNote, pinned} = FC, cum = fcMode === "cum";
   const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
-  const top = Math.max(5, ...lines.map(l => l.tot)), step = [5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
+  // each line's value per day in this mode: running total, or that day's own rain
+  const val = l => Object.fromEntries(l.pts.map((p, k) => [p[0], cum ? p[1] : p[1] - (k ? l.pts[k - 1][1] : 0)]));
+  const vals = lines.map(val);
+  const medOf = d => { const v = vals.map(x => x[d]).filter(x => x != null).sort((a, b) => a - b);
+    return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
+  const top = Math.max(cum ? 5 : 2, ...vals.flatMap(x => Object.values(x)));
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
   const W0 = 340, H0 = 128, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
-  const X = i => L0 + (W0 - L0 - R0) * (i + 1) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
+  const X = i => L0 + (W0 - L0 - R0) * (i + (cum ? 1 : 0.5)) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
-  days.forEach((d, i) => { if (i % 2 === 0 || days.length <= 8) g += `<text x="${X(i)}" y="${H0 - 7}" text-anchor="${i === days.length - 1 ? "end" : "middle"}" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(d, {weekday: "short"}).slice(0, 2)} ${part(d, {day: "numeric"})}</text>`; });
-  const poly = (pts, attrs) => `<polyline points="${[[L0, Y(0)], ...pts].map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
-  for (const l of lines.filter(l => !l.main).concat(lines.filter(l => l.main)))   // the page's own three on top
-    g += poly(l.pts.map(p => [X(days.indexOf(p[0])), Y(p[1])]), `stroke="${l.col}" stroke-width="${l.m === fModel ? 3 : l.main ? 2 : 1.4}"${l.main ? "" : ' stroke-opacity=".85"'}`);
-  // median: the middle of the models still running on each day
-  const med = [];
-  days.forEach((d, i) => {
-    const v = lines.map(l => (l.pts.find(p => p[0] === d) || [])[1]).filter(x => x != null).sort((a, b) => a - b);
-    if (v.length >= 3) med.push([X(i), Y(v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2), v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2]);
-  });
-  if (med.length) g += poly(med.map(p => [p[0], p[1]]), `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
+  days.forEach((d, i) => { if (i % 2 === 0 || days.length <= 8) g += `<text x="${X(i)}" y="${H0 - 7}" text-anchor="${i === days.length - 1 && cum ? "end" : "middle"}" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(d, {weekday: "short"}).slice(0, 2)} ${part(d, {day: "numeric"})}</text>`; });
+  const poly = (pts, attrs) => `<polyline points="${(cum ? [[L0, Y(0)], ...pts] : pts).map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
+  const order = lines.map((l, k) => k).sort((a, b) => (lines[a].main ? 1 : 0) - (lines[b].main ? 1 : 0));   // the page's own three on top
+  for (const k of order){
+    const l = lines[k], pts = days.filter(d => vals[k][d] != null).map(d => [X(days.indexOf(d)), Y(vals[k][d])]);
+    g += poly(pts, `stroke="${l.col}" stroke-width="${l.m === fModel ? 3 : l.main ? 2 : 1.4}"${l.main ? "" : ' stroke-opacity=".85"'}`);
+    if (!cum) g += pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${l.main ? 2.2 : 1.6}" fill="${l.col}"/>`).join("");
+  }
+  const med = days.map((d, i) => [i, medOf(d)]).filter(x => x[1] != null);
+  if (med.length) g += poly(med.map(([i, v]) => [X(i), Y(v)]), `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
+  g += `<g class="fcur" visibility="hidden"><line y1="${T0}" y2="${H0 - B0}" stroke="currentColor" stroke-opacity=".55" stroke-width="1"/></g>`;
   $("fChart").hidden = false;
   // the tap readout goes at the top of the chart (and its own box is hidden), to save room on phones
   const head = pinned ? $("fTap").innerHTML : `Rain building up at Dalby · tap the map for anywhere else`;
   $("fTap").classList.add("merged");
-  const SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
-  $("fChart").innerHTML = `<div class="chead">${head}</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
-    <div class="ck">${lines.map(l => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${SHORT[l.name] || l.name} <b>${fmt(l.tot)}</b></span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>`;
+  const last = med.length ? med[med.length - 1][1] : null;
+  $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
+    <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${fmt(cum ? l.tot : Math.max(...Object.values(vals[k])))}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
+    <div class="cfoot"><span>${cum ? "Totals to the end of each run" : "Wettest day in each run"}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">Each day</button></div></div>`;
+  $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
+  // touch / hover readout
+  const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
+  const at = ev => {
+    const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W0;
+    const i = Math.max(0, Math.min(days.length - 1, Math.round((x - L0) / (W0 - L0 - R0) * days.length - (cum ? 1 : 0.5))));
+    const d = days[i], xs = X(i);
+    cur.setAttribute("visibility", "visible"); cur.querySelector("line").setAttribute("x1", xs); cur.querySelector("line").setAttribute("x2", xs);
+    const rows = lines.map((l, k) => [l, vals[k][d]]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]);
+    const m = medOf(d);
+    tip.innerHTML = `<b>${cum ? "Total to" : "Day to"} 10am ${part(d, {weekday: "short", day: "numeric", month: "short"})}:</b>`
+      + (m != null ? ` median <b>${fmt(m)} mm</b> ·` : "")
+      + rows.map(([l, v]) => `<span style="white-space:nowrap"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} ${fmt(v)}</span> `).join("");
+    if (tip.hidden) { tip.hidden = false; fitMap(); }
+  };
+  svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at);
+  svg.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") { tip.hidden = true; cur.setAttribute("visibility", "hidden"); fitMap(); } });
   fitMap();
 }
 async function startForecast(){
@@ -1758,7 +1798,7 @@ $("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 const TAB_ORDER = ["fc", "temp", "wind", "radar", "rain", "soil", "storms", "outlook"];
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
-  swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;
+  swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap, .chartbox svg") ? e.touches[0].clientX : null;
   if (swX != null) { swY = e.touches[0].clientY; swT = Date.now(); }
 }, {passive: true});
 document.addEventListener("touchend", e => {
