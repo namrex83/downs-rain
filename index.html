@@ -213,7 +213,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p>
     <p class="sub" id="subTemp" hidden>Temperature forecast from the ECMWF weather model.</p>
     <p class="sub" id="subSoil" hidden>Soil temperature forecast at 10 cm from the weather models.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tWind" aria-pressed="false">Wind</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -1727,7 +1727,7 @@ $("tTemp").onclick = () => tab !== "temp" && setTab("temp");
 $("tSoil").onclick = () => tab !== "soil" && setTab("soil");
 $("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 // on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
-const TAB_ORDER = ["fc", "wind", "temp", "soil", "storms", "radar", "rain", "outlook"];
+const TAB_ORDER = ["fc", "temp", "wind", "radar", "rain", "soil", "storms", "outlook"];
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
   swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;
