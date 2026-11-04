@@ -970,9 +970,22 @@ async function omDays(lat, lon){
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
     + `&models=${Object.keys(OM_MODELS).join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`;
   const r = await fetch(url); if (!r.ok) throw new Error(r.status);
-  const j = await r.json(), t = j.hourly.time, out = {};
-  for (const m of Object.keys(OM_MODELS)){
-    const v = j.hourly[`precipitation_${m}`]; if (!v) continue;
+  const j = await r.json(), out = {};
+  for (const m of Object.keys(OM_MODELS)){ const d = omParse(j.hourly.time, j.hourly[`precipitation_${m}`]); if (d.length) out[m] = d; }
+  // the Bureau's ACCESS-G sometimes comes back empty in the combined request: ask Open-Meteo's own BOM address for it
+  if (!out.bom_access_global) {
+    try {
+      const r2 = await fetch(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
+        + `&forecast_days=10&past_days=1&timezone=GMT&timeformat=unixtime`);
+      if (r2.ok) { const j2 = await r2.json(), d = omParse(j2.hourly.time, j2.hourly.precipitation); if (d.length) out.bom_access_global = d; }
+    } catch(e){}
+  }
+  return OM_CACHE[key] = out;
+}
+// a model's hourly rain (mm in the hour up to each time) -> [[day, mm], ...] for the 10am-to-10am days it fully covers
+function omParse(t, v){
+  if (!t || !v) return [];
+  {
     const days = {};   // day (named by the 00z / 10am Qld it ends on) -> [sum, hours]
     t.forEach((ti, i) => {
       if (v[i] == null) return;
@@ -982,10 +995,10 @@ async function omDays(lat, lon){
     // whole days only: a day counts if the model's run covers all of it (some models give a value every hour,
     // others such as ACCESS-G only every 3 hours, with gaps between)
     const have = t.filter((ti, i) => v[i] != null), first = have[0], last = have[have.length - 1];
-    out[m] = Object.entries(days).filter(([d]) => { const end = Date.parse(d + "T00:00:00Z") / 1000; return first <= end - 86400 + 3 * 3600 && last >= end; })
+    if (!have.length) return [];
+    return Object.entries(days).filter(([d]) => { const end = Date.parse(d + "T00:00:00Z") / 1000; return first <= end - 86400 + 3 * 3600 && last >= end; })
       .map(([d, x]) => [d, x[0]]).sort();
   }
-  return OM_CACHE[key] = out;
 }
 function gSample(o, vals, lat, lon){
   const nr = o.lats.length, nc = o.lons.length, step = o.lats[0] - o.lats[1];
@@ -1017,6 +1030,8 @@ async function fChart(){
       for (const [d, v] of ds){ if (!open(d)) continue; if (pts.length && pts[pts.length - 1][0] !== addDays(d, -1)) break; tot += v; pts.push([d, tot]); }
       if (pts.length) lines.push({m, pts, tot, name: OM_MODELS[m][0], col: OM_MODELS[m][1]});
     }
+    const none = Object.keys(OM_MODELS).filter(m => !lines.some(l => l.m === m)).map(m => OM_MODELS[m][0].replace(/ \(.*\)/, ""));
+    if (none.length) omNote = ` ${none.join(", ")}: no data from Open-Meteo just now`;
   } catch(e){ omNote = " (the other models couldn't be loaded just now)"; }
   if (!lines.length) { $("fChart").hidden = true; return; }
   const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
@@ -1042,7 +1057,7 @@ async function fChart(){
   $("fTap").classList.add("merged");
   const SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
   $("fChart").innerHTML = `<div class="chead">${head}</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
-    <div class="ck">${lines.map(l => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${SHORT[l.name] || l.name} <b>${fmt(l.tot)}</b></span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b></span>` : ""}${omNote ? `<span>${omNote.trim()}</span>` : ""}</div>`;
+    <div class="ck">${lines.map(l => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${SHORT[l.name] || l.name} <b>${fmt(l.tot)}</b></span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>`;
   fitMap();
 }
 async function startForecast(){
