@@ -52,6 +52,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .tlticks{position:relative;height:18px;font-size:.78rem;color:var(--ink-2)}
 .tlticks span{position:absolute;top:0;white-space:nowrap}
 .rnote a{color:var(--accent);font-weight:600;white-space:nowrap}
+.warrow{pointer-events:none}
+.warrow svg{display:block;width:20px;height:20px;margin:-10px 0 0 -10px;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff)}
+#wTicks span{transform:translateX(-2px)}
 #rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
 .outlinks{display:flex;flex-direction:column;gap:10px}
 .outlinks a{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);text-decoration:none;box-shadow:0 2px 8px rgba(20,50,90,.06)}
@@ -118,6 +121,7 @@ header .seg button[aria-pressed=true]{background:var(--panel);color:var(--accent
 header .seg button::before{content:"";display:block;width:20px;height:20px;margin:0 auto 2px;background:currentColor;
   -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
 #tFc::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%2015a4%204%200%201%201%20.9-7.9A5%205%200%200%201%2017.5%208%203.5%203.5%200%200%201%2017%2015H7z%22/%3E%3Cpath%20d%3D%22M9%2018l-1%202M13%2018l-1%202M17%2018l-1%202%22/%3E%3C/svg%3E")}
+#tWind::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h10a3%203%200%201%200-3-3%22/%3E%3Cpath%20d%3D%22M3%2012h15a3%203%200%201%201-3%203%22/%3E%3Cpath%20d%3D%22M3%2016h7%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h10a3%203%200%201%200-3-3%22/%3E%3Cpath%20d%3D%22M3%2012h15a3%203%200%201%201-3%203%22/%3E%3Cpath%20d%3D%22M3%2016h7%22/%3E%3C/svg%3E")}
 #tStorm::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M13%202L5%2013h6l-1%209%208-12h-6l1-8z%22/%3E%3C/svg%3E")}
 #tRadar::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%225%22/%3E%3Cpath%20d%3D%22M12%2012l6-6%22/%3E%3C/svg%3E")}
 #tRain::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203c3%204%206%207.5%206%2011a6%206%200%200%201-12%200c0-3.5%203-7%206-11z%22/%3E%3C/svg%3E")}
@@ -169,8 +173,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
     <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
     <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
-    <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
+    <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p>
+    <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p></div>
+    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tWind" aria-pressed="false">Wind</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
   <div class="controls rainOnly">
@@ -210,6 +215,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
+  <div class="controls windOnly" hidden>
+    <div class="field"><span class="eyebrow">Show</span>
+      <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button></div></div>
+  </div>
+
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -225,6 +235,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
+  <div class="rTimeline windOnly" id="wTimeline" hidden>
+    <button id="wPlay" class="tlbtn tlplay" aria-pressed="false" aria-label="Play">▶</button>
+    <div class="tlmid">
+      <div class="tltime" id="wLbl">Wind</div>
+      <input type="range" id="wTime" min="0" max="0" value="0" aria-label="Forecast time">
+      <div class="tlticks" id="wTicks"></div>
+    </div>
+  </div>
+  <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
+  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
@@ -246,6 +266,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
+  </section>
+  <section class="panel windOnly" hidden>
+    <p class="note" style="color:var(--ink-2)" id="wInfo"></p>
+    <p class="note">Wind 10 m above the ground, the model's average speed (gusts are the strongest bursts it expects between times, often half as strong again). Arrows point the way the wind is blowing. The model's grid squares are about 25 km across, so it shows the broad pattern, not gullies, ranges or storm outflow: check the wind on the spot before spraying or burning. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel stormOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="sInfo"></p>
@@ -523,7 +547,7 @@ function setPin(label){
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
 map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -555,13 +579,14 @@ function locateMe(btn){
       ? "Location is turned off for this site. On iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App, then try again."
       : "Couldn't get your location just now. Try again in the open, away from buildings.";
     if (tab === "storms") $("sTap").textContent = $("tap").textContent;
+    if (tab === "wind") $("wTap").textContent = $("tap").textContent;
   }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
 }
 function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
@@ -856,6 +881,112 @@ async function startForecast(){
   fDraw();
 }
 
+// Wind tab: data/wind.json (wind.py, ECMWF 10 m winds every 3 h, then 6 h, out to 7 days). Speeds in
+// km/h, directions (where it blows from) in 10-degree steps. Coloured like BOM's wind map, with arrows
+// spread evenly across the screen, redrawn as the map moves.
+let W = null, wOverlay = null, wShow = "spd", wTimer = null;
+const wArrows = L.layerGroup().addTo(map);
+const W_STOPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+const W_COLOURS = ["#f3eafb", "#e9d8f7", "#dcc2f2", "#c9a0e8", "#dc8a4f", "#d06a2c", "#b9501a", "#963a10", "#6b2608", "#3a1404"];
+const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function wSample(vals, lat, lon){
+  const nr = W.lats.length, nc = W.lons.length, step = W.lats[0] - W.lats[1];
+  const fy = (W.lats[0] - lat) / step, fx = (lon - W.lons[0]) / (W.lons[1] - W.lons[0]);
+  if (fy < 0 || fx < 0 || fy > nr - 1 || fx > nc - 1) return null;
+  const r = Math.min(Math.floor(fy), nr - 2), c = Math.min(Math.floor(fx), nc - 2), dy = fy - r, dx = fx - c;
+  return vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx
+       + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx;
+}
+const wI = () => +$("wTime").value;
+const wSpeeds = i => wShow === "gust" && W.gust && W.gust[i] ? W.gust[i] : W.spd[i];
+// u and v (towards east and north) for one time, worked out once, so directions can be smoothed between grid points
+const wUV = i => W._uv[i] || (W._uv[i] = [W.spd[i].map((s, k) => -s * Math.sin(W.dir[i][k] * Math.PI / 18)),
+                                            W.spd[i].map((s, k) => -s * Math.cos(W.dir[i][k] * Math.PI / 18))]);
+function wAt(i, lat, lon){
+  const s = wSample(wSpeeds(i), lat, lon); if (s == null) return null;
+  const [u, v] = wUV(i), uu = wSample(u, lat, lon), vv = wSample(v, lat, lon);
+  return {spd: s, from: (Math.atan2(-uu, -vv) * 180 / Math.PI + 360) % 360, gust: W.gust && W.gust[i] ? wSample(W.gust[i], lat, lon) : null,
+          mean: wSample(W.spd[i], lat, lon)};
+}
+const wTimeText = t => qld(t).toLocaleString("en-AU", {timeZone: "UTC", weekday: "long", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(/\s(am|pm)/, "$1") + " AEST";
+function wDraw(){
+  if (!W || tab !== "wind") return;
+  const i = wI(), vals = wSpeeds(i), cols = W_COLOURS.map(hex);
+  const s = W.lats[W.lats.length - 1], n = W.lats[0], w = W.lons[0], e = W.lons[W.lons.length - 1];
+  const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const CW = 400, CH = Math.round(CW * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
+  const cv = document.createElement("canvas"); cv.width = CW; cv.height = CH;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(CW, CH);
+  for (let y = 0; y < CH; y++){
+    const my = merc(n) - (y + .5) / CH * (merc(n) - merc(s));
+    const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
+    for (let x = 0; x < CW; x++){
+      const v = wSample(vals, lat, w + (x + .5) / CW * (e - w));
+      if (v == null) continue;
+      let k = 0; W_STOPS.forEach((b, j) => { if (v >= b) k = j; });
+      const o = (y*CW + x) * 4; img.data[o] = cols[k][0]; img.data[o+1] = cols[k][1]; img.data[o+2] = cols[k][2]; img.data[o+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  if (wOverlay) map.removeLayer(wOverlay);
+  wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
+  wDrawArrows();
+  $("wLbl").textContent = wTimeText(W.times[i]);
+  $("wLegendTitle").textContent = (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
+  wReadTap();
+}
+function wDrawArrows(){
+  wArrows.clearLayers();
+  if (!W || tab !== "wind") return;
+  const i = wI(), size = map.getSize(), gap = size.x < 500 ? 56 : 70;
+  for (let y = gap / 2; y < size.y; y += gap) for (let x = gap / 2; x < size.x; x += gap){
+    const ll = map.containerPointToLatLng([x, y]), a = wAt(i, ll.lat, ll.lng);
+    if (!a || a.mean < 1) continue;
+    const rot = a.from + 90;   // the arrow points east before turning; it points where the wind goes
+    L.marker(ll, {interactive: false, keyboard: false, icon: L.divIcon({className: "warrow", iconSize: [0, 0],
+      html: `<svg viewBox="0 0 20 20" style="transform:rotate(${rot.toFixed(0)}deg)"><path d="M3 10h13M11 5l5 5-5 5" stroke="#1c2621" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`})}).addTo(wArrows);
+  }
+}
+map.on("moveend zoomend resize", () => { if (tab === "wind") wDrawArrows(); });
+function wReadTap(){
+  if (tab !== "wind" || !tapAt || !W) return;
+  const i = wI(), a = wAt(i, tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
+  if (!a){ setPin("Outside"); $("wTap").textContent = `No wind forecast at ${where} (outside the forecast area).`; return; }
+  const from = COMPASS[Math.round(a.from / 22.5) % 16], mean = Math.round(a.mean), g = a.gust == null ? null : Math.round(a.gust);
+  setPin(`${Math.round(a.spd)} km/h ${from}`);
+  $("wTap").innerHTML = `${wTimeText(W.times[i]).replace(" AEST", "")} at ${where}: wind <b>${mean} km/h</b> from the <b>${from}</b>${g == null ? "" : ` · gusts <b>${g} km/h</b>`}${mean < 1 ? " (calm)" : ""}.`;
+}
+function wTicks(){
+  const n = W.times.length - 1, days = [];
+  W.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
+  $("wTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
+}
+async function startWind(){
+  $("wLegend").innerHTML = W_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${W_STOPS[i]}${i === W_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  try { W = await getJSON("data/wind.json"); }
+  catch(e){ W = null; $("wTap").innerHTML = `<span class="empty">No wind forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
+  W._uv = {};
+  if (!W.gust) { wShow = "spd"; $("wShow").hidden = true; }
+  $("wTime").max = W.times.length - 1;
+  // open on the forecast time nearest now
+  const now = Date.now() / 1000;
+  $("wTime").value = W.times.reduce((b, t, i) => Math.abs(t - now) < Math.abs(W.times[b] - now) ? i : b, 0);
+  wTicks();
+  const run = new Date(W.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
+  $("wInfo").textContent = `${W.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time: every 3 hours for 6 days, then every 6 hours. Updated twice a day.`;
+  fitMap(); wDraw();
+}
+function wLoop(on){
+  clearInterval(wTimer); wTimer = null;
+  $("wPlay").setAttribute("aria-pressed", on); $("wPlay").textContent = on ? "❚❚" : "▶"; $("wPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  if (!on || !W) return;
+  wTimer = setInterval(() => { const el = $("wTime"); el.value = +el.value >= +el.max ? 0 : +el.value + 1; wDraw(); }, 700);
+}
+$("wPlay").onclick = () => wLoop(!wTimer);
+$("wTime").oninput = () => { wLoop(false); wDraw(); };
+$("wShow").onclick = e => { const b = e.target.closest("button"); if (!b || !W) return;
+  wShow = b.dataset.w; [...$("wShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); wDraw(); };
+
 // Live radar: BOM's Toowoomba pictures straight from the BOM website, 128 km (IDR1083, most detail),
 // 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
 // centred on the radar, 2 x range across.
@@ -992,15 +1123,16 @@ function setTab(t, first){
   if (t !== "radar" && tab === "radar" && viewBeforeRadar && !first) { map.setView(viewBeforeRadar.c, viewBeforeRadar.z, {animate: false}); viewBeforeRadar = null; }
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tOut").setAttribute("aria-pressed", t === "outlook");
-  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly"}[t];
-  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly").forEach(el => el.hidden = !el.classList.contains(only));
-  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook";
+  $("tRain").setAttribute("aria-pressed", t === "rain"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tWind").setAttribute("aria-pressed", t === "wind"); $("tOut").setAttribute("aria-pressed", t === "outlook");
+  const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly"}[t];
+  document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly, .windOnly").forEach(el => el.hidden = !el.classList.contains(only));
+  $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook"; $("subWind").hidden = t !== "wind";
   $("map").hidden = t === "outlook";   // the Outlook tab is just links
   if (t !== "radar") rClear();
   map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
   if (t !== "fc") fLoop(false);
+  if (t !== "wind") { wLoop(false); if (wOverlay) map.removeLayer(wOverlay); wArrows.clearLayers(); }
   $("dayField").hidden = t === "rain" && view === "week";
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
@@ -1014,6 +1146,10 @@ function setTab(t, first){
     gaugeLayer.clearLayers(); if (ring) ring.addTo(map);
     if (tapAt) setPin("");
     startRadar(true);
+  } else if (t === "wind"){
+    if (overlay) map.removeLayer(overlay);
+    gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
+    if (W) wDraw(); else startWind();
   } else if (t === "outlook"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers();
@@ -1031,9 +1167,10 @@ function setTab(t, first){
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
+$("tWind").onclick = () => tab !== "wind" && setTab("wind");
 $("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 // on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
-const TAB_ORDER = ["fc", "storms", "radar", "rain", "outlook"];
+const TAB_ORDER = ["fc", "wind", "storms", "radar", "rain", "outlook"];
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
   swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap") ? e.touches[0].clientX : null;
