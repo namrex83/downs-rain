@@ -230,7 +230,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls soilOnly" hidden>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button><button data-o="avg" aria-pressed="false">7-day average</button></div></div>
+      <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button><button data-o="day" aria-pressed="false">Day average</button><button data-o="avg" aria-pressed="false">7-day average</button></div></div>
   </div>
 
   <div id="map"></div>
@@ -1136,6 +1136,7 @@ const O_COLOURS = ["#283c8f", "#3456b8", "#4a7fd6", "#78a9e6", "#3fa34d", "#7cc3
                    "#ee7b3b", "#dc5330", "#bf3029", "#93192c", "#5e0f33"];
 const oI = () => +$("oTime").value;
 const o8 = () => O.times.map((t, i) => qld(t).getUTCHours() === 8 ? i : -1).filter(i => i >= 0);
+const oStops = () => oShow === "day" ? o8().filter(i => oDayIdx(qDate(O.times[i])).length >= 8) : o8();   // the times the slider steps through
 function oSample(vals, lat, lon){
   const nr = O.lats.length, nc = O.lons.length, step = O.lats[0] - O.lats[1];
   const fy = (O.lats[0] - lat) / step, fx = (lon - O.lons[0]) / (O.lons[1] - O.lons[0]);
@@ -1153,8 +1154,17 @@ function oAvg(){
   const now = Date.now() / 1000, use = o8().filter(i => O.times[i] > now - 4 * 3600).slice(0, 7);
   return O._avg = O.t[use[0]].map((_, k) => { let s = 0, n = 0; for (const i of use){ const v = O.t[i][k]; if (v != null){ s += v; n++; } } return n ? Math.round(s / n) : null; });
 }
-const oVals = i => oShow === "avg" ? oAvg() : O.t[i];
-const oWhen = i => oShow === "avg" ? "Next 7 days · average of the 8am readings" : oShow === "8am" ? `${part(qDate(O.times[i]), {weekday: "long", day: "numeric", month: "short"})}, 8am` : wTimeText(O.times[i]);
+// the average of a Queensland day's readings (every 3 hours, 2am to 11pm) at each grid point
+const oDayIdx = d => O.times.map((t, j) => qDate(t) === d ? j : -1).filter(j => j >= 0);
+function oDayAvg(d){
+  O._dayAvg = O._dayAvg || {};
+  if (O._dayAvg[d]) return O._dayAvg[d];
+  const use = oDayIdx(d);
+  return O._dayAvg[d] = O.t[use[0]].map((_, k) => { let s = 0, n = 0; for (const i of use){ const v = O.t[i][k]; if (v != null){ s += v; n++; } } return n ? Math.round(s / n) : null; });
+}
+const oFullDays = () => [...new Set(O.times.map(qDate))].filter(d => oDayIdx(d).length >= 8);   // days with all 8 readings
+const oVals = i => oShow === "avg" ? oAvg() : oShow === "day" ? oDayAvg(qDate(O.times[i])) : O.t[i];
+const oWhen = i => oShow === "avg" ? "Next 7 days · average of the 8am readings" : oShow === "day" ? `${part(qDate(O.times[i]), {weekday: "long", day: "numeric", month: "short"})} · day average` : oShow === "8am" ? `${part(qDate(O.times[i]), {weekday: "long", day: "numeric", month: "short"})}, 8am` : wTimeText(O.times[i]);
 function oDraw(){
   if (!O || tab !== "soil") return;
   const i = oI(), vals = oVals(i), cols = O_COLOURS.map(hex);
@@ -1197,18 +1207,19 @@ function oReadTap(){
   const pl = oPlanting(tapAt.lat, tapAt.lng);
   const list = pl.days.map(x => `${part(x.d, {weekday: "short"})} ${x.v.toFixed(1)}`).join(" · ");
   const avg = oSample(oAvg(), tapAt.lat, tapAt.lng);
+  const dayList = oFullDays().map(d => { const x = oSample(oDayAvg(d), tapAt.lat, tapAt.lng); return x == null ? "" : `${part(d, {weekday: "short"})} ${x.toFixed(1)}`; }).filter(Boolean).join(" · ");
   const verdict = pl.from ? `Cotton planting guide (14°C+ at 8am, 3 days running): <b>met from ${part(pl.from, {weekday: "long"})}</b>.`
     : `Cotton planting guide (14°C+ at 8am, 3 days running): <b>not met</b> in the forecast.`;
-  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">Next 7-day average (8am): <b>${avg == null ? "–" : avg.toFixed(1)}°C</b>. 8am at 10 cm: ${list}. ${verdict}</span>`;
+  $("oTap").innerHTML = `${oWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1)}°C</b> at 10 cm.<span class="verdict">Next 7-day average (8am): <b>${avg == null ? "–" : avg.toFixed(1)}°C</b>. 8am at 10 cm: ${list}. Day average: ${dayList}. ${verdict}</span>`;
 }
 function oTicks(){
   const n = O.times.length - 1, days = [];
   O.times.forEach((t, i) => { const d = qDate(t); if (!days.length || days[days.length - 1].d !== d) days.push({d, i}); });
   $("oTicks").innerHTML = days.filter(x => n - x.i > 1).map(x => `<span style="left:${(100 * x.i / n).toFixed(1)}%">${part(x.d, {weekday: "short"}).slice(0, 2)}</span>`).join("");
 }
-function oSnap(){   // in "8am each day", keep the slider on 8am
-  if (oShow !== "8am") return;
-  const e8 = o8(); if (!e8.length) return;
+function oSnap(){   // in "8am each day" and "Day average", keep the slider on a day's 8am
+  if (oShow !== "8am" && oShow !== "day") return;
+  const e8 = oStops(); if (!e8.length) return;
   const v = oI(); $("oTime").value = e8.reduce((b, j) => Math.abs(j - v) < Math.abs(b - v) ? j : b, e8[0]);
 }
 async function startSoil(){
@@ -1234,7 +1245,7 @@ function oLoop(on){
   oTimer = setInterval(() => {
     const el = $("oTime"), v = +el.value;
     if (oShow === "avg") return;
-    if (oShow === "8am"){ const e8 = o8(), k = e8.indexOf(v); el.value = e8[k + 1 < e8.length ? k + 1 : 0]; }
+    if (oShow === "8am" || oShow === "day"){ const e8 = oStops(), k = e8.indexOf(v); el.value = e8[k + 1 < e8.length ? k + 1 : 0]; }
     else el.value = v >= +el.max ? 0 : v + 1;
     oDraw();
   }, 800);
