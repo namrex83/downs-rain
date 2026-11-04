@@ -17,14 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install
         run: pip install ecmwf-opendata eccodes numpy requests
+
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
 
       - name: Get ECMWF rain forecast
         run: python forecast.py
@@ -54,14 +59,6 @@ jobs:
         run: python soil.py
 
       - name: Publish
-        run: |
-          git config user.name "radar-bot"
-          git config user.email "radar-bot@users.noreply.github.com"
-          git add data/forecast.json
-          for f in data/storms_ecmwf.json data/forecast_gfs.json data/forecast_aifs.json data/wind.json data/temp.json data/soil.json data/et0.json; do [ -f $f ] && git add $f; done
-          if git diff --cached --quiet; then
-            echo "Nothing new"
-          else
-            git commit -m "Model forecast $(date -u +%Y-%m-%dT%H:%MZ)"
-            for i in 1 2 3 4 5; do git pull --rebase && git push && break; sleep 7; done
-          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Model forecast $(date -u +%Y-%m-%dT%H:%MZ)"

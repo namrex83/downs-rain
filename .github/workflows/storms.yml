@@ -17,26 +17,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install
         run: pip install requests eccodes numpy
 
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+
       - name: Get storm forecast
         run: python storms.py
 
       - name: Publish
-        run: |
-          git config user.name "radar-bot"
-          git config user.email "radar-bot@users.noreply.github.com"
-          git add data/storms.json
-          if git diff --cached --quiet; then
-            echo "Nothing new"
-          else
-            git commit -m "Storm forecast $(date -u +%Y-%m-%dT%H:%MZ)"
-            for i in 1 2 3 4 5; do git pull --rebase && git push && break; sleep 7; done
-          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Storm forecast $(date -u +%Y-%m-%dT%H:%MZ)"
