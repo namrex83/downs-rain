@@ -63,8 +63,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .tlmid .transport{margin:6px auto 2px}
 .chartbox:empty{display:none}
 .chartbox svg{display:block;width:100%;height:auto}
-.chartbox .ck{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.8rem;margin-top:4px;color:var(--ink-2)}
-.chartbox .ck i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.chartbox .ck{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:2px 10px;font-size:.74rem;margin-top:2px;color:var(--ink-2)}
+.chartbox .chead{font-size:.86rem;line-height:1.3;margin-bottom:2px}
+.chartbox .ck i{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
@@ -162,6 +163,18 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .slegend span{font:500 .6rem var(--mono);color:var(--ink-2);white-space:nowrap}
 .slegend.cats span{font:600 .68rem var(--body);white-space:normal;line-height:1.15;display:block;padding-right:4px}
 @media (max-width:600px){
+  /* Forecast on phones: controls on two tight rows (totals, then model + loop), so the map and the rain chart fit on the first screen */
+  #fControls{gap:6px 8px}
+  #fControls .eyebrow, #fControls label{display:none}
+  #fSumField{order:-1;flex:1 1 100%}
+  #fSum{width:100%} #fSum button{flex:1;padding:0 4px;min-height:34px;font-size:.82rem}
+  #fModel button{min-height:34px;padding:0 9px;font-size:.82rem}
+  #fControls .transport{padding:1px 3px}
+  #fControls .transport button{width:30px;height:32px} #fControls .transport .tpplay{width:36px}
+  #fControls .transport button svg{width:17px;height:17px}
+  #fDayField{flex:1 1 100%} #fDayField select{min-height:34px}
+  #fTap.merged{display:none}
+  .chartbox{padding:8px 10px}
   body{padding-top:calc(4px + env(safe-area-inset-top,0px))}
   header{margin-top:calc(-4px - env(safe-area-inset-top,0px));padding-top:calc(12px + env(safe-area-inset-top,0px))}
   .wrap{gap:8px}
@@ -231,12 +244,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="rRange"><button data-km="128" aria-pressed="false">128 km</button><button data-km="256" aria-pressed="true">256 km</button><button data-km="512" aria-pressed="false">512 km</button></div></div>
   </div>
 
-  <div class="controls fcOnly" hidden>
-    <div class="field"><span class="eyebrow">Model</span>
+  <div class="controls fcOnly" id="fControls" hidden>
+    <div class="field" id="fModelField"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
-    <div class="field"><span class="eyebrow">Show</span>
+    <div class="field" id="fSumField"><span class="eyebrow">Show</span>
       <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="true">7 days</button><button data-n="9" aria-pressed="false">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
-    <div class="field"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
+    <div class="field" id="fLoopField"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
@@ -322,6 +335,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
+    <p class="note"><b>Rain chart:</b> each model's running total at the pin (or Dalby), day by day, in mm, with the dashed median of all of them. GFS, ECMWF and ECMWF AI are the maps above; ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan) are read for the spot from Open-Meteo (CC BY 4.0). Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel windOnly" hidden>
@@ -659,8 +673,11 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
+  // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
+  const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
+  const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  el.style.minHeight = tab === "fc" ? "180px" : "";
+  el.style.height = Math.max(tab === "fc" ? 180 : 240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
 fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
@@ -930,6 +947,7 @@ function fDraw(){
   fReadTap();
 }
 function fReadTap(){
+  if (tab === "fc" && F && !tapAt) fChart();   // before anywhere is tapped, the chart shows Dalby
   if (tab !== "fc" || !tapAt || !F) return;
   const v = fSample(fVals(), tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   const [a, b] = fSumN ? fSpan() : [+$("fDay").value, +$("fDay").value + 1];
@@ -973,10 +991,10 @@ function gSample(o, vals, lat, lon){
   return (vals[r*nc + c] * (1-dy) * (1-dx) + vals[r*nc + c + 1] * (1-dy) * dx + vals[(r+1)*nc + c] * dy * (1-dx) + vals[(r+1)*nc + c + 1] * dy * dx) / 10;
 }
 async function fChart(){
-  if (tab !== "fc" || !tapAt) return;
-  const at = tapAt;
+  if (tab !== "fc") return;
+  const pinned = tapAt, at = pinned || L.latLng(HOME[0], HOME[1]), still = () => tapAt === pinned && tab === "fc";   // stop if the pin moved meanwhile
   for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
-  if (at !== tapAt || tab !== "fc") return;
+  if (!still()) return;
   const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
   const open = d => d > today || (d === today && nowQ.getUTCHours() < 10);   // forecast days not finished yet
   const lines = [];
@@ -989,7 +1007,7 @@ async function fChart(){
   let omNote = "";
   try {
     const om = await omDays(at.lat, at.lng);
-    if (at !== tapAt || tab !== "fc") return;
+    if (!still()) return;
     for (const [m, ds] of Object.entries(om)){
       let tot = 0; const pts = [];
       for (const [d, v] of ds){ if (!open(d)) continue; if (pts.length && pts[pts.length - 1][0] !== addDays(d, -1)) break; tot += v; pts.push([d, tot]); }
@@ -999,7 +1017,7 @@ async function fChart(){
   if (!lines.length) { $("fChart").hidden = true; return; }
   const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
   const top = Math.max(5, ...lines.map(l => l.tot)), step = [5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const W0 = 340, H0 = 170, L0 = 34, R0 = 8, T0 = 10, B0 = 22;
+  const W0 = 340, H0 = 128, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
   const X = i => L0 + (W0 - L0 - R0) * (i + 1) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
@@ -1015,9 +1033,12 @@ async function fChart(){
   });
   if (med.length) g += poly(med.map(p => [p[0], p[1]]), `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
   $("fChart").hidden = false;
-  $("fChart").innerHTML = `<div class="eyebrow" style="margin-bottom:4px">Rain building up at the pin · each model, mm</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
-    <div class="ck">${lines.map(l => `<span><i style="background:${l.col}"></i>${l.name} <b>${fmt(l.tot)}</b> mm (${l.pts.length} days)</span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b> mm</span>` : ""}</div>
-    <p class="note" style="margin:6px 0 0;font-size:.75rem">GFS, ECMWF and ECMWF AI are the maps above; ACCESS-G, UK Met Office, ICON, GEM and JMA are read for this spot from Open-Meteo (CC BY 4.0)${omNote}. Each line stops where its model run ends. When the lines bunch together the forecast is more certain.</p>`;
+  // the tap readout goes at the top of the chart (and its own box is hidden), to save room on phones
+  const head = pinned ? $("fTap").innerHTML : `Rain building up at Dalby · tap the map for anywhere else`;
+  $("fTap").classList.add("merged");
+  const SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
+  $("fChart").innerHTML = `<div class="chead">${head}</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
+    <div class="ck">${lines.map(l => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${SHORT[l.name] || l.name} <b>${fmt(l.tot)}</b></span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b></span>` : ""}${omNote ? `<span>${omNote.trim()}</span>` : ""}</div>`;
   fitMap();
 }
 async function startForecast(){
