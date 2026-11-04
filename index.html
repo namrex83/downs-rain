@@ -58,6 +58,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
+.daybar button b{display:block;font:600 .68rem/1.2 var(--mono);color:var(--ink);white-space:nowrap;letter-spacing:-.03em;margin-top:2px}
+.daybar button b:empty{display:none}
+.daybar button[aria-pressed=true] b{color:inherit}
 .daybar button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .daybar button[aria-pressed=true] span{color:inherit;opacity:.85}
 #rStartTick{left:0}#rEndTick{right:0}#rNowTick{transform:translateX(-50%);font-weight:600;color:var(--ink)}
@@ -985,7 +988,7 @@ function wDraw(){
   if (wOverlay) map.removeLayer(wOverlay);
   wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
   wDrawArrows();
-  $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]);
+  $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]); dayBarValues("wDays", windDay);
   $("wLegendTitle").textContent = (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
   wReadTap();
 }
@@ -1003,6 +1006,7 @@ function wDrawArrows(){
 }
 map.on("moveend zoomend resize", () => { if (tab === "wind") wDrawArrows(); });
 function wReadTap(){
+  if (tab === "wind" && W) dayBarValues("wDays", windDay);
   if (tab !== "wind" || !tapAt || !W) return;
   const i = wI(), a = wAt(i, tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   if (!a){ setPin("Outside"); $("wTap").textContent = `No wind forecast at ${where} (outside the forecast area).`; return; }
@@ -1045,7 +1049,7 @@ $("wShow").onclick = e => { const b = e.target.closest("button"); if (!b || !W) 
 // the slider to that day at the same time of day (or the nearest time it has), and the current day is lit.
 function dayBar(box, times, slider, draw, stop){
   const today = qDate(Date.now() / 1000), days = [...new Set(times.map(qDate))].filter(d => d >= today);
-  $(box).innerHTML = days.map(d => `<button data-d="${d}" aria-pressed="false">${part(d, {weekday: "short"})}<span>${part(d, {day: "numeric"})}</span></button>`).join("");
+  $(box).innerHTML = days.map(d => `<button data-d="${d}" aria-pressed="false">${part(d, {weekday: "short"})}<span>${part(d, {day: "numeric"})}</span><b></b></button>`).join("");
   $(box).onclick = e => {
     const b = e.target.closest("button"); if (!b) return;
     stop();
@@ -1054,6 +1058,21 @@ function dayBar(box, times, slider, draw, stop){
     $(slider).value = idx.reduce((best, i) => Math.abs(qld(times[i]).getUTCHours() - hour) < Math.abs(qld(times[best]).getUTCHours() - hour) ? i : best, idx[0]);
     draw();
   };
+}
+// each day's figures on its button, read at the pin (or Dalby before anywhere is tapped)
+function dayBarValues(box, fn){
+  const at = tapAt || L.latLng(HOME[0], HOME[1]);
+  [...$(box).children].forEach(b => { b.querySelector("b").textContent = fn(b.dataset.d, at.lat, at.lng) || ""; });
+}
+const dayIdx = (times, d) => times.map((t, i) => qDate(t) === d ? i : -1).filter(i => i >= 0);
+function windDay(d, lat, lon){   // the day's strongest wind, with its direction then
+  let best = null;
+  for (const i of dayIdx(W.times, d)){ const a = wAt(i, lat, lon); if (a && (!best || a.mean > best.mean)) best = a; }
+  return best ? `${Math.round(best.mean)} ${COMPASS[Math.round(best.from / 22.5) % 16]}` : "";
+}
+function tempDay(d, lat, lon){   // the day's lowest / highest
+  const v = dayIdx(T.times, d).map(i => tSample(T.t[i], lat, lon)).filter(x => x != null);
+  return v.length ? `${Math.round(Math.min(...v))}/${Math.round(Math.max(...v))}` : "";
 }
 function dayBarLight(box, t){ [...$(box).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.d === qDate(t))); }
 
@@ -1103,11 +1122,12 @@ function tDraw(){
   ctx.putImageData(img, 0, 0);
   if (tOverlay) map.removeLayer(tOverlay);
   tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
-  $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]);
+  $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]); dayBarValues("tDays", tempDay);
   $("tLegendTitle").textContent = {now: "Temperature (°C)", max: "Highest temperature of the day (°C)", min: "Lowest temperature of the day (°C)"}[tShow];
   tReadTap();
 }
 function tReadTap(){
+  if (tab === "temp" && T) dayBarValues("tDays", tempDay);
   if (tab !== "temp" || !tapAt || !T) return;
   const i = tI(), v = tSample(tVals(i), tapAt.lat, tapAt.lng), where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   if (v == null){ setPin("Outside"); $("tTap").textContent = `No temperature forecast at ${where} (outside the forecast area).`; return; }
