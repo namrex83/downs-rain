@@ -385,6 +385,34 @@ jobs:
               return out
           
           
+          def write_obs(positions=None):
+              """The latest reading from each BOM station (temperature, dew point, humidity, wind, gusts) and today's
+              highest and lowest temperature so far, for the station dots on the Temp and Wind tabs: data/obs.json."""
+              import requests
+              out = []
+              for prod, wmo in STATIONS:
+                  try:
+                      r = requests.get(f"https://www.bom.gov.au/fwo/{prod}/{prod}.{wmo}.json", headers={"User-Agent": USER_AGENT}, timeout=30)
+                      r.raise_for_status()
+                      obs = r.json()["observations"]["data"]
+                      if not obs:
+                          continue
+                      o = obs[0]   # newest first
+                      today = (o.get("local_date_time_full") or "")[:8]
+                      temps = [x["air_temp"] for x in obs if (x.get("local_date_time_full") or "").startswith(today) and x.get("air_temp") is not None]
+                      pos = (positions or {}).get(wmo, o)
+                      out.append({"name": o.get("name"), "lat": pos["lat"], "lon": pos["lon"], "time": o.get("local_date_time_full"),
+                                  "t": o.get("air_temp"), "td": o.get("dewpt"), "rh": o.get("rel_hum"),
+                                  "dir": o.get("wind_dir"), "spd": o.get("wind_spd_kmh"), "gust": o.get("gust_kmh"),
+                                  "tmax": max(temps) if temps else None, "tmin": min(temps) if temps else None})
+                  except Exception as e:
+                      log(f"  observations {wmo}: {e}")
+              if out:
+                  with open(os.path.join(DATA, "obs.json"), "w") as f:
+                      json.dump({"made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "stations": out}, f, separators=(",", ":"))
+                  log(f"Station readings: {len(out)} stations")
+          
+          
           def site_key(name):
               """Name as matched against the secret: case, spacing and a "(DDCGI)" tag don't matter,
               so "Jimbour (DDCGI)" from a pasted list finds "Jimbour"."""
@@ -864,6 +892,11 @@ jobs:
                           f"radar x{bias:.2f} from {npairs} gauge(s)")
           
                   recorrect_changed_days()
+          
+                  try:
+                      write_obs(positions)
+                  except Exception as e:
+                      log(f"  station readings skipped: {e}")
           
                   # running since-9am map, refreshed on every run that added new scans
                   cur = window_for(now)

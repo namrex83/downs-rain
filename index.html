@@ -97,6 +97,11 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #mapRow{display:flex;flex-direction:column;gap:12px}
 #side{display:flex;flex-direction:column;gap:12px}
 #fTap.merged{display:none}   /* its text is in the chart's heading */
+/* BOM station readings on the Temp and Wind maps */
+.obs{transform:translate(-50%,-50%);width:max-content;display:flex;align-items:center;gap:2px;background:#fff;color:#1c2621;border:2px solid #1c2621;border-radius:9px;
+  padding:1px 5px;font:700 .72rem/1.2 var(--mono);white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
+.obs svg{width:13px;height:13px}
+.obs.calm{border-style:dashed}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
@@ -342,9 +347,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap soilOnly" id="oTap" hidden>Tap the map to read the soil temperature at any spot.</div>
   <div class="soilOnly" id="oLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Soil temperature at 10 cm (°C) · green is 14°C+</div><div class="legend" id="oLegend"></div></div>
   <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
-  <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="legend" id="tLegend"></div></div>
+  <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="note" style="margin:0 0 4px;font-size:.74rem">White boxes are <b>actual</b> BOM station temperatures at their latest reading; tap one for humidity, Delta T and today's max/min.</div><div class="legend" id="tLegend"></div></div>
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
-  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
+  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">White boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
@@ -1330,7 +1335,7 @@ function wReadTap(){
       setPin(SPRAY_NAMES[r.lv]);
     }
   }
-  $("wTap").innerHTML = `${wTimeText(W.times[i]).replace(" AEST", "")} at ${where}: wind <b>${mean} km/h</b> from the <b>${from}</b>${g == null ? "" : ` · gusts <b>${g} km/h</b>`}${mean < 1 ? " (calm)" : ""}.${sp}`;
+  $("wTap").innerHTML = `${wTimeText(W.times[i]).replace(" AEST", "")} at ${where}: wind <b>${mean} km/h</b> from the <b>${from}</b>${g == null ? "" : ` · gusts <b>${g} km/h</b>`}${mean < 1 ? " (calm)" : ""}.${sp}${obsLine("wind")}`;
 }
 function wTicks(){
   const n = W.times.length - 1, days = [];
@@ -1405,6 +1410,56 @@ function tempDay(d, lat, lon){   // the day's lowest / highest
 }
 function dayBarLight(box, t){ [...$(box).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.d === qDate(t))); }
 
+// BOM station readings (data/obs.json, saved by the radar job about hourly): actual temperature, humidity,
+// wind and gusts now, and today's highest and lowest so far. Shown as dots on the Temp and Wind maps.
+let OBS = null, obsAt = 0;
+const obsLayer = L.layerGroup().addTo(map);
+const obsTime = s => { if (!s) return ""; const h = +s.slice(8, 10), m = s.slice(10, 12); return `${h % 12 || 12}:${m}${h < 12 ? "am" : "pm"}`; };
+const obsFrom = d => { const k = COMPASS.indexOf(d); return k < 0 ? null : k * 22.5; };
+async function loadObs(){
+  if (OBS && Date.now() - obsAt < 10 * 60000) return OBS;
+  try { OBS = await getJSON("data/obs.json"); obsAt = Date.now(); } catch(e){ OBS = null; }
+  return OBS;
+}
+function obsPopup(o){
+  const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null;
+  return `<b>${o.name}</b> · BOM station, actual at ${obsTime(o.time)}<br>`
+    + (o.t != null ? `Temperature <b>${o.t.toFixed(1)}°C</b>` : "") + (o.tmax != null ? ` (today ${o.tmin.toFixed(1)} to ${o.tmax.toFixed(1)}°C so far)` : "") + "<br>"
+    + (o.rh != null ? `Humidity ${o.rh}%` : "") + (o.td != null ? ` · dew point ${o.td.toFixed(1)}°C` : "") + (d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>` : "") + "<br>"
+    + (o.spd != null ? `Wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? ` · gusts ${o.gust} km/h` : ""}` : "");
+}
+async function drawObs(){
+  obsLayer.clearLayers();
+  if (tab !== "temp" && tab !== "wind") return;
+  const j = await loadObs(); if (!j || (tab !== "temp" && tab !== "wind")) return;
+  obsLayer.clearLayers();
+  for (const o of j.stations){
+    let html;
+    if (tab === "temp") html = o.t == null ? null : `${Math.round(o.t)}°`;
+    else {
+      const from = obsFrom(o.dir);
+      html = o.spd == null ? null : (from == null ? `${o.spd}` : `<svg viewBox="0 0 20 20" style="transform:rotate(${from + 90}deg)"><path d="M3 10h13M11 5l5 5-5 5" stroke="#1c2621" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>${o.spd}`);
+    }
+    if (!html) continue;
+    L.marker([o.lat, o.lon], {zIndexOffset: 500, icon: L.divIcon({className: "", iconSize: [0, 0], html: `<div class="obs${tab === "wind" && !o.spd ? " calm" : ""}" title="${o.name}">${html}</div>`})})
+      .bindPopup(obsPopup(o)).addTo(obsLayer);
+  }
+}
+// the nearest station to a spot, for the tap readouts
+function nearestObs(lat, lon){
+  if (!OBS) return null;
+  let best = null;
+  for (const o of OBS.stations){ const km = Math.hypot((o.lat - lat) * 111, (o.lon - lon) * 111 * Math.cos(lat * Math.PI / 180)); if (!best || km < best.km) best = {o, km}; }
+  return best && best.km <= 60 ? best : null;
+}
+function obsLine(kind){
+  const n = tapAt && nearestObs(tapAt.lat, tapAt.lng); if (!n) return "";
+  const o = n.o, near = `${o.name} (${Math.round(n.km)} km away), actual at ${obsTime(o.time)}`;
+  if (kind === "temp") return o.t == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: <b>${o.t.toFixed(1)}°C</b>${o.tmax != null ? `, today ${o.tmin.toFixed(1)} to ${o.tmax.toFixed(1)}°C so far` : ""}.</span>`;
+  const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null;
+  return o.spd == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? `, gusts ${o.gust}` : ""}${d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>, humidity ${o.rh}%` : ""}.</span>`;
+}
+
 // Temp tab: data/temp.json (temp.py, ECMWF 2 m temperature, degC x10, same times as the wind). "Day max"
 // and "Day min" take the highest or lowest of the chosen Queensland day's times at each grid point.
 let T = null, tOverlay = null, tShow = "now", tTimer = null;
@@ -1468,7 +1523,7 @@ function tReadTap(){
       : tSample(T.t[j], tapAt.lat, tapAt.lng) < tSample(T.t[b], tapAt.lat, tapAt.lng)) ? j : b, idx[0]);
     extra = `, about ${qHour(T.times[at])}`;
   }
-  $("tTap").innerHTML = `${tWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1).replace("-", "−")}°C</b>${extra}${v <= 2 && tShow !== "max" ? " · frost likely on still, clear nights" : ""}.`;
+  $("tTap").innerHTML = `${tWhen(i).replace(" AEST", "")} at ${where}: <b>${v.toFixed(1).replace("-", "−")}°C</b>${extra}${v <= 2 && tShow !== "max" ? " · frost likely on still, clear nights" : ""}.${obsLine("temp")}`;
 }
 function tTicks(){
   const n = T.times.length - 1, days = [];
@@ -1825,6 +1880,7 @@ function setTab(t, first){
   if (t !== "storms") sLoop(false);
   if (t !== "fc") fLoop(false);
   if (t !== "soil") { oLoop(false); if (oOverlay) map.removeLayer(oOverlay); }
+  setTimeout(() => drawObs().then(() => { if (tab === "wind") wReadTap(); if (tab === "temp") tReadTap(); }), 0);   // station dots on Temp and Wind only
   if (t !== "temp") { tLoop(false); if (tOverlay) map.removeLayer(tOverlay); }
   if (t !== "wind") { wLoop(false); if (wOverlay) map.removeLayer(wOverlay); wArrows.clearLayers(); }
   $("dayField").hidden = t === "rain" && view === "week";
