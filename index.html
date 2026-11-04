@@ -81,7 +81,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 /* Forecast on a computer: the page goes wider, with the rain chart beside the map instead of under it */
 @media (min-width:1000px){
-  body.fcwide .wrap{max-width:1440px}
+  .wrap{max-width:1440px}   /* every tab uses the full width on a computer */
   body.fcwide #mapRow{display:flex;flex-direction:row;gap:14px;align-items:stretch}
   body.fcwide #map{flex:1 1 auto;min-width:0;height:calc(100vh - 230px);min-height:420px}
   body.fcwide #fChart{flex:0 0 420px;margin:0;align-self:stretch;overflow:auto}
