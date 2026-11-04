@@ -72,6 +72,13 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .chartbox .cmode button{min-height:28px;font-size:.74rem;padding:0 10px}
 .chartbox .chead{font-size:.86rem;line-height:1.3;margin-bottom:2px}
 .chartbox .ck i{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+/* pull down to refresh: a round arrow that follows the finger, then spins while the page reloads */
+#ptr{position:fixed;left:50%;top:0;z-index:2000;width:40px;height:40px;margin-left:-20px;border-radius:50%;background:var(--panel);color:var(--accent);
+  box-shadow:0 2px 10px rgba(0,0,0,.25);display:grid;place-items:center;transform:translateY(-60px);opacity:0;pointer-events:none}
+#ptr svg{width:22px;height:22px}
+#ptr.ready{background:var(--accent);color:var(--accent-ink)}
+#ptr.spin svg{animation:ptrspin .8s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
@@ -208,6 +215,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 </style>
 </head>
 <body>
+<div id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 <div class="wrap">
   <header>
     <div><h1>Darling Downs <span>Weather Desk</span></h1>
@@ -377,6 +385,8 @@ const tpMove = (k, i, n) => k === "first" ? 0 : k === "last" ? n - 1 : Math.max(
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
 let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
+// after a pull-down refresh (the address has ?r=), stay on the tab you were on
+try { const t = localStorage.getItem("tab"); if (new URLSearchParams(location.search).has("r") && ["fc","temp","wind","radar","rain","soil","storms","outlook"].includes(t)) tab = t; } catch(e){}
 try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "outlook"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
 
 // Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
@@ -1885,6 +1895,32 @@ $("sDay").onchange = () => { sSetHourRange(); sDraw(); };
 $("sHour").oninput = () => { sLoop(false); sHourLabel(); sDraw(); };
 
 init(); setTab(tab, true);
+
+// Pull down from the top of the page to reload it (the home-screen app has no refresh button). The reload asks
+// for a fresh copy (a new address each time), so a page saved on the phone isn't shown again.
+(() => {
+  const el = $("ptr"), PULL = 90;
+  let y0 = null, dy = 0;
+  const set = (y, rot) => { el.style.transform = `translateY(${y}px)`; el.style.opacity = Math.min(1, y / 40 + .2); el.querySelector("svg").style.transform = `rotate(${rot}deg)`; };
+  const reset = () => { el.style.transition = "transform .2s, opacity .2s"; el.classList.remove("ready"); set(-60, 0); el.style.opacity = 0; setTimeout(() => el.style.transition = "", 220); };
+  document.addEventListener("touchstart", e => {
+    y0 = scrollY <= 0 && e.touches.length === 1 && !e.target.closest("#map, input[type=range], .chartbox svg, .tablewrap, select") ? e.touches[0].clientY : null; dy = 0;
+  }, {passive: true});
+  document.addEventListener("touchmove", e => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || scrollY > 0) { if (dy < -10) y0 = null; set(-60, 0); el.style.opacity = 0; return; }
+    set(Math.min(dy * .5, 70) - 40, dy * 2);
+    el.classList.toggle("ready", dy > PULL);
+  }, {passive: true});
+  document.addEventListener("touchend", () => {
+    if (y0 == null) return; y0 = null;
+    if (dy > PULL) {
+      el.classList.add("spin"); el.classList.remove("ready"); set(24, 0); el.style.opacity = 1;
+      const u = new URL(location.href); u.searchParams.set("r", Date.now()); location.replace(u.toString());
+    } else reset();
+  }, {passive: true});
+})();
 
 // On opening, ask for the phone's location: if it's inside the area the maps cover, centre the map on it at
 // the usual zoom (so someone opening in Brisbane gets the same sized area around Brisbane) and put the pin
