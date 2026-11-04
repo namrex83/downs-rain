@@ -55,6 +55,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .warrow{pointer-events:none}
 .warrow svg{display:block;width:20px;height:20px;margin:-10px 0 0 -10px;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff)}
 #wTicks span,#tTicks span,#oTicks span{transform:translateX(-2px)}
+.transport{display:flex;width:max-content;align-items:center;gap:2px;border:1px solid var(--line);border-radius:999px;background:var(--panel);padding:3px 6px}
+.transport button{border:0;background:none;color:var(--accent);width:44px;height:38px;border-radius:12px;display:grid;place-items:center;cursor:pointer;padding:0}
+.transport button svg{width:20px;height:20px;fill:currentColor}
+.transport .tpplay{background:color-mix(in srgb, var(--accent) 12%, var(--panel));width:52px}
+.transport .tpplay svg{width:24px;height:24px}
+.tlmid .transport{margin:6px auto 2px}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
@@ -137,8 +143,8 @@ header .seg button::before{content:"";display:block;width:20px;height:20px;margi
 #tOut::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22/%3E%3Cpath%20d%3D%22M3%2010h18M8%203v4M16%203v4%22/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22/%3E%3Cpath%20d%3D%22M3%2010h18M8%203v4M16%203v4%22/%3E%3C/svg%3E")}
 input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-height:28px}
 #sHourField{flex:1 1 100%}
-.sHourRow{display:flex;align-items:center;gap:10px}
-.sHourRow input{flex:1}
+.sHourRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sHourRow input{flex:1 1 100%;order:-1;min-width:0}
 .playbtn{font:700 .9rem var(--body);border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:999px;min-height:38px;padding:0 16px;cursor:pointer}
 .playbtn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
@@ -209,7 +215,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">When</span>
       <div class="seg"><button id="sWorst" aria-pressed="true">Worst of day</button><button id="sHourly" aria-pressed="false">By hour</button></div></div>
     <div class="field" id="sHourField" hidden><label for="sHour" id="sHourLbl">Time</label>
-      <div class="sHourRow"><button id="sPlay" class="playbtn" aria-pressed="false">Play</button><input type="range" id="sHour" min="0" max="0" value="0"></div></div>
+      <div class="sHourRow"><div class="transport" id="sTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="sPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div><input type="range" id="sHour" min="0" max="0" value="0"></div></div>
   </div>
 
   <div class="controls radarOnly" hidden>
@@ -221,8 +227,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button><button data-n="9" aria-pressed="false">9-day total</button><button data-n="15" aria-pressed="false">15-day total</button></div></div>
-    <div class="field"><span class="eyebrow">Loop days</span><button id="fPlay" class="playbtn" aria-pressed="false">Play</button></div>
+      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="true">7 days</button><button data-n="9" aria-pressed="false">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
+    <div class="field"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
@@ -247,39 +253,38 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
   <div class="rTimeline radarOnly" id="rTimeline" hidden>
-    <button id="rPlay" class="tlbtn tlplay" aria-pressed="true" aria-label="Pause">❚❚</button>
     <div class="tlmid">
       <div class="tltime" id="rLbl">Radar</div>
       <input type="range" id="rFrame" min="0" max="0" value="0" aria-label="Radar time">
       <div class="tlticks"><span id="rStartTick">−90 mins</span><span id="rNowTick">Now</span><span id="rEndTick">+90 mins</span></div>
+      <div class="transport" id="rTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="rPlay" class="tpplay" aria-pressed="true" aria-label="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div>
     </div>
-    <button id="rLatest" class="tlbtn" aria-label="Jump to now">⏭</button>
   </div>
   <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
   <div class="rTimeline windOnly" id="wTimeline" hidden>
-    <button id="wPlay" class="tlbtn tlplay" aria-pressed="false" aria-label="Play">▶</button>
     <div class="tlmid">
       <div class="tltime" id="wLbl">Wind</div>
       <input type="range" id="wTime" min="0" max="0" value="0" aria-label="Forecast time">
       <div class="tlticks" id="wTicks"></div>
+      <div class="transport" id="wTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="wPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div>
     </div>
   </div>
   <div class="rTimeline tempOnly" id="tTimeline" hidden>
-    <button id="tPlay" class="tlbtn tlplay" aria-pressed="false" aria-label="Play">▶</button>
     <div class="tlmid">
       <div class="tltime" id="tLbl">Temperature</div>
       <input type="range" id="tTime" min="0" max="0" value="0" aria-label="Forecast time">
       <div class="tlticks" id="tTicks"></div>
+      <div class="transport" id="tTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="tPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div>
     </div>
   </div>
   <div class="rTimeline soilOnly" id="oTimeline" hidden>
-    <button id="oPlay" class="tlbtn tlplay" aria-pressed="false" aria-label="Play">▶</button>
     <div class="tlmid">
       <div class="tltime" id="oLbl">Soil temperature</div>
       <input type="range" id="oTime" min="0" max="0" value="0" aria-label="Forecast time">
       <div class="tlticks" id="oTicks"></div>
+      <div class="transport" id="oTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="oPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div>
     </div>
   </div>
   <div class="tap soilOnly" id="oTap" hidden>Tap the map to read the soil temperature at any spot.</div>
@@ -334,6 +339,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 <script>
 (() => {
 const $ = id => document.getElementById(id);
+const TP_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg>', TP_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+// the first / back / play / forward / last controls: step(k) is called with "first", "prev", "next" or "last"
+function tpBind(id, step){ $(id).addEventListener("click", e => { const b = e.target.closest("button[data-k]"); if (b) step(b.dataset.k); }); }
+// the first time that falls today (forecasts start the night before): "first" goes there, not to yesterday
+const tpToday = times => Math.max(0, times.findIndex(t => qDate(t) >= qDate(Date.now() / 1000)));
+const tpMove = (k, i, n) => k === "first" ? 0 : k === "last" ? n - 1 : Math.max(0, Math.min(n - 1, i + (k === "next" ? 1 : -1)));
 const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
 let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
@@ -1036,11 +1047,12 @@ async function startWind(){
 }
 function wLoop(on){
   clearInterval(wTimer); wTimer = null;
-  $("wPlay").setAttribute("aria-pressed", on); $("wPlay").textContent = on ? "❚❚" : "▶"; $("wPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  $("wPlay").setAttribute("aria-pressed", on); $("wPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("wPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on || !W) return;
   wTimer = setInterval(() => { const el = $("wTime"); el.value = +el.value >= +el.max ? 0 : +el.value + 1; wDraw(); }, 700);
 }
 $("wPlay").onclick = () => wLoop(!wTimer);
+tpBind("wTp", k => { if (!W) return; wLoop(false); $("wTime").value = k === "first" ? tpToday(W.times) : tpMove(k, wI(), W.times.length); wDraw(); });
 $("wTime").oninput = () => { wLoop(false); wDraw(); };
 $("wShow").onclick = e => { const b = e.target.closest("button"); if (!b || !W) return;
   wShow = b.dataset.w; [...$("wShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); wDraw(); };
@@ -1161,7 +1173,7 @@ async function startTemp(){
 }
 function tLoop(on){
   clearInterval(tTimer); tTimer = null;
-  $("tPlay").setAttribute("aria-pressed", on); $("tPlay").textContent = on ? "❚❚" : "▶"; $("tPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  $("tPlay").setAttribute("aria-pressed", on); $("tPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("tPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on || !T) return;
   tTimer = setInterval(() => {
     const el = $("tTime"); let v = +el.value;
@@ -1171,6 +1183,16 @@ function tLoop(on){
   }, 800);
 }
 $("tPlay").onclick = () => tLoop(!tTimer);
+tpBind("tTp", k => {
+  if (!T) return; tLoop(false);
+  if (tShow === "now") $("tTime").value = k === "first" ? tpToday(T.times) : tpMove(k, tI(), T.times.length);
+  else {   // a day at a time: the stops are each day's first time
+    const firsts = T.times.map((t, i) => i === 0 || qDate(t) !== qDate(T.times[i - 1]) ? i : -1).filter(i => i >= tpToday(T.times));
+    const cur = firsts.filter(i => i <= tI()).length - 1;
+    $("tTime").value = firsts[tpMove(k, Math.max(0, cur), firsts.length)];
+  }
+  tDraw();
+});
 $("tTime").oninput = () => { tLoop(false); tDraw(); };
 $("tShow").onclick = e => { const b = e.target.closest("button"); if (!b || !T) return;
   tShow = b.dataset.t; [...$("tShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); tDraw(); };
@@ -1287,7 +1309,7 @@ async function startSoil(){
 }
 function oLoop(on){
   clearInterval(oTimer); oTimer = null;
-  $("oPlay").setAttribute("aria-pressed", on); $("oPlay").textContent = on ? "❚❚" : "▶"; $("oPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  $("oPlay").setAttribute("aria-pressed", on); $("oPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("oPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on || !O) return;
   oTimer = setInterval(() => {
     const el = $("oTime"), v = +el.value;
@@ -1298,6 +1320,12 @@ function oLoop(on){
   }, 800);
 }
 $("oPlay").onclick = () => oLoop(!oTimer);
+tpBind("oTp", k => {
+  if (!O || oShow === "avg") return; oLoop(false);
+  if (oShow === "now") $("oTime").value = k === "first" ? tpToday(O.times) : tpMove(k, oI(), O.times.length);
+  else { const st = oStops(), cur = Math.max(0, st.indexOf(oI())); $("oTime").value = st[tpMove(k, cur, st.length)]; }
+  oDraw();
+});
 $("oTime").oninput = () => { oLoop(false); if (oShow === "avg") { oShow = "8am"; [...$("oShow").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.o === "8am")); } oSnap(); oDraw(); };
 $("oShow").onclick = e => { const b = e.target.closest("button"); if (!b || !O) return;
   oShow = b.dataset.o; [...$("oShow").children].forEach(x => x.setAttribute("aria-pressed", x === b)); if (oShow === "avg") oLoop(false); oSnap(); oDraw(); };
@@ -1343,7 +1371,7 @@ function rShow(i){
   $("rTap").innerHTML = `Radar picture from <b>${qTimeShort(d)}</b> (${ago} min ago)${i === rNReal - 1 ? ", the latest" : ""}. For rainfall totals, see the Rainfall tab.`;
 }
 function rPlay(on){
-  $("rPlay").setAttribute("aria-pressed", on); $("rPlay").textContent = on ? "❚❚" : "▶"; $("rPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+  $("rPlay").setAttribute("aria-pressed", on); $("rPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("rPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   clearInterval(rTimer); rTimer = null;
   if (!on) return;
   rTimer = setInterval(() => {
@@ -1410,8 +1438,8 @@ $("rRange").onclick = e => {
   else map.setView([idx.radar.lat, idx.radar.lon], rRange === 128 ? 8.5 : 7.75);   // about 150 / 250 km across on a phone
   startRadar(false);
 };
-$("rLatest").onclick = () => { rPlay(false); rShow(rNReal - 1); };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
+tpBind("rTp", k => { if (!rFrames.length) return; rPlay(false); rShow(tpMove(k, rPos, rFrames.length)); });
 
 // Outlook tab: links to long-range outlooks (add more here)
 const OUTLOOK_LINKS = [
@@ -1516,7 +1544,7 @@ $("fDay").onchange = () => { fLoop(false); fDraw(); };
 let fTimer = null, fHold = 0;
 function fLoop(on){
   clearInterval(fTimer); fTimer = null;
-  $("fPlay").setAttribute("aria-pressed", on); $("fPlay").textContent = on ? "Pause" : "Play";
+  $("fPlay").setAttribute("aria-pressed", on); $("fPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("fPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on || !F) return;
   if (fSumN) fSetSum(0, true);
   $("fDay").value = String(fStart); fDraw();
@@ -1527,6 +1555,12 @@ function fLoop(on){
   }, 1200);
 }
 $("fPlay").onclick = () => fLoop(!fTimer);
+tpBind("fTp", k => {
+  if (!F) return; fLoop(false);
+  if (fSumN) fSetSum(0, true);   // stepping shows one day at a time
+  const n = F.days.length - fStart, cur = Math.max(0, +$("fDay").value - fStart);
+  $("fDay").value = String(fStart + tpMove(k, cur, n)); fDraw();
+});
 function fSetSum(n, quiet){
   // ECMWF's main model only reaches 10 days, so on the 15-day total its button is taken off
   // (and if it was the one showing, the ECMWF AI model shows instead)
@@ -1560,7 +1594,7 @@ const setWhen = worst => { sWorst = worst; $("sWorst").setAttribute("aria-presse
 let sTimer = null, sHold = 0;
 function sLoop(on){
   clearInterval(sTimer); sTimer = null;
-  $("sPlay").setAttribute("aria-pressed", on); $("sPlay").textContent = on ? "Pause" : "Play";
+  $("sPlay").setAttribute("aria-pressed", on); $("sPlay").innerHTML = on ? TP_PAUSE : TP_PLAY; $("sPlay").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on) return;
   sTimer = setInterval(() => {
     const el = $("sHour"), v = +el.value;
@@ -1569,6 +1603,11 @@ function sLoop(on){
   }, 800);
 }
 $("sPlay").onclick = () => sLoop(!sTimer);
+tpBind("sTp", k => {
+  if (!S) return; sLoop(false);
+  const el = $("sHour"), lo = +el.min, n = +el.max - lo + 1;
+  el.value = lo + tpMove(k, +el.value - lo, n); sHourLabel(); sDraw();
+});
 $("sWorst").onclick = () => setWhen(true);
 $("sHourly").onclick = () => setWhen(false);
 $("sDay").onchange = () => { sSetHourRange(); sDraw(); };
