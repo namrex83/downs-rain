@@ -248,7 +248,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="fModelField"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
     <div class="field" id="fSumField"><span class="eyebrow">Show</span>
-      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="true">7 days</button><button data-n="9" aria-pressed="false">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
+      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="false">7 days</button><button data-n="9" aria-pressed="true">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
     <div class="field" id="fLoopField"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
@@ -903,11 +903,11 @@ async function startStorms(){
 // data/forecast.json (forecast.py, ECMWF) and data/forecast_gfs.json (forecast_gfs.py, GFS) hold
 // rain per 10am-to-10am day, mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
 let F = null, fOverlay = null, fModel = "ecmwf";
-try { const m = localStorage.getItem("fModel"); if (m === "gfs" || m === "aifs") fModel = m; } catch(e){}
+// the Forecast tab always opens on ECMWF (fModel starts as "ecmwf") with the 9-day total
 const F_FILE = {gfs: "data/forecast_gfs.json", ecmwf: "data/forecast.json", aifs: "data/forecast_aifs.json"};
 const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI"};
 // fSumN: 0 shows one day; 3 or 7 add up that many days from fStart, the first day that hasn't finished
-let fSumN = 7, fStart = 0;   // opens on the 7-day total
+let fSumN = 9, fStart = 0;   // opens on the 9-day total
 const fSpan = () => [fStart, Math.min(F.days.length, fStart + fSumN)];
 function fVals(){
   if (!fSumN) return F.mm10[+$("fDay").value];
@@ -979,7 +979,11 @@ async function omDays(lat, lon){
       const d = new Date(Math.ceil(ti / 86400) * 86400000).toISOString().slice(0, 10);   // each value is the rain in the hour up to ti
       const x = days[d] || (days[d] = [0, 0]); x[0] += v[i]; x[1]++;
     });
-    out[m] = Object.entries(days).filter(([, x]) => x[1] === 24).map(([d, x]) => [d, x[0]]).sort();   // whole days only
+    // whole days only: a day counts if the model's run covers all of it (some models give a value every hour,
+    // others such as ACCESS-G only every 3 hours, with gaps between)
+    const have = t.filter((ti, i) => v[i] != null), first = have[0], last = have[have.length - 1];
+    out[m] = Object.entries(days).filter(([d]) => { const end = Date.parse(d + "T00:00:00Z") / 1000; return first <= end - 86400 + 3 * 3600 && last >= end; })
+      .map(([d, x]) => [d, x[0]]).sort();
   }
   return OM_CACHE[key] = out;
 }
