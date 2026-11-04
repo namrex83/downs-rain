@@ -1421,12 +1421,19 @@ async function loadObs(){
   try { OBS = await getJSON("data/obs.json"); obsAt = Date.now(); } catch(e){ OBS = null; }
   return OBS;
 }
+// spray conditions from a station's actual readings, with the same rules as the Spray view
+function obsSpray(o){
+  if (o.spd == null || o.t == null || o.td == null || !o.time) return null;
+  return sprayRate(o.spd, o.t, o.td, +o.time.slice(8, 10));
+}
+const sprayBadge = r => `<b style="color:#fff;background:${SPRAY_COLOURS[r.lv]};border-radius:6px;padding:0 6px">${SPRAY_NAMES[r.lv]}</b>`;
 function obsPopup(o){
-  const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null;
+  const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null, sp = obsSpray(o);
   return `<b>${o.name}</b> · BOM station, actual at ${obsTime(o.time)}<br>`
     + (o.t != null ? `Temperature <b>${o.t.toFixed(1)}°C</b>` : "") + (o.tmax != null ? ` (today ${o.tmin.toFixed(1)} to ${o.tmax.toFixed(1)}°C so far)` : "") + "<br>"
     + (o.rh != null ? `Humidity ${o.rh}%` : "") + (o.td != null ? ` · dew point ${o.td.toFixed(1)}°C` : "") + (d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>` : "") + "<br>"
-    + (o.spd != null ? `Wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? ` · gusts ${o.gust} km/h` : ""}` : "");
+    + (o.spd != null ? `Wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? ` · gusts ${o.gust} km/h` : ""}` : "")
+    + (sp ? `<br>Spray conditions (actual): ${sprayBadge(sp)}${sp.why.length ? ` · ${sp.why.join("; ")}` : ""}` : "");
 }
 // station readings only make sense for today: hidden when the map is on another day
 const obsToday = () => { const today = qDate(Date.now() / 1000);
@@ -1461,7 +1468,8 @@ function obsLine(kind){
   const o = n.o, near = `${o.name} (${Math.round(n.km)} km away), actual at ${obsTime(o.time)}`;
   if (kind === "temp") return o.t == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: <b>${o.t.toFixed(1)}°C</b>${o.tmax != null ? `, today ${o.tmin.toFixed(1)} to ${o.tmax.toFixed(1)}°C so far` : ""}.</span>`;
   const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null;
-  return o.spd == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? `, gusts ${o.gust}` : ""}${d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>, humidity ${o.rh}%` : ""}.</span>`;
+  const sp = obsSpray(o);
+  return o.spd == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? `, gusts ${o.gust}` : ""}${d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>, humidity ${o.rh}%` : ""}${sp ? ` · spray now ${sprayBadge(sp)}` : ""}.</span>`;
 }
 
 // Temp tab: data/temp.json (temp.py, ECMWF 2 m temperature, degC x10, same times as the wind). "Day max"
