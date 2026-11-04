@@ -990,7 +990,8 @@ function fDraw(){
   const vals = fVals(), ramp = idx.ramp.map(hex);
   const s = F.lats[F.lats.length - 1], n = F.lats[0], w = F.lons[0], e = F.lons[F.lons.length - 1];
   const merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
-  const W = 450, H = Math.round(W * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
+  const W = Math.min(1200, Math.round(450 * (e - w) / 9)),   // the same detail whatever size the forecast area is
+        H = Math.round(W * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H);
   for (let y = 0; y < H; y++){

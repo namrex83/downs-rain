@@ -16,8 +16,8 @@ import time
 import numpy as np
 import requests
 
-LAT_N, LAT_S = -23.0, -32.0       # same area as the ECMWF forecast
-LON_W, LON_E = 146.0, 155.0
+LAT_N, LAT_S = -9.0, -44.0          # all of Australia (Torres Strait to Tasmania)
+LON_W, LON_E = 112.0, 155.0
 DAYS = 16                         # GFS runs out to 384 hours
 TZ = dt.timedelta(hours=10)
 OUT = os.path.join("data", "forecast_gfs.json")
@@ -99,7 +99,7 @@ def run():
     if when is None:
         sys.exit("No complete GFS run found on NOMADS")
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and len(json.load(open(OUT))["days"]) >= DAYS - 1 and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and len(json.load(open(OUT))["days"]) >= DAYS - 1 and len(json.load(open(OUT))["lons"]) > 100 and "--force" not in sys.argv:
         print(f"Already have the GFS {tag} run")
         return
     steps = steps_for(when)

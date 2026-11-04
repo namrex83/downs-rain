@@ -18,8 +18,8 @@ import sys
 
 import numpy as np
 
-LAT_N, LAT_S = -23.0, -32.0       # same area as the Storms tab
-LON_W, LON_E = 146.0, 155.0
+LAT_N, LAT_S = -9.0, -44.0          # all of Australia (Torres Strait to Tasmania)
+LON_W, LON_E = 112.0, 155.0
 TZ = dt.timedelta(hours=10)       # Queensland, no daylight saving
 GRIB = "tp.grib2"
 # "python forecast.py" is ECMWF's main model (IFS, out to 10 days); "python forecast.py aifs" is ECMWF's
@@ -73,7 +73,7 @@ def run():
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and json.load(open(OUT)).get("v") == 2 and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and json.load(open(OUT)).get("v") == 3 and "--force" not in sys.argv:
         print(f"Already have the {tag} run")
         return
     first = (24 - when.hour) % 24                 # first step that falls on 00z (10am Qld)
@@ -96,7 +96,7 @@ def run():
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
-                   "model": MODEL, "max_step": MAX_STEP, "v": 2,
+                   "model": MODEL, "max_step": MAX_STEP, "v": 3,
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
                    "days": days, "mm10": mm10,
                    "total": np.round(total * 10).astype(int).flatten().tolist()}, f, separators=(",", ":"))
