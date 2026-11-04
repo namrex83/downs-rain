@@ -941,6 +941,30 @@ function fReadTap(){
 // Rain chart at the pin: each model's running total, day by day, for as far as it goes (like the multi-model
 // charts on Meteologix). All three model files are loaded the first time.
 const F_ALL = {}, F_COL = {gfs: "#e07b39", ecmwf: "#2a7de1", aifs: "#8e44ad"};
+// more models for the chart, read for the exact spot from Open-Meteo (free, CC BY 4.0) in the browser, and added
+// up into the same 10am-to-10am Queensland days (00z to 00z)
+const OM_MODELS = {bom_access_global: ["ACCESS-G (BOM)", "#2ca02c"], ukmo_seamless: ["UK Met Office", "#d62728"],
+                   icon_seamless: ["ICON (Germany)", "#17a2b8"], gem_seamless: ["GEM (Canada)", "#7f8c8d"], jma_seamless: ["JMA (Japan)", "#b8860b"]};
+const OM_CACHE = {};
+async function omDays(lat, lon){
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  if (OM_CACHE[key]) return OM_CACHE[key];
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
+    + `&models=${Object.keys(OM_MODELS).join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`;
+  const r = await fetch(url); if (!r.ok) throw new Error(r.status);
+  const j = await r.json(), t = j.hourly.time, out = {};
+  for (const m of Object.keys(OM_MODELS)){
+    const v = j.hourly[`precipitation_${m}`]; if (!v) continue;
+    const days = {};   // day (named by the 00z / 10am Qld it ends on) -> [sum, hours]
+    t.forEach((ti, i) => {
+      if (v[i] == null) return;
+      const d = new Date(Math.ceil(ti / 86400) * 86400000).toISOString().slice(0, 10);   // each value is the rain in the hour up to ti
+      const x = days[d] || (days[d] = [0, 0]); x[0] += v[i]; x[1]++;
+    });
+    out[m] = Object.entries(days).filter(([, x]) => x[1] === 24).map(([d, x]) => [d, x[0]]).sort();   // whole days only
+  }
+  return OM_CACHE[key] = out;
+}
 function gSample(o, vals, lat, lon){
   const nr = o.lats.length, nc = o.lons.length, step = o.lats[0] - o.lats[1];
   const fy = (o.lats[0] - lat) / step, fx = (lon - o.lons[0]) / (o.lons[1] - o.lons[0]);
@@ -960,8 +984,18 @@ async function fChart(){
     if (!o) continue;
     let tot = 0; const pts = [];
     o.days.forEach((d, k) => { if (!open(d)) return; const v = gSample(o, o.mm10[k], at.lat, at.lng); if (v == null) return; tot += v; pts.push([d, tot]); });
-    if (pts.length) lines.push({m, pts, tot});
+    if (pts.length) lines.push({m, pts, tot, name: F_NAME[m], col: F_COL[m], main: true});
   }
+  let omNote = "";
+  try {
+    const om = await omDays(at.lat, at.lng);
+    if (at !== tapAt || tab !== "fc") return;
+    for (const [m, ds] of Object.entries(om)){
+      let tot = 0; const pts = [];
+      for (const [d, v] of ds){ if (!open(d)) continue; if (pts.length && pts[pts.length - 1][0] !== addDays(d, -1)) break; tot += v; pts.push([d, tot]); }
+      if (pts.length) lines.push({m, pts, tot, name: OM_MODELS[m][0], col: OM_MODELS[m][1]});
+    }
+  } catch(e){ omNote = " (the other models couldn't be loaded just now)"; }
   if (!lines.length) { $("fChart").hidden = true; return; }
   const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort();
   const top = Math.max(5, ...lines.map(l => l.tot)), step = [5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
@@ -970,13 +1004,20 @@ async function fChart(){
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
   days.forEach((d, i) => { if (i % 2 === 0 || days.length <= 8) g += `<text x="${X(i)}" y="${H0 - 7}" text-anchor="${i === days.length - 1 ? "end" : "middle"}" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(d, {weekday: "short"}).slice(0, 2)} ${part(d, {day: "numeric"})}</text>`; });
-  for (const l of lines){
-    const pts = [[L0, Y(0)], ...l.pts.map(p => [X(days.indexOf(p[0])), Y(p[1])])];
-    g += `<polyline points="${pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="${F_COL[l.m]}" stroke-width="${l.m === fModel ? 3 : 2}" stroke-linejoin="round"/>`;
-  }
+  const poly = (pts, attrs) => `<polyline points="${[[L0, Y(0)], ...pts].map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
+  for (const l of lines.filter(l => !l.main).concat(lines.filter(l => l.main)))   // the page's own three on top
+    g += poly(l.pts.map(p => [X(days.indexOf(p[0])), Y(p[1])]), `stroke="${l.col}" stroke-width="${l.m === fModel ? 3 : l.main ? 2 : 1.4}"${l.main ? "" : ' stroke-opacity=".85"'}`);
+  // median: the middle of the models still running on each day
+  const med = [];
+  days.forEach((d, i) => {
+    const v = lines.map(l => (l.pts.find(p => p[0] === d) || [])[1]).filter(x => x != null).sort((a, b) => a - b);
+    if (v.length >= 3) med.push([X(i), Y(v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2), v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2]);
+  });
+  if (med.length) g += poly(med.map(p => [p[0], p[1]]), `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
   $("fChart").hidden = false;
   $("fChart").innerHTML = `<div class="eyebrow" style="margin-bottom:4px">Rain building up at the pin · each model, mm</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
-    <div class="ck">${lines.map(l => `<span><i style="background:${F_COL[l.m]}"></i>${F_NAME[l.m]} <b>${fmt(l.tot)}</b> mm (${l.pts.length} days)</span>`).join("")}</div>`;
+    <div class="ck">${lines.map(l => `<span><i style="background:${l.col}"></i>${l.name} <b>${fmt(l.tot)}</b> mm (${l.pts.length} days)</span>`).join("")}${med.length ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(med[med.length - 1][2])}</b> mm</span>` : ""}</div>
+    <p class="note" style="margin:6px 0 0;font-size:.75rem">GFS, ECMWF and ECMWF AI are the maps above; ACCESS-G, UK Met Office, ICON, GEM and JMA are read for this spot from Open-Meteo (CC BY 4.0)${omNote}. Each line stops where its model run ends. When the lines bunch together the forecast is more certain.</p>`;
   fitMap();
 }
 async function startForecast(){
