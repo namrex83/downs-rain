@@ -27,6 +27,7 @@ GRIB = "tp.grib2"
 AIFS = "aifs" in sys.argv
 MAX_STEP = 360 if AIFS else 240
 OUT = os.path.join("data", "forecast_aifs.json" if AIFS else "forecast.json")
+TO_MM = 1 if AIFS else 1000      # AIFS gives rain in mm (kg/m2), IFS in metres
 MODEL = "ECMWF AIFS (AI model, open data, 0.25°)" if AIFS else "ECMWF IFS (open data, 0.25°)"
 
 
@@ -72,7 +73,7 @@ def run():
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and json.load(open(OUT)).get("v") == 2 and "--force" not in sys.argv:
         print(f"Already have the {tag} run")
         return
     first = (24 - when.hour) % 24                 # first step that falls on 00z (10am Qld)
@@ -88,14 +89,14 @@ def run():
         acc[0] = np.zeros_like(acc[want[0]])
     days, mm10 = [], []
     for a, b in zip(steps, steps[1:]):
-        mm = np.clip((acc[b] - acc[a]) * 1000, 0, None)
+        mm = np.clip((acc[b] - acc[a]) * TO_MM, 0, None)
         mm10.append(np.round(mm * 10).astype(int).flatten().tolist())
         days.append((when + dt.timedelta(hours=b) + TZ).date().isoformat())
-    total = np.clip((acc[steps[-1]] - acc[steps[0]]) * 1000, 0, None)
+    total = np.clip((acc[steps[-1]] - acc[steps[0]]) * TO_MM, 0, None)
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
-                   "model": MODEL, "max_step": MAX_STEP,
+                   "model": MODEL, "max_step": MAX_STEP, "v": 2,
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
                    "days": days, "mm10": mm10,
                    "total": np.round(total * 10).astype(int).flatten().tolist()}, f, separators=(",", ":"))
