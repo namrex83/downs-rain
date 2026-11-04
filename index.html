@@ -370,6 +370,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images, added up every few minutes. Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from Toowoomba, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
   <p class="note" id="disclaimer"></p>
+  <p class="note" id="pagever" style="text-align:center;font-size:.72rem;color:var(--ink-3)"></p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -1894,6 +1895,8 @@ $("sHourly").onclick = () => setWhen(false);
 $("sDay").onchange = () => { sSetHourRange(); sDraw(); };
 $("sHour").oninput = () => { sLoop(false); sHourLabel(); sDraw(); };
 
+// which copy of the page this is (when GitHub published it), to spot an old saved copy on a phone
+try { const d = new Date(document.lastModified); if (!isNaN(d)) $("pagever").textContent = "Page version: " + d.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + " · pull down at the top to refresh"; } catch(e){}
 init(); setTab(tab, true);
 
 // Pull down from the top of the page to reload it (the home-screen app has no refresh button). The reload asks
