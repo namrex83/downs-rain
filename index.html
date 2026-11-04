@@ -213,7 +213,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button><button data-n="16" aria-pressed="false">16-day total</button></div></div>
+      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button><button data-n="10" aria-pressed="false">10-day total</button><button data-n="15" aria-pressed="false" id="f15">15-day total</button></div></div>
     <div class="field"><span class="eyebrow">Loop days</span><button id="fPlay" class="playbtn" aria-pressed="false">Play</button></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
@@ -923,8 +923,8 @@ async function startForecast(){
   fSetSum(fSumN, true);
   const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
   $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Out to 16 days. Updated four times a day. GFS data from NOAA (US government, public domain)."
-    : fModel === "aifs" ? "ECMWF's AI (machine-learning) model, trained on decades of past weather; out to 15 days, so its 16-day total is 15 days. Updated twice a day."
-    : "Out to 10 days, so its 16-day total is 10 days. Updated twice a day, at about 6:30am and 6:30pm."}`;
+    : fModel === "aifs" ? "ECMWF's AI (machine-learning) model, trained on decades of past weather; out to 15 days. Updated twice a day."
+    : "Out to 10 days (9 from the evening run), so no 15-day total. Updated twice a day, at about 6:30am and 6:30pm."}`;
   fDraw();
 }
 
@@ -1485,6 +1485,9 @@ function fLoop(on){
 }
 $("fPlay").onclick = () => fLoop(!fTimer);
 function fSetSum(n, quiet){
+  // ECMWF's main model only reaches 10 days, so it has no 15-day total
+  $("f15").hidden = fModel === "ecmwf";
+  if (n === 15 && fModel === "ecmwf") n = 10;
   fSumN = n;
   [...$("fSum").children].forEach(x => x.setAttribute("aria-pressed", +x.dataset.n === n));
   $("fDayField").hidden = n > 0; fitMap();
