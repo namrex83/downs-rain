@@ -1096,7 +1096,7 @@ function fChartDraw(){
       + rows.map(([l, v]) => `<span style="white-space:nowrap"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} ${fmt(v)}</span> `).join("");
     if (tip.hidden) { tip.hidden = false; fitMap(); }
   };
-  svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at);
+  svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at); svg.addEventListener("click", at);   // click too, for older phones
   svg.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") { tip.hidden = true; cur.setAttribute("visibility", "hidden"); fitMap(); } });
   fitMap();
 }
