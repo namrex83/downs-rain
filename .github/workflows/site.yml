@@ -1,0 +1,33 @@
+name: Publish page
+
+# Puts a new index.html or assets/ from main onto the published site straight away (the data jobs also
+# copy them every time they publish).
+on:
+  push:
+    branches: [main]
+    paths: ["index.html", "assets/**", ".github/pages.sh"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Page update $(date -u +%Y-%m-%dT%H:%MZ)"
