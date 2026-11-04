@@ -347,9 +347,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap soilOnly" id="oTap" hidden>Tap the map to read the soil temperature at any spot.</div>
   <div class="soilOnly" id="oLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Soil temperature at 10 cm (°C) · green is 14°C+</div><div class="legend" id="oLegend"></div></div>
   <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
-  <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="note" style="margin:0 0 4px;font-size:.74rem">White boxes are <b>actual</b> BOM station temperatures at their latest reading; tap one for humidity, Delta T and today's max/min.</div><div class="legend" id="tLegend"></div></div>
+  <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station temperatures (on Day max / Day min, today's highest / lowest so far); tap one for humidity, Delta T and more.</div><div class="legend" id="tLegend"></div></div>
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
-  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">White boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
+  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
@@ -1302,7 +1302,7 @@ function wDraw(){
   if (wOverlay) map.removeLayer(wOverlay);
   wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
   wDrawArrows();
-  $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]); dayBarValues("wDays", windDay);
+  $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]); dayBarValues("wDays", windDay); drawObs();
   $("wLegendTitle").textContent = spray ? "Spray conditions · wind, Delta T and inversion risk" : (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
   wReadTap();
 }
@@ -1428,14 +1428,17 @@ function obsPopup(o){
     + (o.rh != null ? `Humidity ${o.rh}%` : "") + (o.td != null ? ` · dew point ${o.td.toFixed(1)}°C` : "") + (d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>` : "") + "<br>"
     + (o.spd != null ? `Wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? ` · gusts ${o.gust} km/h` : ""}` : "");
 }
+// station readings only make sense for today: hidden when the map is on another day
+const obsToday = () => { const today = qDate(Date.now() / 1000);
+  return tab === "temp" ? !!T && qDate(T.times[tI()]) === today : tab === "wind" ? !!W && qDate(W.times[wI()]) === today : false; };
 async function drawObs(){
+  if (!obsToday()) { obsLayer.clearLayers(); return; }
+  const j = await loadObs(); if (!j) return;
   obsLayer.clearLayers();
-  if (tab !== "temp" && tab !== "wind") return;
-  const j = await loadObs(); if (!j || (tab !== "temp" && tab !== "wind")) return;
-  obsLayer.clearLayers();
+  if (!obsToday()) return;
   for (const o of j.stations){
     let html;
-    if (tab === "temp") html = o.t == null ? null : `${Math.round(o.t)}°`;
+    if (tab === "temp") { const v = tShow === "max" ? o.tmax : tShow === "min" ? o.tmin : o.t; html = v == null ? null : `${Math.round(v)}°`; }
     else {
       const from = obsFrom(o.dir);
       html = o.spd == null ? null : (from == null ? `${o.spd}` : `<svg viewBox="0 0 20 20" style="transform:rotate(${from + 90}deg)"><path d="M3 10h13M11 5l5 5-5 5" stroke="#1c2621" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>${o.spd}`);
@@ -1444,6 +1447,7 @@ async function drawObs(){
     L.marker([o.lat, o.lon], {zIndexOffset: 500, icon: L.divIcon({className: "", iconSize: [0, 0], html: `<div class="obs${tab === "wind" && !o.spd ? " calm" : ""}" title="${o.name}">${html}</div>`})})
       .bindPopup(obsPopup(o)).addTo(obsLayer);
   }
+  if (tapAt) { if (tab === "temp") tReadTap(); else wReadTap(); }   // add the nearest station to the readout once the readings are in
 }
 // the nearest station to a spot, for the tap readouts
 function nearestObs(lat, lon){
@@ -1453,7 +1457,7 @@ function nearestObs(lat, lon){
   return best && best.km <= 60 ? best : null;
 }
 function obsLine(kind){
-  const n = tapAt && nearestObs(tapAt.lat, tapAt.lng); if (!n) return "";
+  const n = tapAt && obsToday() && nearestObs(tapAt.lat, tapAt.lng); if (!n) return "";
   const o = n.o, near = `${o.name} (${Math.round(n.km)} km away), actual at ${obsTime(o.time)}`;
   if (kind === "temp") return o.t == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: <b>${o.t.toFixed(1)}°C</b>${o.tmax != null ? `, today ${o.tmin.toFixed(1)} to ${o.tmax.toFixed(1)}°C so far` : ""}.</span>`;
   const d = o.t != null && o.td != null ? deltaT(o.t, o.td) : null;
@@ -1506,7 +1510,7 @@ function tDraw(){
   ctx.putImageData(img, 0, 0);
   if (tOverlay) map.removeLayer(tOverlay);
   tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
-  $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]); dayBarValues("tDays", tempDay);
+  $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]); dayBarValues("tDays", tempDay); drawObs();
   $("tLegendTitle").textContent = {now: "Temperature (°C)", max: "Highest temperature of the day (°C)", min: "Lowest temperature of the day (°C)"}[tShow];
   tReadTap();
 }
