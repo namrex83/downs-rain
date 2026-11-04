@@ -918,3 +918,8 @@ jobs:
             git commit -m "Rainfall maps $(date -u +%Y-%m-%dT%H:%MZ)"
             for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
           fi
+
+      - name: Copy the site to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/mirror.sh
