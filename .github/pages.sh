@@ -30,7 +30,10 @@ put)
     base=$(git -C site rev-parse FETCH_HEAD)
     rm -rf pub; git -C site worktree prune
     git -C site worktree add -q --detach "$PWD/pub" "$base"   # a fresh copy of what's published now
-    cp index.html pub/; mkdir -p pub/assets; cp -r assets/. pub/assets/; touch pub/.nojekyll
+    # the page itself always comes from the latest main, not this job's checkout, so a long job (the forecast
+    # takes up to 20 minutes) can't put back an older page that was replaced while it ran
+    git fetch -q --depth 1 origin main
+    rm -rf pub/assets; git archive FETCH_HEAD index.html assets | tar -x -C pub; touch pub/.nojekyll
     (cd site && find data -type f -newer ../.jobstart) | while read -r f; do
       mkdir -p "pub/$(dirname "$f")"; cp "site/$f" "pub/$f"
     done
