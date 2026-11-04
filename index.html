@@ -211,9 +211,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls fcOnly" hidden>
     <div class="field"><span class="eyebrow">Model</span>
-      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
+      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
     <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button></div></div>
+      <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3-day total</button><button data-n="7" aria-pressed="true">7-day total</button><button data-n="16" aria-pressed="false">16-day total</button></div></div>
     <div class="field"><span class="eyebrow">Loop days</span><button id="fPlay" class="playbtn" aria-pressed="false">Play</button></div>
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
@@ -856,7 +856,9 @@ async function startStorms(){
 // data/forecast.json (forecast.py, ECMWF) and data/forecast_gfs.json (forecast_gfs.py, GFS) hold
 // rain per 10am-to-10am day, mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
 let F = null, fOverlay = null, fModel = "ecmwf";
-try { if (localStorage.getItem("fModel") === "gfs") fModel = "gfs"; } catch(e){}
+try { const m = localStorage.getItem("fModel"); if (m === "gfs" || m === "aifs") fModel = m; } catch(e){}
+const F_FILE = {gfs: "data/forecast_gfs.json", ecmwf: "data/forecast.json", aifs: "data/forecast_aifs.json"};
+const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI"};
 // fSumN: 0 shows one day; 3 or 7 add up that many days from fStart, the first day that hasn't finished
 let fSumN = 7, fStart = 0;   // opens on the 7-day total
 const fSpan = () => [fStart, Math.min(F.days.length, fStart + fSumN)];
@@ -908,9 +910,9 @@ function fReadTap(){
 async function startForecast(){
   [...$("fModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === fModel));
   const keep = F ? F.days[+$("fDay").value] : null;
-  try { F = await getJSON(fModel === "gfs" ? "data/forecast_gfs.json" : "data/forecast.json"); }
+  try { F = await getJSON(F_FILE[fModel]); }
   catch(e){ F = null; if (fOverlay) map.removeLayer(fOverlay);
-    $("fTap").innerHTML = `<span class="empty">No ${fModel === "gfs" ? "GFS" : "ECMWF"} forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
+    $("fTap").innerHTML = `<span class="empty">No ${F_NAME[fModel]} forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
   if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
   const today = new Date(Date.now() + 36e5 * 10).toISOString().slice(0, 10);
   $("fDay").innerHTML = F.days.map((d, i) => `<option value="${i}">${rainDay(d)}</option>`).join("");
@@ -920,7 +922,9 @@ async function startForecast(){
   $("fDay").value = keep && F.days.includes(keep) ? String(F.days.indexOf(keep)) : String(fStart);   // switching model keeps the chosen day
   fSetSum(fSumN, true);
   const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
-  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Updated four times a day. GFS data from NOAA (US government, public domain)." : "Updated twice a day, at about 6:30am and 6:30pm."}`;
+  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Out to 16 days. Updated four times a day. GFS data from NOAA (US government, public domain)."
+    : fModel === "aifs" ? "ECMWF's AI (machine-learning) model, trained on decades of past weather; out to 15 days, so its 16-day total is 15 days. Updated twice a day."
+    : "Out to 10 days, so its 16-day total is 10 days. Updated twice a day, at about 6:30am and 6:30pm."}`;
   fDraw();
 }
 

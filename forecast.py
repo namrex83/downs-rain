@@ -20,15 +20,19 @@ import numpy as np
 
 LAT_N, LAT_S = -23.0, -32.0       # same area as the Storms tab
 LON_W, LON_E = 146.0, 155.0
-DAYS = 7
 TZ = dt.timedelta(hours=10)       # Queensland, no daylight saving
-OUT = os.path.join("data", "forecast.json")
 GRIB = "tp.grib2"
+# "python forecast.py" is ECMWF's main model (IFS, out to 10 days); "python forecast.py aifs" is ECMWF's
+# AI model (AIFS single, out to 15 days, 6-hourly), also open data under CC BY 4.0
+AIFS = "aifs" in sys.argv
+MAX_STEP = 360 if AIFS else 240
+OUT = os.path.join("data", "forecast_aifs.json" if AIFS else "forecast.json")
+MODEL = "ECMWF AIFS (AI model, open data, 0.25°)" if AIFS else "ECMWF IFS (open data, 0.25°)"
 
 
 def latest_run(client):
     # only the 00z and 12z runs ("oper") go out far enough for a week of days
-    return client.latest(type="fc", stream="oper", param="tp", step=144)
+    return client.latest(type="fc", stream="oper", param="tp", step=MAX_STEP - 12)
 
 
 def read_grib(path):
@@ -63,16 +67,16 @@ def read_grib(path):
 
 def run():
     from ecmwf.opendata import Client
-    client = Client(source="ecmwf")
+    client = Client(source="ecmwf", model="aifs-single") if AIFS else Client(source="ecmwf")
     when = latest_run(client)
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and "--force" not in sys.argv:
         print(f"Already have the {tag} run")
         return
     first = (24 - when.hour) % 24                 # first step that falls on 00z (10am Qld)
-    steps = [first + 24 * i for i in range(DAYS + 1)]
+    steps = [first + 24 * i for i in range((MAX_STEP - first) // 24 + 1)]   # as many whole days as the run reaches
     want = [s for s in steps if s > 0]
     print(f"Getting ECMWF {tag} total precipitation, steps {want}", flush=True)
     client.retrieve(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper",
@@ -91,7 +95,7 @@ def run():
     os.makedirs("data", exist_ok=True)
     with open(OUT, "w") as f:
         json.dump({"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
-                   "model": "ECMWF IFS (open data, 0.25°)",
+                   "model": MODEL, "max_step": MAX_STEP,
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
                    "days": days, "mm10": mm10,
                    "total": np.round(total * 10).astype(int).flatten().tolist()}, f, separators=(",", ":"))

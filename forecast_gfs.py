@@ -3,7 +3,7 @@ GFS rainfall forecast for the Forecast tab's "GFS" option.
 
 Run by .github/workflows/forecast.yml. Downloads total precipitation (APCP) for the area from
 NOAA's GFS 0.25 degree run on the NOMADS server (US government data, public domain), every 6
-hours out to the end of the 7th day, and writes data/forecast_gfs.json in the same layout as
+hours out to the end of the 16th day, and writes data/forecast_gfs.json in the same layout as
 forecast.py's ECMWF file: rain per 10am-to-10am Queensland day (00z to 00z), mm x10.
 """
 import datetime as dt
@@ -18,7 +18,7 @@ import requests
 
 LAT_N, LAT_S = -23.0, -32.0       # same area as the ECMWF forecast
 LON_W, LON_E = 146.0, 155.0
-DAYS = 7
+DAYS = 16                         # GFS runs out to 384 hours
 TZ = dt.timedelta(hours=10)
 OUT = os.path.join("data", "forecast_gfs.json")
 NOMADS = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
@@ -48,11 +48,11 @@ def fetch(run, fhr, tries=3):
 
 def steps_for(run):
     first = (24 - run.hour) % 24                   # first step on 00z (10am Qld)
-    return [first + 24 * i for i in range(DAYS + 1)]
+    return [first + 24 * i for i in range((DAYS * 24 - first) // 24 + 1)]   # whole days to the end of the run (384 h)
 
 
 def latest_run(now):
-    """Newest GFS run whose files reach the end of the 7th day."""
+    """Newest GFS run whose files reach its last whole day."""
     t = now.replace(minute=0, second=0, microsecond=0)
     t -= dt.timedelta(hours=t.hour % 6)
     for back in range(6):
@@ -99,7 +99,7 @@ def run():
     if when is None:
         sys.exit("No complete GFS run found on NOMADS")
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and len(json.load(open(OUT))["days"]) >= DAYS - 1 and "--force" not in sys.argv:
         print(f"Already have the GFS {tag} run")
         return
     steps = steps_for(when)
