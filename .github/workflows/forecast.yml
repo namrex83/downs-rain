@@ -15,7 +15,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -45,12 +45,16 @@ jobs:
         continue-on-error: true          # a problem here shouldn't stop the rain forecast going out
         run: python temp.py
 
+      - name: Get soil temperature
+        continue-on-error: true          # a problem here shouldn't stop the rain forecast going out
+        run: python soil.py
+
       - name: Publish
         run: |
           git config user.name "radar-bot"
           git config user.email "radar-bot@users.noreply.github.com"
           git add data/forecast.json
-          for f in data/storms_ecmwf.json data/forecast_gfs.json data/wind.json data/temp.json; do [ -f $f ] && git add $f; done
+          for f in data/storms_ecmwf.json data/forecast_gfs.json data/wind.json data/temp.json data/soil.json; do [ -f $f ] && git add $f; done
           if git diff --cached --quiet; then
             echo "Nothing new"
           else
