@@ -1,7 +1,1 @@
 __pycache__/
-# published data lives on the gh-pages branch; the jobs link data -> site/data
-data
-site/
-pub/
-.jobstart
-.startlist
