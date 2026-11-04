@@ -55,7 +55,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .warrow{pointer-events:none}
 .warrow svg{display:block;width:20px;height:20px;margin:-10px 0 0 -10px;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff)}
 #wTicks span,#tTicks span,#oTicks span{transform:translateX(-2px)}
-.daybar{display:flex;gap:4px;margin-top:6px}
+.daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
 .daybar button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -238,6 +238,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button><button data-o="day" aria-pressed="false">Day average</button><button data-o="avg" aria-pressed="false">7-day average</button></div></div>
   </div>
 
+  <div class="daybar windOnly" id="wDays" hidden></div>
+  <div class="daybar tempOnly" id="tDays" hidden></div>
   <div id="map"></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -279,10 +281,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
   <div class="tap soilOnly" id="oTap" hidden>Tap the map to read the soil temperature at any spot.</div>
   <div class="soilOnly" id="oLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Soil temperature at 10 cm (°C) · green is 14°C+</div><div class="legend" id="oLegend"></div></div>
-  <div class="daybar tempOnly" id="tDays" hidden></div>
   <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
   <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="legend" id="tLegend"></div></div>
-  <div class="daybar windOnly" id="wDays" hidden></div>
   <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
@@ -636,7 +636,7 @@ function fitMap(){
   const el = $("map");
   if (innerWidth > 600) { el.style.height = ""; map.invalidateSize(); return; }
   const top = el.getBoundingClientRect().top + scrollY;
-  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "wDays", "tTap", "tLegendBox", "tTimeline", "tDays", "oTap", "oLegendBox", "oTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
+  const legend = ["legendBox", "tap", "stats", "sTap", "sLegendBox", "fTap", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"].reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   el.style.height = Math.max(240, innerHeight - top - legend - 10) + "px";
   map.invalidateSize();
 }
