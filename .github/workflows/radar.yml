@@ -84,7 +84,7 @@ jobs:
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
           DEAD_RING_KM = 5.0         # ...and at least half of it nearly everywhere within this distance
           
-          # BOM automatic weather stations inside the radar's range: (product, station number)
+          # BOM automatic weather stations (inside the Toowoomba radar's range): (product, station number)
           STATIONS = [
               ("IDQ60801", "94542"),  # Dalby
               ("IDQ60801", "94552"),  # Oakey
@@ -98,6 +98,15 @@ jobs:
               ("IDQ60801", "99122"),  # Inglewood (portable)
               ("IDQ60901", "94562"),  # Gatton
               ("IDQ60901", "94549"),  # Kingaroy
+              # Brisbane, the coasts and Gympie (South East Queensland)
+              ("IDQ60901", "94576"),  # Brisbane
+              ("IDQ60901", "94578"),  # Brisbane Airport
+              ("IDQ60901", "94575"),  # Archerfield
+              ("IDQ60901", "94568"),  # Amberley
+              ("IDQ60901", "94592"),  # Coolangatta
+              ("IDQ60901", "94580"),  # Gold Coast Seaway
+              ("IDQ60901", "94569"),  # Sunshine Coast Airport
+              ("IDQ60901", "94566"),  # Gympie
           ]
           USER_AGENT = "Mozilla/5.0 (compatible; downs-rain/1.0; personal rainfall map)"
           

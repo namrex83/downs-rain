@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Darling Downs Weather Desk</title>
+<title>South East Queensland Weather Desk</title>
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="manifest" href="assets/manifest.webmanifest">
@@ -240,11 +240,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 <div id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 <div class="wrap">
   <header>
-    <div><h1>Darling Downs <span>Weather Desk</span></h1>
+    <div><h1>South East Queensland <span>Weather Desk</span></h1>
     <p class="sub" id="subRain">Toowoomba radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
     <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
-    <p class="sub" id="subRadar" hidden>Live Toowoomba radar from the Bureau of Meteorology.</p>
+    <p class="sub" id="subRadar" hidden>Live Bureau of Meteorology radar: Toowoomba, Brisbane, Marburg and Gympie.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p>
     <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p>
     <p class="sub" id="subTemp" hidden>Temperature forecast from the ECMWF weather model.</p>
@@ -276,6 +276,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls radarOnly" hidden>
+    <div class="field"><span class="eyebrow">Radar</span>
+      <div class="seg" id="rSite"><button data-s="toowoomba" aria-pressed="true">Toowoomba</button><button data-s="brisbane" aria-pressed="false">Brisbane</button><button data-s="marburg" aria-pressed="false">Marburg</button><button data-s="gympie" aria-pressed="false">Gympie</button></div></div>
     <div class="field"><span class="eyebrow">Range</span>
       <div class="seg" id="rRange"><button data-km="128" aria-pressed="false">128 km</button><button data-km="256" aria-pressed="true">256 km</button><button data-km="512" aria-pressed="false">512 km</button></div></div>
   </div>
@@ -361,7 +363,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note" id="notes"></p>
   </section>
   <section class="panel radarOnly" hidden>
-    <p class="note">The Bureau of Meteorology's Toowoomba (Mt Kynoch) radar, 128, 256 or 512 km range, the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
+    <p class="note">The Bureau of Meteorology's South East Queensland radars, Toowoomba (Mt Kynoch), Brisbane (Mt Stapylton), Marburg and Gympie (Mt Kanigan), at 128, 256 or 512 km range (not every radar has every range), the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel outOnly" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
@@ -370,7 +372,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
-    <p class="note"><b>Rain chart:</b> each model's running total at the pin (or Dalby), day by day, in mm, with the dashed median of all of them. GFS, ECMWF and ECMWF AI are the maps above; ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan) are read for the spot from Open-Meteo (CC BY 4.0). Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
+    <p class="note"><b>Rain chart:</b> each model's running total at the pin (or Toowoomba), day by day, in mm, with the dashed median of all of them. GFS, ECMWF and ECMWF AI are the maps above; ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan) are read for the spot from Open-Meteo (CC BY 4.0). Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel windOnly" hidden>
@@ -440,7 +442,8 @@ try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "o
 
 // Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
 // tabs keeps wherever the map has been moved to
-const HOME = [-27.25, 151.15], HOME_ZOOM = 8.25;
+const HOME = [-27.4, 152.2], HOME_ZOOM = 8;   // South East Queensland, Dalby to the coast
+const SPOT = {name: "Toowoomba", ll: [-27.56, 151.95]};   // the chart and day buttons read here until a spot is tapped
 const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, HOME_ZOOM);
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
@@ -1095,7 +1098,7 @@ function gSample(o, vals, lat, lon){
 }
 async function fChart(){
   if (tab !== "fc") return;
-  const pinned = tapAt, at = pinned || L.latLng(HOME[0], HOME[1]), still = () => tapAt === pinned && tab === "fc";   // stop if the pin moved meanwhile
+  const pinned = tapAt, at = pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), still = () => tapAt === pinned && tab === "fc";   // stop if the pin moved meanwhile
   for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
   if (!still()) return;
   const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
@@ -1158,7 +1161,7 @@ function fChartDraw(){
   g += `<g class="fcur" visibility="hidden"><line y1="${T0}" y2="${H0 - B0}" stroke="currentColor" stroke-opacity=".55" stroke-width="1"/></g>`;
   $("fChart").hidden = false;
   // the tap readout goes at the top of the chart (and its own box is hidden), to save room on phones
-  const head = pinned ? $("fTap").innerHTML : `Rain building up at Dalby · tap the map for anywhere else`;
+  const head = pinned ? $("fTap").innerHTML : `Rain building up at ${SPOT.name} · tap the map for anywhere else`;
   $("fTap").classList.add("merged");
   const last = med.length ? med[med.length - 1][1] : null;
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
@@ -1386,7 +1389,7 @@ function dayBar(box, times, slider, draw, stop){
 }
 // each day's figures on its button, read at the pin (or Dalby before anywhere is tapped)
 function dayBarValues(box, fn){
-  const at = tapAt || L.latLng(HOME[0], HOME[1]);
+  const at = tapAt || L.latLng(SPOT.ll[0], SPOT.ll[1]);
   [...$(box).children].forEach(b => {
     const v = fn(b.dataset.d, at.lat, at.lng) || "", o = typeof v === "object" ? v : {text: v};
     b.querySelector("b").textContent = o.text || "";
@@ -1726,12 +1729,20 @@ $("oShow").onclick = e => { const b = e.target.closest("button"); if (!b || !O) 
 // Live radar: BOM's Toowoomba pictures straight from the BOM website, 128 km (IDR1083, most detail),
 // 256 km (IDR1082) or 512 km (IDR1081) range, normally a new one every 5 minutes. Each is a square
 // centred on the radar, 2 x range across.
-const R_CODES = {128: "IDR1083", 256: "IDR1082", 512: "IDR1081"};
-let rRange = 256;
-try { const r = +localStorage.getItem("rRange"); if (R_CODES[r]) rRange = r; } catch(e){}
-const R_URL = t => `https://www.bom.gov.au/radar/${R_CODES[rRange]}.T.${t}.png`;
+// The four BOM radars covering South East Queensland. Product codes are IDR + radar number + 1 (512 km),
+// 2 (256 km) or 3 (128 km); each picture is a square centred on its radar, 2 x range across.
+const R_SITES = {
+  toowoomba: {name: "Toowoomba (Mt Kynoch)", id: "108", lat: -27.274, lon: 151.993},
+  brisbane:  {name: "Brisbane (Mt Stapylton)", id: "66", lat: -27.718, lon: 153.240},
+  marburg:   {name: "Marburg", id: "50", lat: -27.608, lon: 152.539},
+  gympie:    {name: "Gympie (Mt Kanigan)", id: "08", lat: -25.957, lon: 152.577}};
+const R_DIGIT = {512: 1, 256: 2, 128: 3};
+const R_CODES = R_DIGIT;   // the ranges on offer
+let rRange = 256, rSite = "toowoomba";
+try { const r = +localStorage.getItem("rRange"); if (R_DIGIT[r]) rRange = r; const s = localStorage.getItem("rSite"); if (R_SITES[s]) rSite = s; } catch(e){}
+const R_URL = t => `https://www.bom.gov.au/radar/IDR${R_SITES[rSite].id}${R_DIGIT[rRange]}.T.${t}.png`;
 function rBounds(){
-  const {lat, lon} = idx.radar, dlat = rRange / 110.57, dlon = rRange / (111.32 * Math.cos(lat * Math.PI / 180));
+  const {lat, lon} = R_SITES[rSite], dlat = rRange / 110.57, dlon = rRange / (111.32 * Math.cos(lat * Math.PI / 180));
   return [[lat - dlat, lon - dlon], [lat + dlat, lon + dlon]];
 }
 const R_COLOURS = ["#f5f5ff","#b4b4ff","#7878ff","#1414ff","#00d8c3","#009690","#006666","#ffff00","#ffc800","#ff9600","#ff6400","#ff0000","#c80000","#780000","#280000"];
@@ -1779,11 +1790,13 @@ function rClear(){
 async function startRadar(fit){
   rClear();
   [...$("rRange").children].forEach(x => x.setAttribute("aria-pressed", +x.dataset.km === rRange));
+  [...$("rSite").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.s === rSite));
   $("rLegend").innerHTML = R_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${R_RATES[i]}${i === R_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
   if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
+  if (ring) { ring.setLatLng([R_SITES[rSite].lat, R_SITES[rSite].lon]); ring.setRadius(rRange * 1000); }
   const newest = await rNewest();
   if (tab !== "radar") return;
-  if (!newest){ $("rTap").textContent = "Couldn't load the BOM radar just now. Check your connection, or try again in a few minutes."; fitMap(); return; }
+  if (!newest){ $("rTap").textContent = `Couldn't load the ${R_SITES[rSite].name} radar at ${rRange} km just now. It may be down for maintenance or not offer that range; try another radar or range, or again in a few minutes.`; fitMap(); return; }
   // the last hour, 5 minutes apart; keep the pictures that exist (some ranges come less often)
   const cand = [...Array(19)].map((_, i) => new Date(newest - (18 - i) * 300000));   // the last 90 minutes
   const ok = await Promise.all(cand.map(d => tryImg(R_URL(utcStamp(d)))));
@@ -1800,7 +1813,7 @@ async function startRadar(fit){
       const compass = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(from / 45) % 8];
       rMotion = {...m, words: (speed < 3 ? "which is barely moving" : `about ${Math.round(speed)} km/h from the ${compass}`)
         + (m.basis === "earlier" && m.measured ? ` (as measured at ${qTimeShort(new Date(m.measured))}; the rain since has been too changeable to measure)` : "")};
-      const [[s0, w0], [n0, e0]] = rBounds(), coslat = Math.cos(idx.radar.lat * Math.PI / 180);
+      const [[s0, w0], [n0, e0]] = rBounds(), coslat = Math.cos(R_SITES[rSite].lat * Math.PI / 180);
       for (let lead = 10; lead <= 90; lead += 10){   // the next 90 minutes
         const dLat = m.v_kmh * lead / 60 / 110.57, dLon = m.u_kmh * lead / 60 / (111.32 * coslat);
         rFrames.push(new Date(+latest + lead * 60000));
@@ -1827,9 +1840,18 @@ $("rRange").onclick = e => {
   rRange = +b.dataset.km; try { localStorage.setItem("rRange", rRange); } catch(_){}
   // tapping a range frames it like BOM's loop: 128 and 256 km show their whole area around Toowoomba,
   // 512 km the whole of South East Queensland (opening the tab keeps the shared view)
-  if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);
-  else map.setView([idx.radar.lat, idx.radar.lon], rRange === 128 ? 8.5 : 7.75);   // about 150 / 250 km across on a phone
+  rFrame0();
   startRadar(false);
+};
+// frame the chosen radar and range: 128 and 256 km around the radar, 512 km the whole of South East Queensland
+function rFrame0(){
+  if (rRange === 512) map.fitBounds([[-29.3, 148.6], [-24.8, 153.7]]);
+  else map.setView([R_SITES[rSite].lat, R_SITES[rSite].lon], rRange === 128 ? 8.5 : 7.75);   // about 150 / 250 km across on a phone
+}
+$("rSite").onclick = e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.s === rSite) return;
+  rSite = b.dataset.s; try { localStorage.setItem("rSite", rSite); } catch(_){}
+  rFrame0(); startRadar(false);
 };
 $("rFrame").oninput = () => { rPlay(false); rShow(+$("rFrame").value); };
 tpBind("rTp", k => { if (!rFrames.length) return; rPlay(false); rShow(tpMove(k, rPos, rFrames.length)); });
@@ -1928,7 +1950,7 @@ function setTab(t, first){
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
     if (F) fDraw(); else startForecast();
   } else {
-    if (ring) ring.addTo(map);
+    if (ring) { ring.setLatLng([idx.radar.lat, idx.radar.lon]); ring.setRadius(idx.radar.range_km * 1000); ring.addTo(map); }   // the rainfall radar's range
     if (idx) show();
   }
   townsForZoom(); fitMap();
@@ -2062,7 +2084,7 @@ init(); setTab(tab, true);
 
 // On opening, ask for the phone's location: if it's inside the area the maps cover, centre the map on it at
 // the usual zoom (so someone opening in Brisbane gets the same sized area around Brisbane) and put the pin
-// there. If location is refused, unavailable or outside the area, the map stays on the Darling Downs.
+// there. If location is refused, unavailable or outside the area, the map stays on the default South East Queensland view.
 const COVER = {s: -30.5, n: -24.5, w: 148.0, e: 154.5};   // the smallest of the forecast areas (wind, temp, soil)
 if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
   const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
