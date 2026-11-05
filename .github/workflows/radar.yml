@@ -332,12 +332,12 @@ jobs:
           
           def merged_radar(day, win):
               """The day's radar total on the Toowoomba grid, blended with the Brisbane radar where it reaches: each
-              spot leans on the nearer radar, fading smoothly between them. If the Brisbane radar missed part of the
-              day its total is scaled up to the same time; if it missed most of it, Toowoomba is used alone."""
+              spot leans on the nearer radar, fading smoothly between them. If the Brisbane radar missed a little of the
+              day its total is scaled up to the same time; if it missed more than a fifth, Toowoomba is used alone."""
               a = load_accum(day, win["n"])
               b = win.get("b")
               pb = accum_b_path(day)
-              if not b or not b.get("frames") or not os.path.exists(pb) or b["minutes"] < 0.5 * max(win["minutes"], 1):
+              if not b or not b.get("frames") or not os.path.exists(pb) or b["minutes"] < 0.8 * max(win["minutes"], 1):   # only when it covered most of the day
                   return a
               bb = np.load(pb) * (win["minutes"] / b["minutes"])
               n, m = a.shape[0], bb.shape[0]
