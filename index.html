@@ -1207,8 +1207,10 @@ function fChartDrawHourly(){
   // the median only uses models that run to the end of the chosen days: a model that stops early (UKMO and ICON
   // run about 7 days) never counts the later rain, so mixing it in drags the middle value down
   const endT = times[times.length - 1], full = shown.filter(m => vals[m][vals[m].length - 1][0] >= endT - 6 * 3600);
-  const medModels = full.length >= 3 ? full : shown;
+  // 3 or more full-length models: their median; only 1 or 2 (15 days: GFS and EC AI): their average instead
+  const useAvg = full.length > 0 && full.length < 3, medModels = full.length ? full : shown, MED = useAvg ? "Average" : "Median";
   const medOf = t => { const v = medModels.map(m => valAt(m, t)).filter(x => x != null).sort((a, b) => a - b);
+    if (useAvg) return v.length === medModels.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
     return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
   const top = Math.max(cum ? 5 : 1, ...shown.flatMap(m => vals[m].map(p => p[1])));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
@@ -1240,8 +1242,8 @@ function fChartDrawHourly(){
   const lastMed = med.length ? (cum ? med[med.length - 1][1] : Math.max(...med.map(x => x[1]))) : null;
   const none = [...Object.keys(H_IDS), ...Object.keys(OM_MODELS)].filter(m => !vals[m] && !hourly[m]).map(m => H_NAME[m] || OM_MODELS[m][0].replace(/ \(.*\)/, ""));
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
-    <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${fmt(Math.max(...vals[m].map(p => p[1])))}</b></span>`).join("")}${lastMed != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(lastMed)}</b></span>` : ""}${none.length ? `<span style="grid-column:1/-1">${none.join(", ")}: no data from Open-Meteo just now</span>` : ""}</div>
-    <div class="cfoot"><span>${cum ? "Running total, hour by hour (shaded = night)" : "Rain in each 3 hours; key shows each model's wettest 3 hours"}. Median of the ${medModels.length} models that run the whole span${medModels.length < shown.length ? ` (not ${shown.filter(m => !medModels.includes(m)).map(hName).join(", ")}, which stop sooner)` : ""}.</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">3-hourly</button></div></div>`;
+    <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${fmt(Math.max(...vals[m].map(p => p[1])))}</b></span>`).join("")}${lastMed != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>${MED} <b>${fmt(lastMed)}</b></span>` : ""}${none.length ? `<span style="grid-column:1/-1">${none.join(", ")}: no data from Open-Meteo just now</span>` : ""}</div>
+    <div class="cfoot"><span>${cum ? "Running total, hour by hour (shaded = night)" : "Rain in each 3 hours; key shows each model's wettest 3 hours"}. ${useAvg ? `Average of ${medModels.map(hName).join(" and ")}, the only model${medModels.length > 1 ? "s" : ""} that run${medModels.length > 1 ? "" : "s"} the whole span` : `Median of the ${medModels.length} models that run the whole span${medModels.length < shown.length ? ` (not ${shown.filter(m => !medModels.includes(m)).map(hName).join(", ")}, which stop sooner)` : ""}`}.</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">3-hourly</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
@@ -1252,7 +1254,7 @@ function fChartDrawHourly(){
     const rows = shown.map(m => [m, valAt(m, t)]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]);
     const m = medOf(t);
     const when = cum ? `Total to ${hWhen(t)}` : `Rain ${hHour(t - 10800)}–${hHour(t)} ${hDay(t - 1)}`;
-    tip.innerHTML = `<b>${when}:</b>` + (m != null ? ` median <b>${fmt(m)} mm</b> ·` : "")
+    tip.innerHTML = `<b>${when}:</b>` + (m != null ? ` ${MED.toLowerCase()} <b>${fmt(m)} mm</b> ·` : "")
       + rows.map(([mm, v]) => `<span style="white-space:nowrap"><i style="background:${hCol(mm)}"></i>${hName(mm)} ${fmt(v)}</span> `).join("");
     if (tip.hidden) { tip.hidden = false; fitMap(); }
   };
