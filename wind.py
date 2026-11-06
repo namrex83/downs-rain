@@ -33,7 +33,7 @@ def run():
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("v") == 2 and "--force" not in sys.argv:
         print(f"Already have the {tag} wind run")
         return
     base = dict(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS)
@@ -45,6 +45,14 @@ def run():
     except Exception as e:
         print(f"  no gusts in the open data ({e})", flush=True)
         have_gust = False
+    # between about 90 and 144 hours ECMWF gives gusts as the strongest in each 6 hours ("10fg6"), not "10fg":
+    # fetch those too and use them for both 3-hourly times inside each 6 hours
+    gust6 = {}
+    try:
+        client.retrieve(**{**base, "step": list(range(96, 145, 6))}, param="10fg6", target="gust6.grib2")
+        gust6 = read("gust6.grib2")[0]
+    except Exception as e:
+        print(f"  no 6-hourly gusts in the open data ({e})", flush=True)
     wind, (lats, lons) = read("wind10.grib2")       # read() already cuts out the storm area
     gust = read("gust.grib2")[0] if have_gust else {}
     get = lambda d, name, step: next((v for (n, lv, s), v in d.items() if n == name and s == step), None)
@@ -63,17 +71,19 @@ def run():
         frm = (np.degrees(np.arctan2(-u, -v)) + 360) % 360       # meteorological: where it comes from
         drn.append((np.round(frm / 10).astype(int) % 36).flatten().tolist())
         g = get(gust, "10fg", step) if step else None
+        if g is None and step:   # fill from the 6-hourly gust covering this time
+            g = next((v for (n, lv, s), v in gust6.items() if s == step + (step % 6)), None)
         gst.append(np.round(cut(g) * KMH).astype(int).flatten().tolist() if g is not None else None)
     os.makedirs("data", exist_ok=True)
     out = {"run": tag, "made": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
            "model": "ECMWF IFS (open data, 0.25°)",
            "lats": [round(float(x), 3) for x in lats[rows]], "lons": [round(float(x), 3) for x in lons[cols]],
-           "times": times, "spd": spd, "dir": drn}
+           "times": times, "spd": spd, "dir": drn, "v": 2}
     if any(g is not None for g in gst):
         out["gust"] = gst
     with open(OUT, "w") as f:
         json.dump(out, f, separators=(",", ":"))
-    for p in ("wind10.grib2", "gust.grib2"):
+    for p in ("wind10.grib2", "gust.grib2", "gust6.grib2"):
         if os.path.exists(p):
             os.remove(p)
     print(f"Wrote {OUT}: {len(rows)}x{len(cols)} points x {len(times)} times; "

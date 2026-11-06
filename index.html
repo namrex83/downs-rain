@@ -98,14 +98,16 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #side{display:flex;flex-direction:column;gap:12px}
 #fTap.merged{display:none}   /* its text is in the chart's heading */
 /* BOM station readings on the Temp and Wind maps */
-.obs{transform:translate(-50%,-50%);width:max-content;display:flex;align-items:center;gap:2px;background:#fff;color:#1c2621;border:2px solid #1c2621;border-radius:9px;
-  padding:1px 5px;font:700 .72rem/1.2 var(--mono);white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
-.obs svg{width:13px;height:13px}
+.obsw{position:relative}
+.obsw > i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#1c2621;border:2px solid #fff;box-sizing:border-box}
+.obs{transform:translate(9px,-50%);width:max-content;display:flex;align-items:center;gap:3px;background:#fff;color:#1c2621;border:2.5px solid #1c2621;border-radius:11px;
+  padding:3px 8px;font:700 .95rem/1.2 var(--mono);white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:pointer}
+.obs svg{width:17px;height:17px}
 .obs.calm{border-style:dashed}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
-.daybar button b{display:block;font:600 .68rem/1.2 var(--mono);color:var(--ink);white-space:nowrap;letter-spacing:-.03em;margin-top:2px}
+.daybar button b{display:block;font:600 .68rem/1.2 var(--mono);color:var(--ink);white-space:pre;letter-spacing:-.03em;margin-top:2px}
 .daybar button b:empty{display:none}
 .daybar button{position:relative}
 .daybar button[data-flag]::after{content:attr(data-flag);position:absolute;top:2px;right:3px;font-size:.66rem;line-height:1}
@@ -1530,10 +1532,13 @@ function dayBarValues(box, fn){
   });
 }
 const dayIdx = (times, d) => times.map((t, i) => qDate(t) === d ? i : -1).filter(i => i >= 0);
-function windDay(d, lat, lon){   // the day's strongest wind, with its direction then
-  let best = null;
-  for (const i of dayIdx(W.times, d)){ const a = wAt(i, lat, lon); if (a && (!best || a.mean > best.mean)) best = a; }
-  return best ? `${Math.round(best.mean)} ${COMPASS[Math.round(best.from / 22.5) % 16]}` : "";
+function windDay(d, lat, lon){   // the day's strongest wind, with its direction then, and the day's strongest gust
+  let best = null, gust = null;
+  for (const i of dayIdx(W.times, d)){
+    const a = wAt(i, lat, lon); if (a && (!best || a.mean > best.mean)) best = a;
+    if (a && a.gust != null && (gust == null || a.gust > gust)) gust = a.gust;
+  }
+  return best ? `${Math.round(best.mean)} ${COMPASS[Math.round(best.from / 22.5) % 16]}${gust != null ? `\nG ${Math.round(gust)}` : ""}` : "";
 }
 function tempDay(d, lat, lon){   // the day's lowest / highest
   const v = dayIdx(T.times, d).map(i => tSample(T.t[i], lat, lon)).filter(x => x != null);
@@ -1587,7 +1592,7 @@ async function drawObs(){
       html = o.spd == null ? null : (from == null ? `${o.spd}` : `<svg viewBox="0 0 20 20" style="transform:rotate(${from + 90}deg)"><path d="M3 10h13M11 5l5 5-5 5" stroke="#1c2621" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>${o.spd}`);
     }
     if (!html) continue;
-    L.marker([o.lat, o.lon], {zIndexOffset: 500, icon: L.divIcon({className: "", iconSize: [0, 0], html: `<div class="obs${tab === "wind" && !o.spd ? " calm" : ""}" title="${o.name}">${html}</div>`})})
+    L.marker([o.lat, o.lon], {zIndexOffset: 500, icon: L.divIcon({className: "", iconSize: [0, 0], html: `<div class="obsw"><i></i><div class="obs${tab === "wind" && !o.spd ? " calm" : ""}" title="${o.name}">${html}</div></div>`})})
       .bindPopup(obsPopup(o)).addTo(obsLayer);
   }
   if (tapAt) { if (tab === "temp") tReadTap(); else wReadTap(); }   // add the nearest station to the readout once the readings are in
