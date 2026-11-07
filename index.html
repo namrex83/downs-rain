@@ -374,7 +374,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
-    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All eight models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan), are read hourly for the spot from Open-Meteo (CC BY 4.0), so the GFS, ECMWF and ECMWF AI totals can differ a little from the maps above, which are whole days on a 25 km grid. Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
+    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All eight models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan), are read hourly for the spot from Open-Meteo (CC BY 4.0), with GFS, ECMWF and ECMWF AI scaled so each day matches the maps above (Open-Meteo only decides when in the day the rain falls). Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel windOnly" hidden>
@@ -1139,8 +1139,9 @@ async function fChart(){
   const pinned = tapAt, at = pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), still = () => tapAt === pinned && tab === "fc";   // stop if the pin moved meanwhile
   try {
     const H = await omHourly(at.lat, at.lng);
+    for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
     if (!still()) return;
-    if (Object.keys(H.series).length) { FC = {hourly: H.series, pinned}; fChartDraw(); return; }
+    if (Object.keys(H.series).length) { FC = {hourly: anchorToMaps(H.series, at), pinned}; fChartDraw(); return; }
   } catch(e){}
   if (!still()) return;
   for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
@@ -1174,6 +1175,26 @@ async function fChart(){
 // Touching or hovering over it shows that day's numbers for every model.
 let FC = null, fcMode = "cum";
 const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
+// GFS, ECMWF and EC AI on the chart are scaled so each 10am-to-10am day adds up to the same rain as the maps (the
+// page's own model files); Open-Meteo's hourly figures only decide when in the day it falls. (Its hourly AI model
+// came out at about twice the map's totals.) Days past the end of a map model's run keep Open-Meteo's figures.
+function anchorToMaps(series, at){
+  const out = {...series};
+  for (const m of Object.keys(H_IDS)){
+    const o = F_ALL[m], s = series[m]; if (!o || !s) continue;
+    const daily = {}; o.days.forEach((d, k) => { const v = gSample(o, o.mm10[k], at.lat, at.lng); if (v != null) daily[d] = v; });
+    const dayOf = t => new Date(Math.ceil(t / 86400) * 86400000).toISOString().slice(0, 10);
+    const sum = {}, hrs = {};
+    for (const [t, mm] of s){ const d = dayOf(t); sum[d] = (sum[d] || 0) + mm; hrs[d] = (hrs[d] || 0) + 1; }
+    out[m] = s.map(([t, mm]) => {
+      const d = dayOf(t);
+      if (!(d in daily) || hrs[d] < 20) return [t, mm];   // a day the map doesn't have, or only part of it here
+      if (sum[d] > 0.05) return [t, mm * daily[d] / sum[d]];
+      return [t, daily[d] / hrs[d]];   // Open-Meteo dry but the map has rain: spread it over the day
+    });
+  }
+  return out;
+}
 const H_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "EC AI"}, H_COL = {gfs: "#e07b39", ecmwf: "#2a7de1", aifs: "#8e44ad"};
 const hName = m => H_NAME[m] || FC_SHORT[OM_MODELS[m][0]] || OM_MODELS[m][0], hCol = m => H_COL[m] || OM_MODELS[m][1];
 const hHour = t => { const h = qld(t).getUTCHours(); return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };
