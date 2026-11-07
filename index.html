@@ -1596,12 +1596,12 @@ function tempDay(d, lat, lon){   // the day's lowest / highest
   const v = dayIdx(T.times, d).map(i => tSample(T.t[i], lat, lon)).filter(x => x != null);
   if (!v.length) return "";
   const lo = Math.min(...v), hi = Math.max(...v);
-  // the day's lowest and highest humidity, from the temperature and dew point at each time
+  // the day's lowest humidity, from the temperature and dew point at each time
   let rh = "";
   if (T.td){
     const r = dayIdx(T.times, d).map(i => { const t = tSample(T.t[i], lat, lon), td = tSample(T.td[i], lat, lon);
       return t == null || td == null ? null : Math.min(100, 100 * Math.exp(17.625 * td / (243.04 + td)) / Math.exp(17.625 * t / (243.04 + t))); }).filter(x => x != null);
-    if (r.length) rh = `\n${Math.round(Math.min(...r))}-${Math.round(Math.max(...r))}%`;
+    if (r.length) rh = `\nRH ${Math.round(Math.min(...r))}%`;   // the day's lowest humidity
   }
   const text = `${Math.round(lo)}/${Math.round(hi)}${rh}`;
   // frost: a screen minimum of 2°C or less usually means ground frost on still, clear nights; heat: 35°C or more
