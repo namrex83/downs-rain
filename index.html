@@ -1208,10 +1208,13 @@ function fChartDrawHourly(){
   const times = [...new Set(shown.flatMap(m => vals[m].map(p => p[0])))].sort((a, b) => a - b);
   // the median only uses models that run to the end of the chosen days: a model that stops early (UKMO and ICON
   // run about 7 days) never counts the later rain, so mixing it in drags the middle value down
-  const endT = times[times.length - 1], full = shown.filter(m => vals[m][vals[m].length - 1][0] >= endT - 6 * 3600);
+  // a model counts as running the whole span if it reaches within a day of the end
+  const endT = times[times.length - 1], full = shown.filter(m => vals[m][vals[m].length - 1][0] >= endT - 24 * 3600);
   // 3 or more full-length models: their median; only 1 or 2 (15 days: GFS and EC AI): their average instead
   const useAvg = full.length > 0 && full.length < 3, medModels = full.length ? full : shown, MED = useAvg ? "Average" : "Median";
-  const medOf = t => { const v = medModels.map(m => valAt(m, t)).filter(x => x != null).sort((a, b) => a - b);
+  // in the running total, a model whose run ends a little before a time keeps its final total, so the line doesn't jump
+  const medVal = (m, t) => { const v = valAt(m, t); if (v != null || !cum) return v; const last = vals[m][vals[m].length - 1]; return t > last[0] ? last[1] : null; };
+  const medOf = t => { const v = medModels.map(m => medVal(m, t)).filter(x => x != null).sort((a, b) => a - b);
     if (useAvg) return v.length === medModels.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
     return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
   const top = Math.max(cum ? 5 : 1, ...shown.flatMap(m => vals[m].map(p => p[1])));
