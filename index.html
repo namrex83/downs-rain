@@ -104,6 +104,15 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
   padding:3px 8px;font:700 .95rem/1.2 var(--mono);white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:pointer}
 .obs svg{width:17px;height:17px}
 .obs.calm{border-style:dashed}
+/* Wind page (no map): location, current wind at the nearest BOM station, and a wind chart */
+.windpage{display:flex;flex-direction:column;gap:10px}
+.wloc{display:flex;gap:8px;align-items:center}
+.wloc select{flex:1;min-width:0}
+.wnow{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:0 2px 8px rgba(20,50,90,.06)}
+.wnow .big{font:700 1.9rem/1 var(--body)} .wnow .big small{font-size:.9rem;font-weight:600;margin-left:3px}
+.wnow .lab{font-size:.8rem;color:var(--ink-2)} .wnow .sub{font-size:.76rem;color:var(--ink-3);margin-top:3px}
+.wnow svg{width:22px;height:22px;vertical-align:-3px}
+#wRange{align-self:flex-start}
 .daybar{display:flex;gap:4px;margin:0}
 .daybar button{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink-2);font:600 .78rem/1.15 var(--body);padding:5px 0;cursor:pointer}
 .daybar button span{display:block;font-weight:500;font-size:.7rem;color:var(--ink-3)}
@@ -293,7 +302,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
-  <div class="controls windOnly" hidden>
+  <div class="controls windOld" hidden>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button><button data-w="spray" aria-pressed="false">Spray</button></div></div>
   </div>
@@ -308,8 +317,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="oShow"><button data-o="now" aria-pressed="false">By time</button><button data-o="8am" aria-pressed="true">8am each day</button><button data-o="day" aria-pressed="false">Day average</button><button data-o="avg" aria-pressed="false">7-day average</button></div></div>
   </div>
 
-  <div class="daybar windOnly" id="wDays" hidden></div>
+  <div class="daybar windOld" id="wDays" hidden></div>
   <div class="daybar tempOnly" id="tDays" hidden></div>
+  <section class="windOnly windpage" id="windPage" hidden>
+    <div class="wloc"><button id="wGps" class="playbtn" aria-label="Use my location">📍 My location</button><select id="wLoc" aria-label="Location"></select></div>
+    <div class="wnow" id="wNow"></div>
+    <div class="seg" id="wRange"><button data-d="1" aria-pressed="false">1 day</button><button data-d="3" aria-pressed="true">3 days</button><button data-d="7" aria-pressed="false">7 days</button></div>
+    <div class="wchart tap chartbox" id="wChart"></div>
+    <div class="tap" id="wRead">Touch the chart for the wind at any time.</div>
+  </section>
   <div id="mapRow"><div id="map"></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -324,7 +340,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
-  <div class="rTimeline windOnly" id="wTimeline" hidden>
+  <div class="rTimeline windOld" id="wTimeline" hidden>
     <div class="tlmid">
       <div class="tltime" id="wLbl">Wind</div>
       <input type="range" id="wTime" min="0" max="0" value="0" aria-label="Forecast time">
@@ -352,8 +368,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="soilOnly" id="oLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Soil temperature at 10 cm (°C) · green is 14°C+</div><div class="legend" id="oLegend"></div></div>
   <div class="tap tempOnly" id="tTap" hidden>Tap the map to read the temperature at any spot.</div>
   <div class="tempOnly" id="tLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="tLegendTitle">Temperature (°C)</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station temperatures (on Day max / Day min, today's highest / lowest so far); tap one for humidity, Delta T and more.</div><div class="legend" id="tLegend"></div></div>
-  <div class="tap windOnly" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
-  <div class="windOnly" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
+  <div class="tap windOld" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
+  <div class="windOld" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
   <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
 
@@ -741,6 +757,7 @@ function locateMe(btn){
 }
 function fitMap(){
   const el = $("map");
+  if (tab === "wind" || tab === "outlook") { el.style.height = ""; return; }   // no map on these tabs
   twoCol();
   if (innerWidth >= 1000) {   // a computer: a square map in the left half, as big as the screen height allows
     const top = $("cols").getBoundingClientRect().top + scrollY, half = ($("cols").clientWidth - 16) / 2;
@@ -1673,6 +1690,132 @@ function obsLine(kind){
   return o.spd == null ? "" : `<span class="verdict">Nearest BOM station: ${near}: wind <b>${o.spd} km/h</b>${o.dir && o.dir !== "CALM" ? ` from the ${o.dir}` : " (calm)"}${o.gust ? `, gusts ${o.gust}` : ""}${d ? ` · Delta T <b>${d.dt.toFixed(1)}</b>, humidity ${o.rh}%` : ""}${sp ? ` · spray now ${sprayBadge(sp)}` : ""}.</span>`;
 }
 
+// Wind page (like WillyWeather's): a location (your GPS spot or a BOM station), the actual wind now at the nearest
+// BOM station, and a chart of the forecast wind (ECMWF, data/wind.json) with direction arrows, gusts, the station's
+// actual wind for the hours gone, night shading and a spray-conditions strip.
+let wLocSel = null, wDays = 3;
+try { const d = +localStorage.getItem("wDays"); if ([1, 3, 7].includes(d)) wDays = d; } catch(e){}
+const W_DESC = [[2, "Calm"], [6, "Light air"], [12, "Light breeze"], [20, "Gentle"], [29, "Moderate"], [39, "Fresh"], [50, "Strong"], [62, "Near gale"], [999, "Gale"]];
+const W_ACOL = ["#cfe8a9", "#b5dc7d", "#94cc52", "#6db33f", "#3f8f2a", "#f2a33a", "#e0663b", "#c0392b", "#8e1b1b"];
+const wDesc = v => W_DESC.findIndex(([lim]) => v < lim);
+const obsUnix = s => Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:00+10:00`) / 1000;
+function wLocNow(){
+  if (wLocSel && wLocSel !== "gps" && OBS){ const o = OBS.stations.find(x => x.name === wLocSel); if (o) return {lat: o.lat, lon: o.lon, name: o.name}; }
+  if (tapAt) return {lat: tapAt.lat, lon: tapAt.lng, name: "My location"};
+  return {lat: SPOT.ll[0], lon: SPOT.ll[1], name: SPOT.name};
+}
+function wNearest(lat, lon){
+  if (!OBS) return null;
+  let best = null;
+  for (const o of OBS.stations){ if (o.spd == null && !(o.hist || []).length) continue;
+    const km = Math.hypot((o.lat - lat) * 111, (o.lon - lon) * 111 * Math.cos(lat * Math.PI / 180)); if (!best || km < best.km) best = {o, km}; }
+  return best && best.km <= 80 ? best : null;
+}
+async function startWindPage(){
+  if (!W) { try { W = await getJSON("data/wind.json"); W._uv = {}; } catch(e){ $("wChart").innerHTML = `<span class="empty">No wind forecast yet.</span>`; return; } }
+  if (!WT) { try { WT = await getJSON("data/temp.json"); } catch(e){ WT = null; } }
+  await loadObs();
+  if (tab !== "wind") return;
+  const names = OBS ? OBS.stations.map(o => o.name).sort() : [];
+  $("wLoc").innerHTML = (tapAt ? `<option value="gps">My location</option>` : "") + names.map(n => `<option value="${n}">${n.replace("PORTABLE QFDI (Inglewood)", "Inglewood")} (BOM station)</option>`).join("");
+  if (!wLocSel) wLocSel = tapAt ? "gps" : (names.includes("Dalby") ? "Dalby" : names[0]);
+  if (wLocSel === "gps" && !tapAt) wLocSel = names.includes("Dalby") ? "Dalby" : names[0];
+  $("wLoc").value = wLocSel;
+  [...$("wRange").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.d === wDays));
+  drawWindPage();
+}
+function drawWindPage(){
+  if (!W || tab !== "wind") return;
+  const loc = wLocNow(), near = wNearest(loc.lat, loc.lon);
+  // the current wind at the nearest BOM station
+  if (near && near.o.spd != null){
+    const o = near.o, from = obsFrom(o.dir);
+    const arrow = from == null ? "" : `<svg viewBox="0 0 20 20" style="transform:rotate(${from + 90}deg)"><path d="M3 10h13M11 5l5 5-5 5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    $("wNow").innerHTML = `<div><div class="lab">Wind now</div><div class="big">${o.spd}<small>km/h</small> ${arrow}<small>${o.dir && o.dir !== "CALM" ? o.dir : "calm"}</small></div>
+      <div class="sub">Recorded at ${o.name.replace("PORTABLE QFDI (Inglewood)", "Inglewood")}${near.km >= 1 ? ` (${near.km < 10 ? near.km.toFixed(1) : Math.round(near.km)} km away)` : ""}, ${obsTime(o.time)}</div></div>
+      <div style="text-align:right"><div class="lab">Gusts</div><div class="big">${o.gust ?? "–"}<small>km/h</small></div><div class="sub">${W_DESC[wDesc(o.spd)][1]}</div></div>`;
+  } else $("wNow").innerHTML = `<div class="sub">No BOM station reading near ${loc.name} just now.</div>`;
+  // the chart
+  const today = qDate(Date.now() / 1000), t0 = Date.parse(today + "T00:00:00+10:00") / 1000, t1 = t0 + wDays * 86400, now = Date.now() / 1000;
+  const pts = [];
+  W.times.forEach((t, i) => { if (t < t0 - 3 * 3600 || t > t1 + 3 * 3600) return; const a = wAt(i, loc.lat, loc.lon); if (a) pts.push({t, i, ...a}); });
+  if (!pts.length) { $("wChart").innerHTML = `<span class="empty">No wind forecast for ${loc.name}.</span>`; return; }
+  const hist = near ? (near.o.hist || []).map(h => ({t: obsUnix(h[0]), spd: h[1], gust: h[2], dir: h[3]})).filter(h => h.t >= t0 && h.t <= now && h.spd != null) : [];
+  const top = Math.max(20, ...pts.map(p => Math.max(p.mean, p.gust ?? 0)), ...hist.map(h => Math.max(h.spd, h.gust ?? 0)));
+  const ymax = Math.ceil(top / 10) * 10, ystep = ymax > 60 ? 20 : 10;
+  const cw = $("wChart").parentElement.clientWidth || 340, H0 = innerWidth >= 1000 ? 240 : 170;
+  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / 320)) : 340, L0 = 30, R0 = 6, T0 = 8, B0 = 30, SP = 7;
+  const X = t => L0 + (W0 - L0 - R0) * (t - t0) / (t1 - t0), Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
+  let g = "";
+  for (let d = t0; d < t1; d += 86400){
+    g += `<rect x="${X(d).toFixed(1)}" y="${T0}" width="${(X(d + 6 * 3600) - X(d)).toFixed(1)}" height="${H0 - T0 - B0}" fill="currentColor" fill-opacity=".05"/>`;
+    g += `<rect x="${X(d + 18 * 3600).toFixed(1)}" y="${T0}" width="${(X(d + 24 * 3600) - X(d + 18 * 3600)).toFixed(1)}" height="${H0 - T0 - B0}" fill="currentColor" fill-opacity=".05"/>`;
+    if (d > t0) g += `<line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${T0}" y2="${H0 - B0 + SP + 2}" stroke="currentColor" stroke-opacity=".25"/>`;
+    const lab = wDays === 7 ? part(qDate(d + 1), {weekday: "short"}).slice(0, 2) + " " + part(qDate(d + 1), {day: "numeric"}) : part(qDate(d + 1), {weekday: "short"}) + " " + part(qDate(d + 1), {day: "numeric", month: "short"});
+    g += `<text x="${X(d + 43200).toFixed(1)}" y="${H0 - 6}" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".75">${lab}</text>`;
+  }
+  for (let v = 0; v <= ymax; v += ystep) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".12"/><text x="${L0 - 4}" y="${Y(v) + 3.5}" text-anchor="end" font-size="9.5" fill="currentColor" fill-opacity=".7">${v}</text>`;
+  const poly = (ps, attrs) => `<polyline points="${ps.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
+  const inR = pts.filter(p => p.t >= t0 - 3 * 3600 && p.t <= t1 + 3 * 3600);
+  g += `<clipPath id="wclip"><rect x="${L0}" y="0" width="${W0 - L0 - R0}" height="${H0}"/></clipPath><g clip-path="url(#wclip)">`;
+  if (inR.some(p => p.gust != null)) g += poly(inR.filter(p => p.gust != null).map(p => [X(p.t), Y(p.gust)]), `stroke="#7fb3e6" stroke-width="1.4" stroke-dasharray="4 3"`);
+  g += poly(inR.map(p => [X(p.t), Y(p.mean)]), `stroke="#2a7de1" stroke-width="2"`);
+  if (hist.length) g += poly(hist.map(h => [X(h.t), Y(h.spd)]), `stroke="#1c2b4a" stroke-width="2"`);
+  // spray strip under the plot, one block per forecast time
+  if (WT){
+    inR.forEach((p, k) => {
+      const q = inR[k + 1]; if (!q) return;
+      const j = WT.times.indexOf(p.t), tt = j >= 0 ? wtSample(WT.t[j], loc.lat, loc.lon) : null, td = j >= 0 && WT.td ? wtSample(WT.td[j], loc.lat, loc.lon) : null;
+      const r = sprayRate(p.mean, tt, td, qld(p.t).getUTCHours());
+      g += `<rect x="${X(p.t).toFixed(1)}" y="${H0 - B0 + 3}" width="${Math.max(0, X(q.t) - X(p.t)).toFixed(1)}" height="${SP - 2}" fill="${SPRAY_COLOURS[r.lv]}"/>`;
+    });
+  }
+  // direction arrows on the forecast line (every other one on 7 days)
+  inR.forEach((p, k) => {
+    if (p.t < t0 || p.t > t1 || (wDays === 7 && k % 2)) return;
+    const c = W_ACOL[wDesc(p.mean)], s = wDays === 7 ? .62 : wDays === 3 ? .78 : 1;
+    g += `<g transform="translate(${X(p.t).toFixed(1)},${Y(p.mean).toFixed(1)}) rotate(${(p.from + 90).toFixed(0)}) scale(${s})"><polygon points="-8,-3 2,-3 2,-7 9,0 2,7 2,3 -8,3" fill="${c}" stroke="#1c2621" stroke-width="1"/></g>`;
+  });
+  g += `</g>`;
+  if (now > t0 && now < t1) g += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${T0}" y2="${H0 - B0}" stroke="#d9534f" stroke-width="1.4"/>`;
+  g += `<g class="fcur" visibility="hidden"><line y1="${T0}" y2="${H0 - B0}" stroke="currentColor" stroke-opacity=".6" stroke-width="1"/></g>`;
+  $("wChart").innerHTML = `<div class="chead">Wind at <b>${loc.name}</b>, km/h · ECMWF forecast</div><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg>
+    <div class="ck" style="grid-template-columns:repeat(2,auto)"><span><i style="background:#2a7de1"></i>Forecast wind</span><span><i style="background:repeating-linear-gradient(90deg,#7fb3e6 0 4px,transparent 4px 7px)"></i>Gusts</span>${hist.length ? `<span><i style="background:#1c2b4a"></i>Actual at ${near.o.name.replace("PORTABLE QFDI (Inglewood)", "Inglewood")}</span>` : ""}<span><i style="background:#d9534f"></i>Now</span>${WT ? `<span style="grid-column:1/-1">Strip under the chart: spray conditions <i style="background:${SPRAY_COLOURS[0]}"></i>good <i style="background:${SPRAY_COLOURS[1]}"></i>marginal <i style="background:${SPRAY_COLOURS[2]}"></i>poor</span>` : ""}</div>`;
+  // touch / hover readout
+  const svg = $("wChart").querySelector("svg"), cur = svg.querySelector(".fcur");
+  const at = ev => {
+    const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W0;
+    const t = Math.max(t0, Math.min(t1, t0 + (x - L0) / (W0 - L0 - R0) * (t1 - t0)));
+    cur.setAttribute("visibility", "visible"); cur.querySelector("line").setAttribute("x1", X(t)); cur.querySelector("line").setAttribute("x2", X(t));
+    // the forecast at that time, between the model's 3-hourly times
+    let k = inR.findIndex(p => p.t >= t); if (k < 0) k = inR.length - 1; const b = inR[k], a = inR[Math.max(0, k - 1)];
+    const f = b.t === a.t ? 0 : (t - a.t) / (b.t - a.t), sp = a.mean + (b.mean - a.mean) * f, gu = a.gust != null && b.gust != null ? a.gust + (b.gust - a.gust) * f : null;
+    const near2 = f < .5 ? a : b, dirTxt = COMPASS[Math.round(near2.from / 22.5) % 16];
+    const j = WT ? WT.times.indexOf(near2.t) : -1, tt = j >= 0 ? wtSample(WT.t[j], loc.lat, loc.lon) : null, td = j >= 0 && WT.td ? wtSample(WT.td[j], loc.lat, loc.lon) : null;
+    const spr = WT ? sprayRate(near2.mean, tt, td, qld(near2.t).getUTCHours()) : null;
+    const hh = qld(t).getUTCHours(), mm = qld(t).getUTCMinutes(), when = `${part(qDate(t), {weekday: "short"})} ${part(qDate(t), {day: "numeric", month: "short"})}, ${hh % 12 || 12}${mm >= 30 ? ":30" : ""}${hh < 12 ? "am" : "pm"}`;
+    let txt = `<b>${when}</b> · forecast <b>${dirTxt} ${Math.round(sp)} km/h</b> (${W_DESC[wDesc(sp)][1]})${gu != null ? ` · gusts ${Math.round(gu)}` : ""}${spr ? ` · spray ${sprayBadge(spr)}` : ""}`;
+    if (t <= now && hist.length){
+      const h = hist.reduce((bst, x) => Math.abs(x.t - t) < Math.abs(bst.t - t) ? x : bst, hist[0]);
+      if (Math.abs(h.t - t) < 3600) txt += `<br>Actual at ${near.o.name.replace("PORTABLE QFDI (Inglewood)", "Inglewood")}: <b>${h.dir && h.dir !== "CALM" ? h.dir + " " : ""}${h.spd} km/h</b>${h.gust ? `, gusts ${h.gust}` : ""}`;
+    }
+    $("wRead").innerHTML = txt;
+  };
+  svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at); svg.addEventListener("click", at);
+}
+$("wLoc").onchange = () => { wLocSel = $("wLoc").value; drawWindPage(); };
+$("wRange").onclick = e => { const b = e.target.closest("button"); if (!b) return; wDays = +b.dataset.d; try { localStorage.setItem("wDays", wDays); } catch(_){}
+  [...$("wRange").children].forEach(x => x.setAttribute("aria-pressed", x === b)); drawWindPage(); };
+$("wGps").onclick = () => {
+  if (!navigator.geolocation) return;
+  $("wGps").textContent = "📍 Finding…";
+  navigator.geolocation.getCurrentPosition(pos => {
+    tapAt = L.latLng(pos.coords.latitude, pos.coords.longitude); wLocSel = "gps"; $("wGps").textContent = "📍 My location";
+    startWindPage();
+  }, () => { $("wGps").textContent = "📍 My location"; $("wRead").textContent = "Couldn't get your location. Check that location is allowed for this site, or pick a station from the list."; },
+  {enableHighAccuracy: false, timeout: 15000, maximumAge: 5 * 60000});
+};
+
 // Temp tab: data/temp.json (temp.py, ECMWF 2 m temperature, degC x10, same times as the wind). "Day max"
 // and "Day min" take the highest or lowest of the chosen Queensland day's times at each grid point.
 let T = null, tOverlay = null, tShow = "now", tTimer = null;
@@ -2106,7 +2249,7 @@ function setTab(t, first){
   const only = {rain: "rainOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly", temp: "tempOnly", soil: "soilOnly"}[t];
   document.querySelectorAll(".rainOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly, .windOnly, .tempOnly, .soilOnly").forEach(el => el.hidden = !el.classList.contains(only));
   $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook"; $("subWind").hidden = t !== "wind"; $("subTemp").hidden = t !== "temp"; $("subSoil").hidden = t !== "soil";
-  $("map").hidden = t === "outlook";   // the Outlook tab is just links
+  $("map").hidden = t === "outlook" || t === "wind";   // Outlook is just links; Wind is a chart page
   if (t !== "radar") rClear();
   map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
@@ -2139,7 +2282,7 @@ function setTab(t, first){
   } else if (t === "wind"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
-    if (W) wDraw(); else startWind();
+    startWindPage();
   } else if (t === "outlook"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers();

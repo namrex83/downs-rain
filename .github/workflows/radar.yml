@@ -449,7 +449,11 @@ jobs:
                       out.append({"name": o.get("name"), "lat": pos["lat"], "lon": pos["lon"], "time": o.get("local_date_time_full"),
                                   "t": o.get("air_temp"), "td": o.get("dewpt"), "rh": o.get("rel_hum"),
                                   "dir": o.get("wind_dir"), "spd": o.get("wind_spd_kmh"), "gust": o.get("gust_kmh"),
-                                  "tmax": max(temps) if temps else None, "tmin": min(temps) if temps else None})
+                                  "tmax": max(temps) if temps else None, "tmin": min(temps) if temps else None,
+                                  # the last 2 days of readings, oldest first, for the actual-wind line on the Wind tab:
+                                  # [YYYYMMDDHHMM local time, wind km/h, gust km/h, direction, temperature]
+                                  "hist": [[(x.get("local_date_time_full") or "")[:12], x.get("wind_spd_kmh"), x.get("gust_kmh"), x.get("wind_dir"), x.get("air_temp")]
+                                           for x in reversed(obs[:96]) if x.get("local_date_time_full")]})
                   except Exception as e:
                       log(f"  observations {wmo}: {e}")
               if out:
