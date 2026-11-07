@@ -374,7 +374,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
-    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All eight models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), GEM (Canada) and JMA (Japan), are read hourly for the spot from Open-Meteo (CC BY 4.0), with GFS, ECMWF and ECMWF AI scaled so each day matches the maps above (Open-Meteo only decides when in the day the rain falls). The dotted green <b>BOM</b> line is the Bureau of Meteorology's own forecast for the nearest town (within 40 km), stepping up at each midnight by the amount BOM gives a 50% chance of reaching; touch the chart for BOM's range and chance for that day. It comes from the BOM app's data feed, for personal use. Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
+    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All seven models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany) and JMA (Japan), are read hourly for the spot from Open-Meteo (CC BY 4.0), with GFS, ECMWF and ECMWF AI scaled so each day matches the maps above (Open-Meteo only decides when in the day the rain falls). The dotted green <b>BOM</b> line is the Bureau of Meteorology's own forecast for the nearest town (within 40 km), stepping up at each midnight by the amount BOM gives a 50% chance of reaching; touch the chart for BOM's range and chance for that day. It comes from the BOM app's data feed, for personal use. Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel windOnly" hidden>
@@ -1053,9 +1053,9 @@ const F_ALL = {}, F_COL = {gfs: "#e07b39", ecmwf: "#2a7de1", aifs: "#8e44ad"};
 // more models for the chart, read for the exact spot from Open-Meteo (free, CC BY 4.0) in the browser, and added
 // up into the same 10am-to-10am Queensland days (00z to 00z)
 const OM_MODELS = {bom_access_global: ["ACCESS-G (BOM)", "#2ca02c"], ukmo_seamless: ["UK Met Office", "#d62728"],
-                   icon_seamless: ["ICON (Germany)", "#17a2b8"], gem_seamless: ["GEM (Canada)", "#7f8c8d"], jma_seamless: ["JMA (Japan)", "#b8860b"]};
+                   icon_seamless: ["ICON (Germany)", "#17a2b8"], jma_seamless: ["JMA (Japan)", "#b8860b"]};
 const OM_CACHE = {};
-// Hourly rain for the chart, for all eight models at the spot (Open-Meteo, the models' own hourly or 3-hourly
+// Hourly rain for the chart, for all seven models at the spot (Open-Meteo, the models' own hourly or 3-hourly
 // output): {series: {model: [[unix time at the end of the hour, mm], ...]}}. The page's own model files are whole
 // 10am-to-10am days, which can't show the time of day.
 const H_IDS = {gfs: "gfs_seamless", ecmwf: "ecmwf_ifs025", aifs: "ecmwf_aifs025_single"};
@@ -1176,7 +1176,7 @@ async function fChart(){
 // draws the chart from FC: "cum" = each model's running total, "day" = each day's rain (10am to 10am).
 // Touching or hovering over it shows that day's numbers for every model.
 let FC = null, fcMode = "cum";
-const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "GEM (Canada)": "GEM", "JMA (Japan)": "JMA"};
+const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "JMA (Japan)": "JMA"};
 // GFS, ECMWF and EC AI on the chart are scaled so each 10am-to-10am day adds up to the same rain as the maps (the
 // page's own model files); Open-Meteo's hourly figures only decide when in the day it falls. (Its hourly AI model
 // came out at about twice the map's totals.) Days past the end of a map model's run keep Open-Meteo's figures.
