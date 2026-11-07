@@ -295,7 +295,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls fcOnly" id="fControls" hidden>
     <div class="field" id="fModelField"><span class="eyebrow">Model</span>
-      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button></div></div>
+      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button><button data-m="avg" aria-pressed="false">Average</button></div></div>
     <div class="field" id="fSumField"><span class="eyebrow">Show</span>
       <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="false">7 days</button><button data-n="9" aria-pressed="true">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
     <div class="field" id="fLoopField"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
@@ -1026,7 +1026,33 @@ async function startStorms(){
 let F = null, fOverlay = null, fModel = "ecmwf";
 // the Forecast tab always opens on ECMWF (fModel starts as "ecmwf") with the 9-day total
 const F_FILE = {gfs: "data/forecast_gfs.json", ecmwf: "data/forecast.json", aifs: "data/forecast_aifs.json"};
-const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI"};
+const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI", avg: "Average"};
+// "Average": the three models' daily maps averaged, day by day (all three while ECMWF lasts, then GFS and
+// ECMWF AI); days only one model reaches are left out. Each day records which models went into it.
+async function avgForecast(){
+  const ms = {};
+  for (const m of Object.keys(F_FILE)) { try { ms[m] = F_ALL[m] || (F_ALL[m] = await getJSON(F_FILE[m])); } catch(e){} }
+  const have = Object.keys(ms).filter(m => ms[m]); if (have.length < 2) throw new Error("not enough models");
+  const ref = ms.gfs || ms[have[0]], n = ref.lats.length * ref.lons.length;
+  const same = o => o.lats.length === ref.lats.length && o.lons.length === ref.lons.length && o.lats[0] === ref.lats[0] && o.lons[0] === ref.lons[0];
+  const days = [...new Set(have.flatMap(m => ms[m].days))].sort(), mm10 = [], used = [], keepDays = [];
+  for (const d of days){
+    const grids = have.map(m => { const k = ms[m].days.indexOf(d); if (k < 0) return null; const o = ms[m];
+      if (same(o)) return o.mm10[k];
+      // a different grid: read it at the reference grid's points
+      const out = new Array(n); let c = 0;
+      for (const la of ref.lats) for (const lo of ref.lons) { const v = gSample(o, o.mm10[k], la, lo); out[c++] = v == null ? null : v * 10; }
+      return out; });
+    const ok = grids.map((g, i) => g ? have[i] : null).filter(Boolean);
+    if (ok.length < 2) continue;
+    const gs = grids.filter(Boolean), avg = new Array(n);
+    for (let c = 0; c < n; c++){ let sum = 0, cnt = 0; for (const g of gs) if (g[c] != null) { sum += g[c]; cnt++; } avg[c] = cnt ? Math.round(sum / cnt) : 0; }
+    mm10.push(avg); used.push(ok); keepDays.push(d);
+  }
+  const runs = have.map(m => ms[m].run).sort();
+  return {lats: ref.lats, lons: ref.lons, days: keepDays, mm10, used, run: runs[runs.length - 1],
+          model: `Average of ${have.map(m => F_NAME[m]).join(", ")}`};
+}
 // fSumN: 0 shows one day; 3 or 7 add up that many days from fStart, the first day that hasn't finished
 let fSumN = 9, fStart = 0;   // opens on the 9-day total
 const fSpan = () => [fStart, Math.min(F.days.length, fStart + fSumN)];
@@ -1075,7 +1101,7 @@ function fReadTap(){
   const [a, b] = fSumN ? fSpan() : [+$("fDay").value, +$("fDay").value + 1];
   const when = `10am ${span(addDays(F.days[a], -1), F.days[b - 1]).replace(" – ", " – 10am ")}${fSumN ? ` (${b - a} day${b - a === 1 ? "" : "s"}${b - a < fSumN ? ", all this model run covers" : ""})` : ""}`;
   setPin(v == null ? "Outside" : `${fmt(v)} mm`);
-  $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}.`;
+  $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}${F.used ? `, average of ${[...new Set(F.used.slice(a, b).map(u => u.map(m => F_NAME[m]).join(", ")))].join("; then ")}` : ""}.`;
   fChart();
 }
 // Rain chart at the pin: each model's running total, day by day, for as far as it goes (like the multi-model
@@ -1407,7 +1433,7 @@ function fChartDraw(){
 async function startForecast(){
   [...$("fModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === fModel));
   const keep = F ? F.days[+$("fDay").value] : null;
-  try { F = await getJSON(F_FILE[fModel]); }
+  try { F = fModel === "avg" ? await avgForecast() : await getJSON(F_FILE[fModel]); }
   catch(e){ F = null; if (fOverlay) map.removeLayer(fOverlay);
     $("fTap").innerHTML = `<span class="empty">No ${F_NAME[fModel]} forecast yet. It appears after the forecast job next runs on GitHub.</span>`; fitMap(); return; }
   if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
@@ -1419,7 +1445,8 @@ async function startForecast(){
   $("fDay").value = keep && F.days.includes(keep) ? String(F.days.indexOf(keep)) : String(fStart);   // switching model keeps the chosen day
   fSetSum(fSumN, true);
   const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
-  $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Out to 16 days. Updated four times a day. GFS data from NOAA (US government, public domain)."
+  if (fModel === "avg") $("fInfo").textContent = `${F.model}: each day's map is the average of the models that reach it, all three for the first ${F.used.filter(u => u.length === 3).length} days, then ${F.used.length && F.used[F.used.length - 1].length === 2 ? F.used[F.used.length - 1].map(m => F_NAME[m]).join(" and ") : "the rest"}. Newest run ${new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z")).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time.`;
+  else $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Out to 16 days. Updated four times a day. GFS data from NOAA (US government, public domain)."
     : fModel === "aifs" ? "ECMWF's AI (machine-learning) model, trained on decades of past weather; out to 15 days. Updated twice a day."
     : "Out to 9 or 10 days, so it's left off the 15-day total. Updated twice a day, at about 6:30am and 6:30pm."}`;
   fDraw();
