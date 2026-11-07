@@ -295,7 +295,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls fcOnly" id="fControls" hidden>
     <div class="field" id="fModelField"><span class="eyebrow">Model</span>
-      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button><button data-m="avg" aria-pressed="false">Average</button></div></div>
+      <div class="seg" id="fModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button><button data-m="aifs" aria-pressed="false">ECMWF AI</button><button data-m="avg" aria-pressed="true">Average</button></div></div>
     <div class="field" id="fSumField"><span class="eyebrow">Show</span>
       <div class="seg" id="fSum"><button data-n="0" aria-pressed="false">Daily</button><button data-n="3" aria-pressed="false">3 days</button><button data-n="7" aria-pressed="false">7 days</button><button data-n="9" aria-pressed="true">9 days</button><button data-n="15" aria-pressed="false">15 days</button></div></div>
     <div class="field" id="fLoopField"><span class="eyebrow">Loop days</span><div class="transport" id="fTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="fPlay" class="tpplay" aria-pressed="false" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12z"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div></div>
@@ -1023,8 +1023,8 @@ async function startStorms(){
 
 // data/forecast.json (forecast.py, ECMWF) and data/forecast_gfs.json (forecast_gfs.py, GFS) hold
 // rain per 10am-to-10am day, mm x10 on a quarter-degree grid. Coloured in the browser with the rain scale.
-let F = null, fOverlay = null, fModel = "ecmwf";
-// the Forecast tab always opens on ECMWF (fModel starts as "ecmwf") with the 9-day total
+let F = null, fOverlay = null, fModel = "avg";   // opens on the average of the three models
+// the Forecast tab always opens on the Average of the three models with the 9-day total
 const F_FILE = {gfs: "data/forecast_gfs.json", ecmwf: "data/forecast.json", aifs: "data/forecast_aifs.json"};
 const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI", avg: "Average"};
 // "Average": the three models' daily maps averaged, day by day (all three while ECMWF lasts, then GFS and
@@ -2445,7 +2445,7 @@ function fSetSum(n, quiet){
   // (and if it was the one showing, the ECMWF AI model shows instead)
   const ecBtn = $("fModel").querySelector('[data-m="ecmwf"]');
   ecBtn.hidden = n === 15;
-  if (n === 15 && fModel === "ecmwf") { fSumN = 15; fModel = "aifs"; startForecast(); return; }   // not saved: ECMWF stays the usual choice
+  if (n === 15 && fModel === "ecmwf") { fSumN = 15; fModel = "avg"; startForecast(); return; }   // not saved: the page still opens on Average
   fSumN = n;
   [...$("fSum").children].forEach(x => x.setAttribute("aria-pressed", +x.dataset.n === n));
   $("fDayField").hidden = n > 0; fitMap();
