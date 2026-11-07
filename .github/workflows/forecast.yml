@@ -58,6 +58,10 @@ jobs:
         continue-on-error: true          # a problem here shouldn't stop the rain forecast going out
         run: python soil.py
 
+      - name: Get BOM town forecasts
+        continue-on-error: true          # a problem here shouldn't stop the other maps going out
+        run: python bom_fc.py
+
       - name: Publish
         env:
           GITHUB_TOKEN: ${{ github.token }}
