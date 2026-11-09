@@ -2,7 +2,7 @@ name: Storm ingredients
 
 on:
   schedule:
-    - cron: "41 4,10,16,22 * * *"   # shortly after each new GFS run reaches Open-Meteo (8:41am, 2:41pm, 8:41pm, 2:41am Qld)
+    - cron: "41 4,10,16,22 * * *"   # shortly after each new GFS run reaches Open-Meteo (8:41am, 2:41pm, 8:41pm and 2:41am Qld)
   workflow_dispatch: {}              # lets you press "Run workflow" by hand
 
 permissions:

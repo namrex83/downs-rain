@@ -2,7 +2,7 @@ name: Rain forecast
 
 on:
   schedule:
-    - cron: "23 5,8,9,11,17,20,21,23 * * *"   # ECMWF 00z/12z are out by about 08/20 UTC, GFS runs about 5 h after 00/06/12/18 UTC; each script skips a run it already has
+    - cron: "23 5,8,9,11,17,20,21,23 * * *"   # ECMWF 00z/12z are out by about 08/20 UTC, GFS runs about 5 h after 00/06/12/18 UTC; each script skips a run it already has.
   workflow_dispatch: {}            # lets you press "Run workflow" by hand
 
 permissions:

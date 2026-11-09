@@ -2,7 +2,7 @@ name: Radar rainfall
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may run it a little late)
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may run it a little late or skip some)
   workflow_dispatch: {}       # lets you press "Run workflow" by hand
 
 permissions:
