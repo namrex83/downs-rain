@@ -138,6 +138,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
 #sFieldWrap{flex:1 1 260px;min-width:0} #sField{width:100%}
+.rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
 #dayField{order:3;flex:1 1 100%}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
   -webkit-appearance:none;appearance:none;cursor:pointer;
@@ -285,6 +286,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><span class="eyebrow">Gauges</span>
       <div class="seg" id="gSeg"><button data-g="1" aria-pressed="true">On</button><button data-g="0" aria-pressed="false">Off</button></div></div>
+    <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
   </div>
 
   <div class="controls stormOnly" hidden>
@@ -581,7 +583,13 @@ const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t
 const wd = d => `${part(d, {weekday:"short"})} ${part(d, {day:"numeric"})}`;
 const span = (a, b) => `${wd(a)}${a.slice(0, 7) === b.slice(0, 7) ? "" : " " + part(a, {month:"short"})} – ${wd(b)} ${part(b, {month:"short"})}`;
 const STORM_OPACITY = 0.78;  // storm colours sit stronger over the satellite map so the top shades stay distinct
-const OVERLAY_OPACITY = 0.6; // fixed see-through level for the rain layer
+const OVERLAY_OPACITY = 0.6; // see-through level for the forecast rain layer
+// the Rainfall map's see-through slider, remembered on this device
+let rainOpacity = OVERLAY_OPACITY;
+try { const o = parseFloat(localStorage.getItem("rainOpacity")); if (o >= 0.2 && o <= 1) rainOpacity = o; } catch(e){}
+$("op").value = rainOpacity;
+$("op").oninput = () => { rainOpacity = +$("op").value; if (overlay) overlay.setOpacity(rainOpacity);
+  try { localStorage.setItem("rainOpacity", rainOpacity); } catch(e){} };
 const rainDay = end => span(addDays(end, -1), end);
 const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.getUTCHours() >= 9) t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };   // Queensland time
 
@@ -637,7 +645,7 @@ async function draw(){
     : (today ? (prov && mode !== "raw" ? "data/today_corr.png" : "data/today.png") : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`)) + bust();
   const [s,w,n,e] = meta.bounds;
   if (overlay) map.removeLayer(overlay);
-  overlay = L.imageOverlay(img, [[s,w],[n,e]], {opacity: OVERLAY_OPACITY, interactive:false}).addTo(map);
+  overlay = L.imageOverlay(img, [[s,w],[n,e]], {opacity: rainOpacity, interactive:false}).addTo(map);
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
   if (prov){
     const g = meta.gauges || [];
