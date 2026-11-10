@@ -298,7 +298,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <option value="srh">Helicity: spin near the ground (tornado risk)</option>
     </select></div>
     <div class="field"><span class="eyebrow">Model</span>
-      <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
+      <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="false">GFS</button><button data-m="ecmwf" aria-pressed="true">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
     <div class="field"><span class="eyebrow">When</span>
       <div class="seg"><button id="sWorst" aria-pressed="true">Worst of day</button><button id="sHourly" aria-pressed="false">By hour</button></div></div>
@@ -1047,8 +1047,7 @@ function sSetHourRange(want){
   $("sHour").value = best; sHourLabel();
 }
 
-let sModel = "gfs";
-try { if (localStorage.getItem("sModel") === "ecmwf") sModel = "ecmwf"; } catch(e){}
+let sModel = "ecmwf";   // the Storms tab opens on ECMWF
 async function startStorms(){
   [...$("sModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === sModel));
   const keep = S ? $("sDay").value : null;
@@ -2511,7 +2510,7 @@ $("fModel").onclick = e => {
 };
 $("sModel").onclick = e => {
   const b = e.target.closest("button"); if (!b || b.dataset.m === sModel) return;
-  sModel = b.dataset.m; try { localStorage.setItem("sModel", sModel); } catch(_){}
+  sModel = b.dataset.m;
   startStorms();
 };
 $("sField").onchange = e => { sField = e.target.value; sDraw(); };
