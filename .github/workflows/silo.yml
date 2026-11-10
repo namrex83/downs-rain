@@ -1,0 +1,42 @@
+name: SILO rainfall
+
+# Fills days the radar record doesn't cover (back to 1 October) from SILO's gauge-based daily rainfall map,
+# and adds up the season total for the Rainfall tab. SILO adds the previous day at about 9pm Qld time.
+on:
+  schedule:
+    - cron: "17 12,23 * * *"   # 10:17pm and 9:17am Qld
+  workflow_dispatch: {}        # lets you press "Run workflow" by hand
+
+permissions:
+  contents: write
+
+concurrency:
+  group: silo
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install numpy h5py requests
+
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+
+      - name: Fill from SILO and add up the season
+        run: python silo.py
+
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "SILO rainfall $(date -u +%Y-%m-%dT%H:%MZ)"

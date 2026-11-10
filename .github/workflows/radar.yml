@@ -1021,6 +1021,9 @@ jobs:
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
         run: python radar.py
 
+      - name: Season total
+        run: python silo.py season || echo "Season total skipped"
+
       - name: Save working state
         if: always()
         uses: actions/cache/save@v5

@@ -278,7 +278,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls rainOnly">
     <div class="field"><span class="eyebrow">View</span>
-      <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button></div></div>
+      <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field" id="weekField" hidden><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
@@ -466,7 +466,9 @@ function tpBind(id, step){ $(id).addEventListener("click", e => { const b = e.ta
 const tpToday = times => Math.max(0, times.findIndex(t => qDate(t) >= qDate(Date.now() / 1000)));
 const tpMove = (k, i, n) => k === "first" ? 0 : k === "last" ? n - 1 : Math.max(0, Math.min(n - 1, i + (k === "next" ? 1 : -1)));
 const bust = () => "?v=" + Date.now();
-let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null;
+let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null, siloDays = [];
+const isSilo = d => siloDays.includes(d);   // days before the radar record (or missed by it), from SILO's gauge-based map
+const allDays = () => [...new Set([...idx.days, ...siloDays])].sort();
 let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
 // after a pull-down refresh (the address has ?r=), stay on the tab you were on
 try { const t = localStorage.getItem("tab"); if (new URLSearchParams(location.search).has("r") && ["fc","temp","wind","radar","rain","soil","storms","outlook"].includes(t)) tab = t; } catch(e){}
@@ -578,24 +580,30 @@ const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.g
 
 async function getJSON(u){ const r = await fetch(u + bust()); if(!r.ok) throw new Error(r.status); return r.json(); }
 
+// the season total runs to hundreds of mm, so it gets its own steps on the same colours
+const SEASON_BREAKS = [5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 600, 800];
+const rainBreaks = () => tab === "rain" && view === "season" ? SEASON_BREAKS : idx.breaks;
 function legend(){
-  $("legend").innerHTML = idx.ramp.map((c,i) => `<div><i style="background:${c}"></i><span>${idx.breaks[i]}${i===idx.ramp.length-1?"+":""}</span></div>`).join("");
+  const br = rainBreaks();
+  $("legend").innerHTML = idx.ramp.map((c,i) => `<div><i style="background:${c}"></i><span>${br[i]}${i===idx.ramp.length-1?"+":""}</span></div>`).join("");
 }
 
 async function init(){
   try { idx = await getJSON("data/index.json"); }
   catch(e){ $("tap").innerHTML = `<span class="empty">No maps yet. The running total for today appears within the first hour of the program running, and the first finished day after the next 9am.</span>`; return; }
   legend();
+  try { siloDays = (await getJSON("data/silo/index.json")).days.filter(d => !idx.days.includes(d)); } catch(e){ siloDays = []; }
   ring = L.circle([idx.radar.lat, idx.radar.lon], {radius: idx.radar.range_km*1000, color:"#7c8781", weight:1, fill:false, dashArray:"4 4", interactive:false});
   if (tab === "rain") ring.addTo(map);
   const sel = $("day");
   sel.innerHTML = `<option value="today">${rainDay(runningEnd())} (so far)</option>` +
-    idx.days.slice().reverse().map(d => `<option value="${d}">${rainDay(d)}</option>`).join("");
+    allDays().reverse().map(d => `<option value="${d}">${rainDay(d)}${isSilo(d) ? " · gauge map" : ""}</option>`).join("");
   sel.value = idx.days.length ? idx.days[idx.days.length - 1] : "today";   // open on the latest day finished at 9am
   sel.onchange = show;
   // 7-day periods: the latest, then each week before it, back to the first finished day
   const ends = [];
-  for (let end = idx.days[idx.days.length - 1]; end && addDays(end, -6) <= idx.days[idx.days.length - 1] && end >= idx.days[0]; end = addDays(end, -7)) ends.push(end);
+  const ad = allDays();
+  for (let end = ad[ad.length - 1]; end && end >= ad[0]; end = addDays(end, -7)) ends.push(end);
   $("weekSel").innerHTML = ends.map((d, i) => `<option value="${i ? d : "latest"}">${span(addDays(d, -7), d)}${i ? "" : " (latest)"}</option>`).join("");
   $("weekSel").onchange = show;
   if (tab === "rain") show();
@@ -603,19 +611,22 @@ async function init(){
 
 async function show(){ if (tab !== "rain") return; await draw(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
 async function draw(){
-  const week = view === "week";
-  const past = week && $("weekSel").value && $("weekSel").value !== "latest";   // an earlier week, added up here
-  const day = week ? "week" : $("day").value;
-  $("dayField").hidden = week; $("weekField").hidden = !week;
+  const week = view === "week", season = view === "season";
+  const ad = allDays(), latestEnd = ad[ad.length - 1];
+  // an earlier week, or the latest one when SILO can fill a day the radar missed: added up here
+  const past = week && (($("weekSel").value && $("weekSel").value !== "latest") || [...Array(7)].some((_, i) => isSilo(addDays(latestEnd, -i))));
+  const day = week ? "week" : season ? "season" : $("day").value, silo = !week && !season && isSilo(day);
+  $("dayField").hidden = week || season; $("weekField").hidden = !week;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
-  try { meta = past ? await buildWeek($("weekSel").value) : await getJSON(`data/${day}.json`); }
+  try { meta = past ? await buildWeek($("weekSel").value === "latest" || !$("weekSel").value ? latestEnd : $("weekSel").value)
+               : await getJSON(silo ? `data/silo/${day}.json` : `data/${day}.json`); }
   catch(e){
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
-    meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : "That day's map isn't available yet."}</span>`; return; }
+    meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : season ? "The season total isn't available yet." : "That day's map isn't available yet."}</span>`; return; }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
-  $("mRaw").disabled = today && !prov; $("mCorr").disabled = today && !prov;
-  const img = past ? gridImage(mode === "raw" ? meta.grid_raw : meta.grid, meta.grid_w, meta.grid_h)
+  $("mRaw").disabled = (today && !prov) || silo || season; $("mCorr").disabled = (today && !prov) || silo || season;
+  const img = past || silo || season ? gridImage(mode === "raw" && !silo && !season ? meta.grid_raw : meta.grid, meta.grid_w, meta.grid_h)
     : (today ? (prov && mode !== "raw" ? "data/today_corr.png" : "data/today.png") : (mode === "raw" ? `data/${day}_radar.png` : `data/${day}.png`)) + bust();
   const [s,w,n,e] = meta.bounds;
   if (overlay) map.removeLayer(overlay);
@@ -639,6 +650,22 @@ async function draw(){
     return;
   }
   const g = meta.gauges || [];
+  if (silo){
+    $("stats").innerHTML = stat("SILO", "Gauge-based map") + stat("~5 km", "Grid") + stat("9am to 9am", rainDay(day));
+    $("notes").textContent = `No radar map for this day${day < idx.days[0] ? " (before the radar record started)" : ""}, so this is SILO's daily rainfall map (Queensland Government), worked out from the Bureau's rain gauges. It's smoother than the radar: it shows the broad pattern but can miss or spread out storm falls between gauges.`;
+    drawGauges(); declutter();
+    return;
+  }
+  if (season){
+    const n = meta.radar_days.length + meta.silo_days.length;
+    $("stats").innerHTML = stat(`${n} days`, `Since ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}, 9am`) + stat(meta.radar_days.length, "Radar days") + stat(meta.silo_days.length, "SILO gauge-map days");
+    $("notes").textContent = `Season total: the rain from 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"long"})} to 9am ${part(meta.to, {day:"numeric", month:"long"})}, adding up the gauge-corrected radar map for each day, or SILO's gauge-based map for days without one.` +
+      (meta.missing.length ? ` Not included (no map): ${meta.missing.map(rainDay).join(", ")}.` : "");
+    $("gauges").innerHTML = `<thead><tr><th>Gauge (radar days only)</th><th class="n">Gauge</th><th class="n">Days</th></tr></thead><tbody>` +
+      g.sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.days}</td></tr>`).join("") + `</tbody>`;
+    drawGauges(); declutter();
+    return;
+  }
   if (week){
     $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
     $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "";
@@ -679,9 +706,9 @@ map.on("zoomend", () => { if (tab === "rain") { drawGauges(); declutter(); } });
 // Earlier weeks are added up here from the finished days' files, like the job does for the latest week,
 // so no extra files are kept. Their map is drawn from the 2 km tap-to-read grid, smoothed.
 const dayFiles = {};
-const dayJSON = d => dayFiles[d] || (dayFiles[d] = getJSON(`data/${d}.json`));
+const dayJSON = d => dayFiles[d] || (dayFiles[d] = getJSON(isSilo(d) ? `data/silo/${d}.json` : `data/${d}.json`));
 async function buildWeek(end){
-  const want = [...Array(7)].map((_, i) => addDays(end, i - 6)), have = want.filter(d => idx.days.includes(d));
+  const want = [...Array(7)].map((_, i) => addDays(end, i - 6)), have = want.filter(d => idx.days.includes(d) || isSilo(d));
   if (!have.length) throw new Error("no days");
   const ms = await Promise.all(have.map(dayJSON)), n = ms[0].grid.length;
   const add = key => { const out = new Array(n).fill(0);
@@ -699,7 +726,7 @@ async function buildWeek(end){
 }
 function gridImage(vals, W, H){   // colour a tap-to-read grid (mm x10), 3x larger with bilinear smoothing
   const f = 3, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
-  const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height), ramp = idx.ramp.map(hex);
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height), ramp = idx.ramp.map(hex), breaks = rainBreaks();
   for (let y = 0; y < cv.height; y++){
     const gy = Math.min(H - 1.001, Math.max(0, (y + .5) / f - .5)), r = Math.floor(gy), dy = gy - r;
     for (let x = 0; x < cv.width; x++){
@@ -707,7 +734,7 @@ function gridImage(vals, W, H){   // colour a tap-to-read grid (mm x10), 3x larg
       const q = [vals[r*W + c], vals[r*W + c + 1], vals[(r+1)*W + c], vals[(r+1)*W + c + 1]];
       if (q.some(v => v < 0)) continue;
       const v = (q[0] * (1-dx) * (1-dy) + q[1] * dx * (1-dy) + q[2] * (1-dx) * dy + q[3] * dx * dy) / 10;
-      let k = -1; idx.breaks.forEach((b, i) => { if (v >= b) k = i; });
+      let k = -1; breaks.forEach((b, i) => { if (v >= b) k = i; });
       if (k < 0) continue;
       const o = (y * cv.width + x) * 4; img.data[o] = ramp[k][0]; img.data[o+1] = ramp[k][1]; img.data[o+2] = ramp[k][2]; img.data[o+3] = 225;
     }
@@ -726,7 +753,7 @@ function valueAt(lat, lon){
   const [s,w,n,e] = meta.bounds, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
   const fx = (lon - w)/(e - w), fy = (merc(n) - merc(lat))/(merc(n) - merc(s));
   if (fx<0||fx>=1||fy<0||fy>=1) return null;
-  const grid = (mode === "raw" && meta.grid_raw) ? meta.grid_raw : meta.grid;
+  const grid = (mode === "raw" && meta.grid_raw && meta.source !== "SILO") ? meta.grid_raw : meta.grid;
   const v = grid[Math.floor(fy*meta.grid_h)*meta.grid_w + Math.floor(fx*meta.grid_w)];
   return v < 0 ? null : v/10;
 }
@@ -737,7 +764,7 @@ function readTap(){
   setPin(v == null ? "No data" : `${fmt(v)} mm`);
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
-  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":$("day").value==="today"?" since 9am":""}${view!=="week"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view!=="week"&&$("day").value==="today")||mode==="raw"?" (radar only)":""}.`;
+  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":view==="season"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season")?" (radar only)":""}.`;
 }
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
@@ -819,9 +846,10 @@ let rw = innerWidth, rh = innerHeight;   // phones: refit on a width change only
 addEventListener("resize", () => { if (innerWidth !== rw || (innerWidth > 600 && innerHeight !== rh)) { rw = innerWidth; rh = innerHeight; fitMap(); } });
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
-const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); show(); };
+const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); $("vSeason").setAttribute("aria-pressed", v==="season"); legend(); show(); };
 $("vDay").onclick = () => setView("day");
 $("vWeek").onclick = () => setView("week");
+$("vSeason").onclick = () => setView("season");
 
 // ================================================================ Storms tab
 // data/storms.json (made by storms.py from the GFS model) holds lifted index (x10), CAPE and
@@ -2371,7 +2399,8 @@ function setTab(t, first){
   setTimeout(() => drawObs().then(() => { if (tab === "wind") wReadTap(); if (tab === "temp") tReadTap(); }), 0);   // station dots on Temp and Wind only
   if (t !== "temp") { tLoop(false); if (tOverlay) map.removeLayer(tOverlay); }
   if (t !== "wind") { wLoop(false); if (wOverlay) map.removeLayer(wOverlay); wArrows.clearLayers(); }
-  $("dayField").hidden = t === "rain" && view === "week";
+  $("dayField").hidden = t === "rain" && view !== "day";
+  if (idx) legend();   // the Forecast tab shares the rainfall legend
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
