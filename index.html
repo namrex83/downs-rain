@@ -240,6 +240,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   .field{gap:2px}
   label,.eyebrow{font-size:.6rem}
   .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
+  #sField{display:grid;grid-template-columns:repeat(4,1fr);border-radius:14px;gap:1px;background:var(--line)}   /* 7 storm maps: two rows on a phone */
+  #sField button{padding:0 4px} #sField button:last-child{grid-column:span 2}
+  .field:has(> #sField){flex:1 1 100%}
   select{font-size:.85rem;min-height:34px;padding:4px 8px}
   /* four tabs: put them on their own full-width row under the title */
   header{flex-wrap:wrap;align-items:flex-start;row-gap:14px}
