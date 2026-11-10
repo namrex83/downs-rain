@@ -184,6 +184,13 @@ header>div:first-child{min-width:0}
 header h1, header h1 span{color:var(--band-ink);text-shadow:0 2px 8px rgba(0,20,50,.45)}
 header .sub{text-shadow:0 1px 4px rgba(0,20,50,.5)}
 header h1 span{opacity:.82}
+/* D1 brand lockup: "SEQ" picked out in sky blue, a spaced-caps byline, and faint radar rings behind the top-right corner */
+header{position:relative;overflow:hidden}
+header>*{position:relative;z-index:1}
+header .rings{position:absolute;z-index:0;right:-70px;top:-60px;width:230px;height:230px;pointer-events:none}
+header h1 .seq{color:#8fd3ff;opacity:1;letter-spacing:.02em}
+header .byline{margin:5px 0 0;font:600 .7rem/1.2 var(--body);letter-spacing:.18em;text-transform:uppercase;color:var(--band-sub);text-shadow:0 1px 4px rgba(0,20,50,.5)}
+header .region{margin:4px 0 2px;font-size:.74rem;color:var(--band-sub);opacity:.85;text-shadow:0 1px 4px rgba(0,20,50,.5)}
 header .sub{color:var(--band-sub)}
 /* the tabs: frosted pills on the band, each with an icon that takes the text colour */
 header .seg{flex:0 0 auto;border:0;border-radius:16px;background:rgba(10,40,80,.3);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:4px;gap:4px}
@@ -252,7 +259,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 <div id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 <div class="wrap">
   <header>
-    <div><h1>South East Queensland <span>Weather Desk</span></h1>
+    <svg class="rings" viewBox="0 0 230 230" aria-hidden="true"><g fill="none" stroke="#fff"><circle cx="115" cy="115" r="35" stroke-opacity=".45"/><circle cx="115" cy="115" r="70" stroke-opacity=".3"/><circle cx="115" cy="115" r="105" stroke-opacity=".18"/></g><path d="M115 115V10A105 105 0 0 0 40.8 40.8Z" fill="#8fd3ff" fill-opacity=".22"/><circle cx="82" cy="78" r="7" fill="#2fbf71" fill-opacity=".75"/><circle cx="94" cy="66" r="4" fill="#f2b233" fill-opacity=".85"/><circle cx="72" cy="92" r="3" fill="#2fbf71" fill-opacity=".6"/><circle cx="115" cy="115" r="3" fill="#fff"/></svg>
+    <div><h1 aria-label="South East Queensland Weather Desk"><span class="seq">SEQ</span> Weather Desk</h1>
+    <p class="byline">by Namrex Weather Co.</p>
+    <p class="region">Darling Downs · South East Queensland</p>
     <p class="sub" id="subRain">Toowoomba and Brisbane radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
     <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
