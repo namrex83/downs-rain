@@ -278,9 +278,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls rainOnly">
     <div class="field"><span class="eyebrow">View</span>
-      <div class="seg"><button id="vDay" aria-pressed="true">Daily</button><button id="vWeek" aria-pressed="false">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
-    <div class="field" id="dayField"><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
-    <div class="field" id="weekField" hidden><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
+      <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
+    <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
+    <div class="field" id="weekField"><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><span class="eyebrow">Gauges</span>
@@ -466,7 +466,7 @@ function tpBind(id, step){ $(id).addEventListener("click", e => { const b = e.ta
 const tpToday = times => Math.max(0, times.findIndex(t => qDate(t) >= qDate(Date.now() / 1000)));
 const tpMove = (k, i, n) => k === "first" ? 0 : k === "last" ? n - 1 : Math.max(0, Math.min(n - 1, i + (k === "next" ? 1 : -1)));
 const bust = () => "?v=" + Date.now();
-let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "day", ring = null, siloDays = [];
+let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "week", ring = null,   /* the Rainfall tab opens on the last 7 days */ siloDays = [];
 const isSilo = d => siloDays.includes(d);   // days before the radar record (or missed by it), from SILO's gauge-based map
 const allDays = () => [...new Set([...idx.days, ...siloDays])].sort();
 let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
