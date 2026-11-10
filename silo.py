@@ -9,7 +9,7 @@ SILO (Queensland Government, licensed CC BY 4.0) publishes a daily rainfall map 
 rain day as the radar maps. For each day from the start of the season with no finished radar map, this puts
 SILO's map onto the radar maps' grid and writes data/silo/<day>.json; data/silo/index.json lists them.
 
-The season total (data/season.json) adds up each day from the start of the season: the radar map where there
+The season total (data/season.json) and the last 14 days (data/fortnight.json) add up each day from the start of the season: the radar map where there
 is one, otherwise SILO's.
 """
 import datetime as dt
@@ -23,6 +23,7 @@ import numpy as np
 DATA = "data"
 SILO_DIR = os.path.join(DATA, "silo")
 SEASON_OUT = os.path.join(DATA, "season.json")
+FORTNIGHT_OUT = os.path.join(DATA, "fortnight.json")
 SILO_URL = "https://s3-ap-southeast-2.amazonaws.com/silo-open-data/Official/annual/daily_rain/{year}.daily_rain.nc"
 REFRESH_DAYS = 10            # SILO revises recent days as late gauge reports come in: fetch these again
 QLD = dt.timezone(dt.timedelta(hours=10))
@@ -134,8 +135,20 @@ def fill_from_silo():
 
 
 def season():
+    """The season total, and the last 14 days (data/fortnight.json), from the radar and SILO days."""
     today = dt.datetime.now(QLD).date()
-    start = season_start(today)
+    span_total(season_start(today), SEASON_OUT, "Season")
+    radar = set(radar_days())
+    try:
+        silo = set(json.load(open(os.path.join(SILO_DIR, "index.json")))["days"])
+    except (OSError, ValueError, KeyError):
+        silo = set()
+    if radar | silo:
+        last = dt.date.fromisoformat(max(radar | silo))
+        span_total(last - dt.timedelta(days=13), FORTNIGHT_OUT, "14-day")
+
+
+def span_total(start, out_path, label):
     radar = set(radar_days())
     try:
         silo = set(json.load(open(os.path.join(SILO_DIR, "index.json")))["days"])
@@ -143,7 +156,7 @@ def season():
         silo = set()
     have = sorted(d for d in radar | silo if d >= start.isoformat())
     if not have:
-        print("No days for the season total yet")
+        print(f"No days for the {label} total yet")
         return
     days = days_between(start, dt.date.fromisoformat(have[-1]))
     total, used_radar, used_silo, gauges, meta0 = None, [], [], {}, None
@@ -158,7 +171,7 @@ def season():
             continue
         g = np.array(m["grid"], np.float32).reshape(m["grid_h"], m["grid_w"])
         if total is not None and g.shape != total.shape:
-            print(f"  season: skipping {d}, grid size changed")
+            print(f"  {label}: skipping {d}, grid size changed")
             continue
         g = np.where(g < 0, np.nan, g / 10)
         total = g if total is None else total + g
@@ -179,12 +192,12 @@ def season():
            "gauges": list(gauges.values()),
            "grid": np.where(np.isnan(total), -1, np.round(total * 10)).astype(int).flatten().tolist()}
     text = json.dumps(out, separators=(",", ":"))
-    if os.path.exists(SEASON_OUT) and open(SEASON_OUT).read() == text:
-        print("Season total unchanged")
+    if os.path.exists(out_path) and open(out_path).read() == text:
+        print(f"{label} total unchanged")
         return
-    with open(SEASON_OUT, "w") as f:
+    with open(out_path, "w") as f:
         f.write(text)
-    print(f"Wrote {SEASON_OUT}: {days[0]} to {days[-1]}, {len(used_radar)} radar day(s), {len(used_silo)} SILO day(s), "
+    print(f"Wrote {out_path}: {days[0]} to {days[-1]}, {len(used_radar)} radar day(s), {len(used_silo)} SILO day(s), "
           f"{len(out['missing'])} missing; wettest {np.nanmax(total):.0f} mm")
 
 
