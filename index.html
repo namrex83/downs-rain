@@ -137,7 +137,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
-#sField{max-width:100%;overflow-x:auto;scrollbar-width:none}#sField::-webkit-scrollbar{display:none}#sField button{flex:0 0 auto;white-space:nowrap}
+#sFieldWrap{flex:1 1 260px;min-width:0} #sField{width:100%}
 #dayField{order:3;flex:1 1 100%}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
   -webkit-appearance:none;appearance:none;cursor:pointer;
@@ -240,9 +240,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   .field{gap:2px}
   label,.eyebrow{font-size:.6rem}
   .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
-  #sField{display:grid;grid-template-columns:repeat(4,1fr);border-radius:14px;gap:1px;background:var(--line)}   /* 7 storm maps: two rows on a phone */
-  #sField button{padding:0 4px} #sField button:first-child{grid-column:span 2}
-  .field:has(> #sField){flex:1 1 100%}
+  #sFieldWrap{flex:1 1 100%}
   select{font-size:.85rem;min-height:34px;padding:4px 8px}
   /* four tabs: put them on their own full-width row under the title */
   header{flex-wrap:wrap;align-items:flex-start;row-gap:14px}
@@ -290,8 +288,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls stormOnly" hidden>
-    <div class="field"><span class="eyebrow">Show</span>
-      <div class="seg" id="sField"><button data-f="mix" aria-pressed="true">Combined</button><button data-f="scp" aria-pressed="false">Supercell</button><button data-f="sev" aria-pressed="false">Severity</button><button data-f="li" aria-pressed="false">Lifted index</button><button data-f="cape" aria-pressed="false">CAPE</button><button data-f="shear" aria-pressed="false">Shear</button><button data-f="srh" aria-pressed="false">Helicity</button></div></div>
+    <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
+      <option value="mix" selected>Combined storm risk</option>
+      <option value="scp">Supercell: rotating storms</option>
+      <option value="sev">Severity: hail and damaging wind</option>
+      <option value="li">Lifted index: how unstable the air is</option>
+      <option value="cape">CAPE: storm energy</option>
+      <option value="shear">Shear: wind change with height</option>
+      <option value="srh">Helicity: spin near the ground (tornado risk)</option>
+    </select></div>
     <div class="field"><span class="eyebrow">Model</span>
       <div class="seg" id="sModel"><button data-m="gfs" aria-pressed="true">GFS</button><button data-m="ecmwf" aria-pressed="false">ECMWF</button></div></div>
     <div class="field"><label for="sDay">Day · Qld time</label><select id="sDay"></select></div>
@@ -2509,10 +2514,7 @@ $("sModel").onclick = e => {
   sModel = b.dataset.m; try { localStorage.setItem("sModel", sModel); } catch(_){}
   startStorms();
 };
-$("sField").onclick = e => {
-  const b = e.target.closest("button"); if (!b) return;
-  sField = b.dataset.f; [...$("sField").children].forEach(x => x.setAttribute("aria-pressed", x === b)); sDraw();
-};
+$("sField").onchange = e => { sField = e.target.value; sDraw(); };
 const setWhen = worst => { sWorst = worst; $("sWorst").setAttribute("aria-pressed", worst); $("sHourly").setAttribute("aria-pressed", !worst);
   $("sHourField").hidden = worst; if (worst) sLoop(false); fitMap(); sDraw(); };
 // "By hour" loop: steps through the chosen day's hours, pausing a moment on the last one
