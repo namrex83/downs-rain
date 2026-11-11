@@ -138,6 +138,13 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
 #sFieldWrap{flex:1 1 260px;min-width:0} #sField{width:100%}
+.hailkey{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin-top:8px;font-size:.78rem;color:var(--ink-2)}
+.hailkey:empty{display:none}
+.hailkey span{display:inline-flex;align-items:center;gap:5px} .hailkey .hknote{color:var(--ink-3)}
+.hailkey i{width:16px;height:12px;border-radius:2px;display:inline-block}
+.hailkey .hk1{background:repeating-linear-gradient(135deg,rgba(214,0,214,.95) 0 2px,transparent 2px 5px);outline:1px solid rgba(214,0,214,.5)}
+.hailkey .hk2{background:rgba(214,0,214,.8)}
+.hailtxt{color:#b000b0}
 .gnote{font-size:.78rem;color:var(--ink-3);text-align:left;padding-top:8px}
 .rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
 #dayField{order:3;flex:1 1 100%}
@@ -287,6 +294,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><span class="eyebrow">Gauges</span>
       <div class="seg" id="gSeg"><button data-g="1" aria-pressed="true">On</button><button data-g="0" aria-pressed="false">Off</button></div></div>
+    <div class="field"><span class="eyebrow">Hail cores</span>
+      <div class="seg" id="hSeg"><button data-h="1" aria-pressed="true">On</button><button data-h="0" aria-pressed="false">Off</button></div></div>
     <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
   </div>
 
@@ -395,7 +404,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap windOld" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOld" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
-  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div></div>
+  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
@@ -652,7 +661,53 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
+
+// Hail cores: spots where the radar saw its strongest echoes (about 55 dBZ and up) in any scan of the day,
+// from data/hail/<day>.json (made by the radar job): 1 = possible hail, 2 = likely hail. Shown over the Daily
+// and Last 7 days maps.
+let hailLayer = null, hail = null, hailOn = true;
+try { hailOn = localStorage.getItem("hailOn") !== "0"; } catch(e){}
+const hailFiles = {};
+const hailJSON = d => d === "today" ? getJSON("data/hail/today.json").catch(() => null)
+  : hailFiles[d] || (hailFiles[d] = getJSON(`data/hail/${d}.json`).catch(() => null));
+function hailPattern(ctx, col){
+  const c = document.createElement("canvas"); c.width = c.height = 8;
+  const x = c.getContext("2d"); x.strokeStyle = col; x.lineWidth = 2.2;
+  x.beginPath(); x.moveTo(-2, 10); x.lineTo(10, -2); x.moveTo(-2, 2); x.lineTo(2, -2); x.moveTo(6, 10); x.lineTo(10, 6); x.stroke();
+  return ctx.createPattern(c, "repeat");
+}
+async function drawHail(){
+  if (hailLayer) { map.removeLayer(hailLayer); hailLayer = null; }
+  hail = null; $("hailKey").innerHTML = "";
+  if (view === "season" || view === "fortnight" || !meta) return;
+  const days = view === "week" ? (meta.days || []).filter(d => !isSilo(d)) : isSilo($("day").value) ? [] : [$("day").value];
+  const hs = (await Promise.all(days.map(hailJSON))).filter(Boolean);
+  if (!hs.length || tab !== "rain") return;
+  const W = hs[0].grid_w, H = hs[0].grid_h, cells = new Uint8Array(W * H);
+  for (const h of hs) if (h.grid_w === W && h.grid_h === H)
+    for (let k = 0; k < W * H; k++){ const v = h.cells.charCodeAt(k) - 48; if (v > cells[k]) cells[k] = v; }
+  if (!cells.some(v => v)) return;
+  hail = {cells, W, H, bounds: hs[0].bounds};
+  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">strongest radar echoes${view === "week" ? " over the 7 days" : " in the day"}${hailOn ? "" : " · turned off above"}</span>`;
+  if (!hailOn) return;
+  const f = 4, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
+  const ctx = cv.getContext("2d"), stripes = hailPattern(ctx, "rgba(214,0,214,.95)");
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++){
+    const v = cells[r * W + c]; if (!v) continue;
+    ctx.fillStyle = v === 2 ? "rgba(214,0,214,.8)" : stripes; ctx.fillRect(c * f, r * f, f, f);
+  }
+  const [s, w, n, e] = hail.bounds;
+  hailLayer = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 1, interactive: false});
+  if (tab === "rain") hailLayer.addTo(map);
+}
+function hailAt(lat, lon){
+  if (!hail) return 0;
+  const [s, w, n, e] = hail.bounds, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const fx = (lon - w) / (e - w), fy = (merc(n) - merc(lat)) / (merc(n) - merc(s));
+  if (fx < 0 || fx >= 1 || fy < 0 || fy >= 1) return 0;
+  return hail.cells[Math.floor(fy * hail.H) * hail.W + Math.floor(fx * hail.W)];
+}
 async function draw(){
   const week = view === "week", fort = view === "fortnight", season = view === "season" || fort;   // fort: the last 14 days, built like the season
   const ad = allDays(), latestEnd = ad[ad.length - 1];
@@ -746,6 +801,10 @@ function drawGauges(){
 $("gSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; gaugesOn = b.dataset.g === "1";
   try { localStorage.setItem("gaugesOn", gaugesOn ? "1" : "0"); } catch(_){} drawGauges(); declutter(); };
 map.on("zoomend", () => { if (tab === "rain") { drawGauges(); declutter(); } });
+const setHailSeg = () => [...$("hSeg").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.h === "1") === hailOn));
+setHailSeg();
+$("hSeg").onclick = async e => { const b = e.target.closest("button"); if (!b) return; hailOn = b.dataset.h === "1"; setHailSeg();
+  try { localStorage.setItem("hailOn", hailOn ? "1" : "0"); } catch(_){} await drawHail(); readTap(); };
 // Earlier weeks are added up here from the finished days' files, like the job does for the latest week,
 // so no extra files are kept. Their map is drawn from the 2 km tap-to-read grid, smoothed.
 const dayFiles = {};
@@ -813,7 +872,8 @@ function readTap(){
   setPin(v == null ? "No data" : `${fmt(v)} mm`);
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
-  $("tap").innerHTML = v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`;
+  const hz = hailAt(tapAt.lat, tapAt.lng);
+  $("tap").innerHTML = (hz ? `<b class="hailtxt">${hz === 2 ? "Likely" : "Possible"} hail core</b> seen here by the radar. ` : "") + (v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`);
 }
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
@@ -2452,6 +2512,7 @@ function setTab(t, first){
   if (idx) legend();   // the Forecast tab shares the rainfall legend
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
+  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; }
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
     if (overlay) map.removeLayer(overlay);
