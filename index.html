@@ -1018,7 +1018,7 @@ function sDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (sOverlay) map.removeLayer(sOverlay);
-  sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: STORM_OPACITY, interactive: false}).addTo(map);
+  sOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: STORM_OPACITY, interactive: false}); if (tab === "storms") sOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   sLegend(); sReadTap();
   if ((sField === "srh" || sField === "scp") && !S.srh)
     $("sTap").innerHTML = `<span class="empty">No helicity in this ${sModel === "ecmwf" ? "ECMWF" : "GFS"} forecast yet. It appears after the storm job next runs on GitHub.</span>`;
@@ -1182,7 +1182,7 @@ function fDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (fOverlay) map.removeLayer(fOverlay);
-  fOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}).addTo(map);
+  fOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}); if (tab === "fc") fOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   fReadTap();
 }
 function fReadTap(){
@@ -1639,7 +1639,7 @@ function wDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (wOverlay) map.removeLayer(wOverlay);
-  wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}).addTo(map);
+  wOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.8, interactive: false}); if (tab === "wind") wOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   wDrawArrows();
   $("wLbl").textContent = wTimeText(W.times[i]); dayBarLight("wDays", W.times[i]); dayBarValues("wDays", windDay); drawObs();
   $("wLegendTitle").textContent = spray ? "Spray conditions · wind, Delta T and inversion risk" : (wShow === "gust" && W.gust ? "Wind gusts" : "Wind speed") + " (km/h) · arrows show direction";
@@ -2051,7 +2051,7 @@ function tDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (tOverlay) map.removeLayer(tOverlay);
-  tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
+  tOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}); if (tab === "temp") tOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   $("tLbl").textContent = tWhen(i); dayBarLight("tDays", T.times[i]); dayBarValues("tDays", tempDay); drawObs();
   $("tLegendTitle").textContent = {now: "Temperature (°C)", max: "Highest temperature of the day (°C)", min: "Lowest temperature of the day (°C)"}[tShow];
   tReadTap();
@@ -2172,7 +2172,7 @@ function oDraw(){
   }
   ctx.putImageData(img, 0, 0);
   if (oOverlay) map.removeLayer(oOverlay);
-  oOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}).addTo(map);
+  oOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}); if (tab === "soil") oOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   $("oLbl").textContent = oWhen(i);
   $("oTimeline").style.opacity = oShow === "avg" ? .45 : "";   // the average doesn't change with the slider
   oReadTap();
