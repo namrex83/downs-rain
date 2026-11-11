@@ -138,6 +138,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
 #sFieldWrap{flex:1 1 260px;min-width:0} #sField{width:100%}
+.gnote{font-size:.78rem;color:var(--ink-3);text-align:left;padding-top:8px}
 .rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
 #dayField{order:3;flex:1 1 100%}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
@@ -653,7 +654,7 @@ async function draw(){
     if (meta.date) $("day").options[0].text = `${rainDay(meta.date)} (so far)`;
     $("notes").textContent = `Provisional: the rain since 9am ${part(addDays(meta.date, -1), {weekday:"long"})}, corrected with the gauge readings so far (BOM gauges, and any local readings entered). It's corrected properly once the day finishes at 9am ${part(meta.date, {weekday:"long"})}.`;
     $("gauges").innerHTML = `<thead><tr><th>Gauge (so far)</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n" title="How far the radar was above (+) or below (−) the gauge">Radar vs gauge</th><th class="n">Map</th></tr></thead><tbody>` +
-      g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.unplaced?"–":pctDiff(x.mm, x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+      g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${unused(x)?" *":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.unplaced?"–":pctDiff(x.mm, x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>` + unusedNote(g);
     drawGauges(); declutter();
     return;
   }
@@ -692,7 +693,7 @@ async function draw(){
   $("stats").innerHTML = stat(`×${meta.bias}`, "Radar scaled by, at Dalby") + stat(meta.gauges_used, "Gauges used") + stat(`${meta.coverage_pct}%`, "Of the day scanned");
   if (meta.coverage_pct < 80) $("notes").textContent = `Some radar scans were missed (${100-meta.coverage_pct}% of the day), so the radar part may read low. Gauge readings still anchor the map.`;
   $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n" title="How far the radar was above (+) or below (−) the gauge">Radar vs gauge</th><th class="n">Map</th></tr></thead><tbody>` +
-    g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.ignored?" (ignored: read dry under widespread rain)":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.unplaced?"–":pctDiff(x.mm, x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
+    g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${unused(x)?" *":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.unplaced?"–":pctDiff(x.mm, x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>` + unusedNote(g);
   drawGauges(); declutter();
 }
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
@@ -763,6 +764,9 @@ const gaugeMarker = x => L.circleMarker([x.lat, x.lon], {radius:5, color:"#1c262
   .addTo(gaugeLayer);
 // radar compared with the gauge: +50% = the radar read half as much again as the gauge; blank when the gauge
 // read (almost) nothing, where a percentage means little
+// gauges that didn't go into the correction: read dry under widespread rain, or outside the radar's reach
+const unused = x => !!x.ignored || x.radar_mm == null;
+const unusedNote = g => g.some(x => !x.unplaced && unused(x)) ? `<tfoot><tr><td colspan="5" class="gnote">* Not used to correct the map: ${[g.some(x => !x.unplaced && x.ignored) ? "read dry or far lower than the radar under widespread rain (likely blocked or faulty)" : "", g.some(x => !x.unplaced && x.radar_mm == null) ? "outside the radar's reach" : ""].filter(Boolean).join("; ")}.</td></tr></tfoot>` : "";
 const pctDiff = (g, r) => g == null || r == null || g < 0.5 ? "–" : (d => (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d) + "%")(Math.round((r - g) / g * 100));
 const stat = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
 
