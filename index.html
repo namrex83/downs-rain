@@ -622,7 +622,34 @@ async function init(){
   for (let end = ad[ad.length - 1]; end && end >= ad[0]; end = addDays(end, -7)) ends.push(end);
   $("weekSel").innerHTML = ends.map((d, i) => `<option value="${i ? d : "latest"}">${span(addDays(d, -7), d)}${i ? "" : " (latest)"}</option>`).join("");
   $("weekSel").onchange = show;
+  try { const d = await stormDay(); if (d && view === "week") { sel.value = d; setView("day"); return; } } catch(e){}
   if (tab === "rain") show();
+}
+
+// The Rainfall tab opens on the last 7 days, unless the radar shows a storm around Dalby: then it opens on that
+// rain day instead: the running total since 9am, or (until 6pm) the day that finished at 9am this morning.
+const STORM_NEAR = {lat: -27.18, lon: 151.26, km: 50, mm: 5};
+function rainNear(m){
+  const corr = !("as_of" in m) || m.provisional;   // finished days are gauge-corrected; the running total once gauges report
+  const grid = corr ? m.grid : (m.grid_raw || m.grid), mm = corr ? STORM_NEAR.mm : STORM_NEAR.mm * 2;   // radar alone reads high
+  const [s, w, n, e] = m.bounds, W = m.grid_w, H = m.grid_h, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const dLat = STORM_NEAR.km / 111, dLon = STORM_NEAR.km / (111 * Math.cos(STORM_NEAR.lat * Math.PI / 180));
+  for (let r = 0; r < H; r++){
+    const lat = 360 / Math.PI * Math.atan(Math.exp(merc(n) - (r + .5) / H * (merc(n) - merc(s)))) - 90;
+    if (Math.abs(lat - STORM_NEAR.lat) > dLat) continue;
+    for (let c = 0; c < W; c++){
+      const lon = w + (c + .5) / W * (e - w), v = grid[r * W + c];
+      if (Math.abs(lon - STORM_NEAR.lon) > dLon || v < 0) continue;
+      if (((lat - STORM_NEAR.lat) / dLat) ** 2 + ((lon - STORM_NEAR.lon) / dLon) ** 2 <= 1 && v / 10 >= mm) return true;
+    }
+  }
+  return false;
+}
+async function stormDay(){
+  try { if (rainNear(await getJSON("data/today.json"))) return "today"; } catch(e){}
+  const last = idx.days[idx.days.length - 1], qldHour = Math.floor(Date.now() / 3600000 + 10) % 24;
+  if (last && last === addDays(runningEnd(), -1) && qldHour < 18 && rainNear(await getJSON(`data/${last}.json`))) return last;
+  return null;
 }
 
 async function show(){ if (tab !== "rain") return; await draw(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
