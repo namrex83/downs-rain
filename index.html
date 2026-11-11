@@ -1422,12 +1422,15 @@ const hDay = t => `${part(qDate(t), {weekday: "short"})} ${part(qDate(t), {day: 
 const hWhen = t => `${hDay(t)}, ${hHour(t)}`;
 function fChartDrawHourly(){
   const {hourly, pinned} = FC, cum = fcMode === "cum";
-  // the time span: from 10am at the start of the first forecast day not finished yet, for the chosen 3/7/9/15 days
+  // the time span: the same days as the map. 3/7/9/15 days from 10am at the start of the first forecast day not
+  // finished yet; Daily: the one day picked (10am to 10am)
   const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
-  const firstEnd = nowQ.getUTCHours() < 10 ? today : addDays(today, 1);
+  const firstEnd = !fSumN && F ? F.days[+$("fDay").value] : nowQ.getUTCHours() < 10 ? today : addDays(today, 1);
   const t0 = Date.parse(addDays(firstEnd, -1) + "T00:00:00Z") / 1000;   // 00z = 10am Qld
-  const lastAll = Math.max(...Object.values(hourly).map(s => s[s.length - 1][0]));
-  const t1 = fSumN ? t0 + fSumN * 86400 : lastAll;
+  const t1 = t0 + (fSumN || 1) * 86400;
+  // a model whose run stops before the end of the chosen days is left off the chart altogether (its total
+  // would read low), and named underneath instead
+  const reaches = m => hourly[m].length && hourly[m][hourly[m].length - 1][0] >= t1 - 3 * 3600;
   const STEP = cum ? 3600 : 10800;   // the 3-hour view adds the rain up in blocks: midnight-3am, 3-6am ... Qld time
   const models = Object.keys(hourly).sort((a, b) => (H_IDS[a] ? 1 : 0) - (H_IDS[b] ? 1 : 0));   // the page's three on top
   const vals = {};
@@ -1443,7 +1446,8 @@ function fChartDrawHourly(){
     if (!cum && block !== null && block <= t1) out.push([block, bsum]);
     if (out.length) vals[m] = out;
   }
-  const shown = models.filter(m => vals[m]);
+  const short = models.filter(m => vals[m] && !reaches(m));
+  const shown = models.filter(m => vals[m] && reaches(m));
   if (!shown.length) { $("fChart").hidden = true; return; }
   const valAt = (m, t) => { const p = vals[m].find(x => x[0] === t); return p ? p[1] : null; };
   const times = [...new Set(shown.flatMap(m => vals[m].map(p => p[0])))].sort((a, b) => a - b);
@@ -1458,7 +1462,9 @@ function fChartDrawHourly(){
   const medOf = t => { const v = medModels.map(m => medVal(m, t)).filter(x => x != null).sort((a, b) => a - b);
     if (useAvg) return v.length === medModels.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
     return v.length >= 3 ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
-  const bom = FC.bom, bomDays = bom ? bom.days.filter(x => x.min != null && bomEnd(x.d) > t0 && bomEnd(x.d) - 86400 < t1) : [];
+  const bomAll = FC.bom, bomReach = bomAll && bomAll.days.some(x => x.min != null && bomEnd(x.d) >= t1 - 12 * 3600);   // BOM's days end at midnight
+  const bom = bomReach ? bomAll : null, bomDays = bom ? bom.days.filter(x => x.min != null && bomEnd(x.d) > t0 && bomEnd(x.d) - 86400 < t1) : [];
+  const shortNames = [...short.map(hName), ...(bomAll && !bomReach ? [`BOM ${bomAll.name}`] : [])];
   const bomSum = cum ? bomDays.reduce((a, x) => a + x.min, 0) : 0;   // so the BOM line fits too
   const top = Math.max(cum ? 5 : 1, bomSum, ...shown.flatMap(m => vals[m].map(p => p[1])));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
@@ -1469,11 +1475,13 @@ function fChartDrawHourly(){
   for (let v = 0; v <= ymax + 1e-9; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${+v.toFixed(1)}</text>`;
   // a tick and label at each Queensland midnight; light shading for night (6pm to 6am) helps see morning vs afternoon
   const days = Math.round((t1 - t0) / 86400);
+  if (days <= 1) for (let t = t0 + 6 * 3600; t < t1; t += 6 * 3600)   // one day: label the hours instead
+    g += `<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${H0 - B0}" y2="${H0 - B0 + 3}" stroke="currentColor" stroke-opacity=".4"/><text x="${X(t).toFixed(1)}" y="${H0 - 7}" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".7">${hHour(t)}</text>`;
   for (let t = Math.ceil((t0 + 36000) / 86400) * 86400 - 36000, k = 0; t <= t1; t += 86400, k++){
     const night0 = Math.max(t0, t - 6 * 3600), night1 = Math.min(t1, t + 6 * 3600);
     g += `<rect x="${X(night0).toFixed(1)}" y="${T0}" width="${(X(night1) - X(night0)).toFixed(1)}" height="${H0 - T0 - B0}" fill="currentColor" fill-opacity=".045"/>`;
     const lx = X(t) + (W0 - L0 - R0) * 43200 / (t1 - t0);   // label at midday
-    if ((days <= 8 || k % 2 === 0) && lx < W0 - R0 - 12) g += `<text x="${lx.toFixed(1)}" y="${H0 - 7}" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(qDate(t + 1), {weekday: "short"}).slice(0, 2)} ${part(qDate(t + 1), {day: "numeric"})}</text>`;
+    if (days > 1 && (days <= 8 || k % 2 === 0) && lx < W0 - R0 - 12) g += `<text x="${lx.toFixed(1)}" y="${H0 - 7}" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(qDate(t + 1), {weekday: "short"}).slice(0, 2)} ${part(qDate(t + 1), {day: "numeric"})}</text>`;
   }
   const poly = (pts, attrs) => `<polyline points="${pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
   for (const m of shown){
@@ -1499,7 +1507,7 @@ function fChartDrawHourly(){
   const none = [...Object.keys(H_IDS), ...Object.keys(OM_MODELS)].filter(m => !vals[m] && !hourly[m]).map(m => H_NAME[m] || OM_MODELS[m][0].replace(/ \(.*\)/, ""));
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${fmt(Math.max(...vals[m].map(p => p[1])))}</b></span>`).join("")}${lastMed != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>${MED} <b>${fmt(lastMed)}</b></span>` : ""}${bomTot != null ? `<span title="Bureau of Meteorology forecast for ${bom.name}"><i style="background:repeating-linear-gradient(90deg,${BOM_COL} 0 2px,transparent 2px 5px)"></i>BOM ${bom.name} <b>${fmt(bomTot)}</b></span>` : ""}${none.length ? `<span style="grid-column:1/-1">${none.join(", ")}: no data from Open-Meteo just now</span>` : ""}</div>
-    <div class="cfoot"><span>${cum ? "Running total, hour by hour (shaded = night)" : "Rain in each 3 hours; key shows each model's wettest 3 hours"}. ${useAvg ? `Average of ${medModels.map(hName).join(" and ")}, the only model${medModels.length > 1 ? "s" : ""} that run${medModels.length > 1 ? "" : "s"} the whole span` : `Median of the ${medModels.length} models that run the whole span${medModels.length < shown.length ? ` (not ${shown.filter(m => !medModels.includes(m)).map(hName).join(", ")}, which stop sooner)` : ""}`}.</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">3-hourly</button></div></div>`;
+    <div class="cfoot"><span>${cum ? "Running total, hour by hour (shaded = night)" : "Rain in each 3 hours; key shows each model's wettest 3 hours"}.${shortNames.length ? ` Not shown: ${shortNames.join(", ")} (${shortNames.length > 1 ? "their forecasts stop" : "its forecast stops"} before the end of these ${days > 1 ? `${days} days` : "this day"}).` : ""} ${useAvg ? `Average of ${medModels.map(hName).join(" and ")}, the only model${medModels.length > 1 ? "s" : ""} that run${medModels.length > 1 ? "" : "s"} the whole span` : `Median of the ${medModels.length} models that run the whole span${medModels.length < shown.length ? ` (not ${shown.filter(m => !medModels.includes(m)).map(hName).join(", ")}, which stop sooner)` : ""}`}.</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="day" aria-pressed="${!cum}">3-hourly</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
