@@ -216,8 +216,9 @@ jobs:
               return top if top else h - w
           
           
-          def decode_rate(png_bytes):
-              """Return (rain rate mm/h as a square float array, header offset in pixels)."""
+          def decode_rate(png_bytes, text_rows=0):
+              """Return (rain rate mm/h as a square float array, header offset in pixels). text_rows: blank this many rows
+              at the bottom, where some pictures (Brisbane, the 128 km one) print their date and time over the map."""
               im = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
               a = np.asarray(im)
               off = map_offset(a)
@@ -235,6 +236,8 @@ jobs:
                   b -= 1
               mask[:t] = False
               mask[b:] = False
+              if text_rows:
+                  mask[max(0, b - text_rows):] = False
               if mask.any():
                   px = sq[mask][:, :3].astype(np.int32)
                   d2 = ((px[:, None, :] - _PAL_RGB[None, :, :]) ** 2).sum(-1)
@@ -429,29 +432,25 @@ jobs:
               stronger echo. A lone pixel with no strong neighbour is dropped (radar noise)."""
               p = hail_path(day)
               hm = np.load(p) if os.path.exists(p) else np.zeros((n, n), np.float32)
-              for kind, lat0, lon0, rng in (("B", B_LAT, B_LON, B_RANGE_KM), ("C", RADAR_LAT, RADAR_LON, C_RANGE_KM)):
-                  pk = hail_path(day, kind)
-                  if os.path.exists(pk):
-                      vals, _, inside = onto(n, np.load(pk), lat0, lon0, rng)
-                      hm = np.maximum(hm, np.where(inside, vals, 0))
-              if name == "today":   # TEMPORARY check: each picture's strongest echoes today, as images
-                  os.makedirs(os.path.join(DATA, "hail"), exist_ok=True)
-                  for kind in ("", "B", "C"):
-                      pk = hail_path(day, kind)
-                      if not os.path.exists(pk):
-                          continue
-                      arr = np.load(pk)
-                      img = np.zeros(arr.shape + (4,), np.uint8)
-                      for thr, col in ((80, (255, 0, 0)), (120, (200, 0, 0)), (200, (120, 0, 120)), (300, (0, 0, 0))):
-                          img[arr >= thr] = col + (255,)
-                      img[(arr > 0) & (arr < 80)] = (200, 200, 255, 255)
-                      Image.fromarray(img, "RGBA").save(os.path.join(DATA, "hail", f"check_{kind or 'T'}.png"))
-                      log(f"  hail check {kind or 'T'}: {arr.shape}, px >=120: {(arr >= 120).sum()}, >=200: {(arr >= 200).sum()}, >=300: {(arr >= 300).sum()}")
+              # each spot takes the radar picture that sees it best (lowest beam): the 128 km Toowoomba picture within about
+              # 110 km of Toowoomba, otherwise whichever of Toowoomba and Brisbane is nearer. (Taking the strongest of all of
+              # them widened every core, since the radars line up slightly differently and see storms at different heights.)
+              k = km_per_px(n)
+              rr, cc = np.mgrid[0:n, 0:n].astype(np.float32)
+              dT = np.hypot((cc + 0.5 - n / 2) * k, (n / 2 - rr - 0.5) * k)
+              pb = hail_path(day, "B")
+              if os.path.exists(pb):
+                  vals, dB, inside = onto(n, np.load(pb), B_LAT, B_LON, B_RANGE_KM)
+                  hm = np.where(inside & (dB < dT), vals, hm)
+              pc = hail_path(day, "C")
+              if os.path.exists(pc):
+                  vals, _, inside = onto(n, np.load(pc), RADAR_LAT, RADAR_LON, C_RANGE_KM)
+                  hm = np.where(inside & (dT < 110), vals, hm)
               lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
               nb = sum(pad[1 + dr:1 + dr + n, 1 + dc:1 + dc + n] for dr in (-1, 0, 1) for dc in (-1, 0, 1))
-              lv[nb < 3] = 0          # a core is at least a few pixels: lone specks and pairs are dropped as noise
+              lv[nb < 4] = 0          # a core is a blob: lone specks, pairs and one-pixel-wide streaks (interference) are dropped
               mm = np.nan_to_num(to_mercator(lv, 512), nan=0)
               h, w = (mm.shape[0] // 2) * 2, (mm.shape[1] // 2) * 2
               b4 = mm[:h, :w].reshape(h // 2, 2, w // 2, 2)
@@ -1029,7 +1028,7 @@ jobs:
                           if day in st["done"] or not win:
                               last_c = t
                               continue
-                          rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm))
+                          rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm), text_rows=24)
                           step = (t - last_c).total_seconds() / 60 if last_c else NOMINAL_STEP_MIN
                           if step > MAX_STEP_MIN:
                               step = NOMINAL_STEP_MIN
@@ -1064,7 +1063,7 @@ jobs:
                           if day in st["done"] or not win:
                               last_b = t
                               continue
-                          rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm))
+                          rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm), text_rows=24)
                           step = (t - last_b).total_seconds() / 60 if last_b else NOMINAL_STEP_MIN
                           if step > MAX_STEP_MIN:
                               step = NOMINAL_STEP_MIN
