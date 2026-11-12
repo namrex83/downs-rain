@@ -186,6 +186,8 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 .nolabel .pinlabel{display:none}   /* Radar: just the marker, no label */
 .pinlabel{background:#fff;color:#1c2621;border:2px solid #1c2621;border-radius:8px;padding:3px 9px;font:700 1.15rem var(--mono);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.45)}
 .pinlabel::before{border-top-color:#1c2621!important}
+.pin.dot{width:14px;height:14px;margin:-7px 0 0 -7px;border-width:3px}
+.pinlabel.dotlabel{font-size:1rem;padding:2px 7px}
 .locate a{display:flex!important;align-items:center;justify-content:center;width:34px!important;height:34px!important;cursor:pointer}
 .locate svg{width:20px;height:20px}
 .locate a.busy svg{animation:spin 1s linear infinite}
@@ -307,6 +309,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Hail cores</span>
       <div class="seg" id="hSeg"><button data-h="1" aria-pressed="true">On</button><button data-h="0" aria-pressed="false">Off</button></div></div>
     <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
+    <div class="field"><span class="eyebrow">Extra dots</span>
+      <div class="seg"><button id="dotAdd" aria-pressed="false">＋ Add dots</button><button id="dotClear" hidden>Clear</button></div></div>
   </div>
 
   <div class="controls stormOnly" hidden>
@@ -684,7 +688,7 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); fitMap(); }
 
 // Hail: spots where the radar's echo reached the top of its scale (about 63 dBZ and up): in one scan of the day,
 // possible; in two or more, likely. From data/hail/<day>.json (made by the radar job). Shown over the Daily
@@ -951,7 +955,27 @@ function setPin(label){
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
 const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
-map.on("click", ev => { tapAt = ev.latlng; readAnyTap(); });
+map.on("click", ev => { if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
+
+// Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
+// several spots can be compared (or screenshotted) at once. They follow the day or view picked; Clear removes them.
+let dotMode = false;
+const dots = [], dotLayer = L.layerGroup();
+const dotLabel = ll => { const v = valueAt(ll.lat, ll.lng); return v == null ? "–" : `${fmt(v)} mm`; };
+function addDot(ll){
+  const m = L.marker(ll, {interactive: false, keyboard: false, zIndexOffset: 900,
+      icon: L.divIcon({className: "", html: '<div class="pin dot"></div>', iconSize: [0, 0]})})
+    .bindTooltip(dotLabel(ll), {permanent: true, direction: "top", offset: [0, -10], className: "pinlabel dotlabel"});
+  dots.push({ll, m}); m.addTo(dotLayer); dotLayer.addTo(map); $("dotClear").hidden = false;
+}
+function refreshDots(){
+  if (tab !== "rain") { map.removeLayer(dotLayer); return; }
+  for (const d of dots) d.m.setTooltipContent(dotLabel(d.ll));
+  if (dots.length) dotLayer.addTo(map);
+}
+function setDotMode(on){ dotMode = on; $("dotAdd").setAttribute("aria-pressed", on); $("dotAdd").textContent = on ? "Tap the map… (done)" : "＋ Add dots"; }
+$("dotAdd").onclick = () => setDotMode(!dotMode);
+$("dotClear").onclick = () => { dots.length = 0; dotLayer.clearLayers(); setDotMode(false); $("dotClear").hidden = true; };
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
 // The blue circle shows how accurate the phone thinks its position is.
@@ -2588,7 +2612,7 @@ function setTab(t, first){
   if (idx) legend();   // the Forecast tab shares the rainfall legend
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
-  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; }
+  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
     if (overlay) map.removeLayer(overlay);
