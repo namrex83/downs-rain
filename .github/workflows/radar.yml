@@ -434,6 +434,19 @@ jobs:
                   if os.path.exists(pk):
                       vals, _, inside = onto(n, np.load(pk), lat0, lon0, rng)
                       hm = np.maximum(hm, np.where(inside, vals, 0))
+              if name == "today":   # TEMPORARY check: each picture's strongest echoes today, as images
+                  os.makedirs(os.path.join(DATA, "hail"), exist_ok=True)
+                  for kind in ("", "B", "C"):
+                      pk = hail_path(day, kind)
+                      if not os.path.exists(pk):
+                          continue
+                      arr = np.load(pk)
+                      img = np.zeros(arr.shape + (4,), np.uint8)
+                      for thr, col in ((80, (255, 0, 0)), (120, (200, 0, 0)), (200, (120, 0, 120)), (300, (0, 0, 0))):
+                          img[arr >= thr] = col + (255,)
+                      img[(arr > 0) & (arr < 80)] = (200, 200, 255, 255)
+                      Image.fromarray(img, "RGBA").save(os.path.join(DATA, "hail", f"check_{kind or 'T'}.png"))
+                      log(f"  hail check {kind or 'T'}: {arr.shape}, px >=120: {(arr >= 120).sum()}, >=200: {(arr >= 200).sum()}, >=300: {(arr >= 300).sum()}")
               lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
