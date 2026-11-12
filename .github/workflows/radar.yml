@@ -83,11 +83,11 @@ jobs:
               ((200, 0, 0), 155.0), ((120, 0, 0), 250.0), ((40, 0, 0), 360.0),
           ]
           COLOUR_TOLERANCE = 30      # max RGB distance for a pixel to count as a palette colour
-          # Hail cores: the strongest radar echoes, the top two colours of BOM's scale. Each spot keeps the strongest echo
-          # seen in any scan of the day. (The dark red below them, about 56 dBZ, is reached by very heavy rain alone, so
-          # it isn't counted.)
-          HAIL_POSSIBLE = 240.0      # maroon, about 60 dBZ
-          HAIL_LIKELY = 330.0        # black, about 63 dBZ and up
+          # Hail: only echoes at the very top of BOM's scale (black, about 63 dBZ and up), which ordinary heavy-rain cores
+          # rarely reach. Possible = seen there in one scan; likely = seen there in two or more scans (a strong core that
+          # sat over the spot). Where a second radar covers the spot it must see at least maroon (about 60 dBZ) too.
+          HAIL_TOP = 330.0           # black
+          HAIL_CONFIRM = 200.0       # maroon, for the second radar
           # Gauge correction
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
@@ -424,14 +424,21 @@ jobs:
               np.maximum(hm, rate, out=hm)
               os.makedirs(STATE, exist_ok=True)
               np.save(p, hm)
+              pn = hail_path(day, "N" + kind)           # how many scans reached the top of the scale at each spot
+              cnt = np.load(pn) if os.path.exists(pn) else np.zeros(rate.shape, np.uint16)
+              if cnt.shape != rate.shape:
+                  cnt = np.zeros(rate.shape, np.uint16)
+              cnt += (rate >= HAIL_TOP).astype(np.uint16)
+              np.save(pn, cnt)
           
           
           def write_hail(day, name, n):
-              """Possible (1) and likely (2) hail cores for the day on the map grid, as data/hail/<name>.json:
-              a string of one digit per tap-to-read cell, rows north to south. Spots seen by both radars take the
-              stronger echo. A lone pixel with no strong neighbour is dropped (radar noise)."""
+              """Possible (1) and likely (2) hail for the day on the map grid, as data/hail/<name>.json: a string of one
+              digit per tap-to-read cell, rows north to south (see HAIL_TOP). Lone specks and streaks are dropped (noise)."""
               p = hail_path(day)
               hm = np.load(p) if os.path.exists(p) else np.zeros((n, n), np.float32)
+              pn = hail_path(day, "N")
+              cnt = np.load(pn).astype(np.float32) if os.path.exists(pn) else np.zeros((n, n), np.float32)
               # each spot takes the radar picture that sees it best (lowest beam): the 128 km Toowoomba picture within about
               # 110 km of Toowoomba, otherwise whichever of Toowoomba and Brisbane is nearer. (Taking the strongest of all of
               # them widened every core, since the radars line up slightly differently and see storms at different heights.)
@@ -448,23 +455,29 @@ jobs:
                   useB = inB & (dB < dT)
                   hm = np.where(useB, vals, hm)
                   second = np.where(useB, hT, np.where(inB, vals, second))
+                  pbn = hail_path(day, "NB")
+                  cB = onto(n, np.load(pbn).astype(np.float32), B_LAT, B_LON, B_RANGE_KM)[0] if os.path.exists(pbn) else 0 * cnt
+                  cnt = np.where(useB, cB, cnt)
               pc = hail_path(day, "C")
               if os.path.exists(pc):
                   vals, _, inC = onto(n, np.load(pc), RADAR_LAT, RADAR_LON, C_RANGE_KM)
                   useC = inC & (dT < 110)
                   hm = np.where(useC, vals, hm)
                   second = np.where(useC, hT, second)
+                  pcn = hail_path(day, "NC")
+                  cC = onto(n, np.load(pcn).astype(np.float32), RADAR_LAT, RADAR_LON, C_RANGE_KM)[0] if os.path.exists(pcn) else 0 * cnt
+                  cnt = np.where(useC, cC, cnt)
               r2 = max(1, int(round(2 / k)))
               pad = np.pad(np.nan_to_num(second, nan=-1), r2, constant_values=-1)
               near = np.max([pad[r2 + dr:r2 + dr + n, r2 + dc:r2 + dc + n] for dr in range(-r2, r2 + 1) for dc in range(-r2, r2 + 1)], axis=0)
-              confirmed = np.isnan(second) | (near >= 80)
+              confirmed = np.isnan(second) | (near >= HAIL_CONFIRM)
               hm = np.where(confirmed, hm, 0)
               for kind in ("T", "B", "C"):   # (pictures from a one-off check, no longer made)
                   try:
                       os.remove(os.path.join(DATA, "hail", f"check_{kind}.png"))
                   except OSError:
                       pass
-              lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
+              lv = (hm >= HAIL_TOP).astype(np.float32) + ((hm >= HAIL_TOP) & (cnt >= 2))
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
               nb = sum(pad[1 + dr:1 + dr + n, 1 + dc:1 + dc + n] for dr in (-1, 0, 1) for dc in (-1, 0, 1))
@@ -1141,7 +1154,7 @@ jobs:
                               os.remove(accum_b_path(day))
                           if os.path.exists(accum_c_path(day)):
                               os.remove(accum_c_path(day))
-                          for kind in ("", "B", "C"):
+                          for kind in ("", "B", "C", "N", "NB", "NC"):
                               if os.path.exists(hail_path(day, kind)):
                                   os.remove(hail_path(day, kind))
                       except OSError:

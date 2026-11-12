@@ -663,8 +663,8 @@ async function stormDay(){
 
 async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); fitMap(); }
 
-// Hail cores: spots where the radar saw its strongest echoes (about 55 dBZ and up) in any scan of the day,
-// from data/hail/<day>.json (made by the radar job): 1 = possible hail, 2 = likely hail. Shown over the Daily
+// Hail: spots where the radar's echo reached the top of its scale (about 63 dBZ and up): in one scan of the day,
+// possible; in two or more, likely. From data/hail/<day>.json (made by the radar job). Shown over the Daily
 // and Last 7 days maps.
 let hailLayer = null, hail = null, hailOn = true;
 try { hailOn = localStorage.getItem("hailOn") !== "0"; } catch(e){}
@@ -689,7 +689,7 @@ async function drawHail(){
     for (let k = 0; k < W * H; k++){ const v = h.cells.charCodeAt(k) - 48; if (v > cells[k]) cells[k] = v; }
   if (!cells.some(v => v)) return;
   hail = {cells, W, H, bounds: hs[0].bounds};
-  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">strongest radar echoes${view === "week" ? " over the 7 days" : " in the day"}${hailOn ? "" : " · turned off above"}</span>`;
+  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">radar echo at the top of its scale${view === "week" ? " over the 7 days" : ""}: possible = one scan, likely = two or more${hailOn ? "" : " · turned off above"}</span>`;
   if (!hailOn) return;
   const f = 4, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
   const ctx = cv.getContext("2d"), stripes = hailPattern(ctx, "rgba(214,0,214,.95)");
