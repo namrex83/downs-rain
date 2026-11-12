@@ -83,10 +83,11 @@ jobs:
               ((200, 0, 0), 155.0), ((120, 0, 0), 250.0), ((40, 0, 0), 360.0),
           ]
           COLOUR_TOLERANCE = 30      # max RGB distance for a pixel to count as a palette colour
-          # Hail cores: the strongest radar echoes (the top colours of BOM's scale, about 55 dBZ and up). Rain alone
-          # rarely gets there; hail does. Each spot keeps the strongest echo seen in any scan of the day.
-          HAIL_POSSIBLE = 150.0      # dark red and above
-          HAIL_LIKELY = 240.0        # maroon and above
+          # Hail cores: the strongest radar echoes, the top two colours of BOM's scale. Each spot keeps the strongest echo
+          # seen in any scan of the day. (The dark red below them, about 56 dBZ, is reached by very heavy rain alone, so
+          # it isn't counted.)
+          HAIL_POSSIBLE = 240.0      # maroon, about 60 dBZ
+          HAIL_LIKELY = 330.0        # black, about 63 dBZ and up
           # Gauge correction
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
@@ -437,10 +438,14 @@ jobs:
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
               nb = sum(pad[1 + dr:1 + dr + n, 1 + dc:1 + dc + n] for dr in (-1, 0, 1) for dc in (-1, 0, 1))
-              lv[nb < 2] = 0
+              lv[nb < 3] = 0          # a core is at least a few pixels: lone specks and pairs are dropped as noise
               mm = np.nan_to_num(to_mercator(lv, 512), nan=0)
               h, w = (mm.shape[0] // 2) * 2, (mm.shape[1] // 2) * 2
-              cells = mm[:h, :w].reshape(h // 2, 2, w // 2, 2).max(axis=(1, 3)).astype(int)
+              b4 = mm[:h, :w].reshape(h // 2, 2, w // 2, 2)
+              # a 2 km map cell is marked only when at least half of it is a core (not whenever one corner touches one),
+              # at the level most of that half reached
+              hit = (b4 > 0).sum(axis=(1, 3)) >= 2
+              cells = np.where(hit, np.where((b4 >= 2).sum(axis=(1, 3)) >= 2, 2, 1), 0).astype(int)
               os.makedirs(os.path.join(DATA, "hail"), exist_ok=True)
               out = {"date": day, "bounds": list(bounds()), "grid_w": int(cells.shape[1]), "grid_h": int(cells.shape[0]),
                      "possible": int((cells >= 1).sum()), "likely": int((cells >= 2).sum()),
