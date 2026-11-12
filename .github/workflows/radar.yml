@@ -459,6 +459,11 @@ jobs:
               near = np.max([pad[r2 + dr:r2 + dr + n, r2 + dc:r2 + dc + n] for dr in range(-r2, r2 + 1) for dc in range(-r2, r2 + 1)], axis=0)
               confirmed = np.isnan(second) | (near >= 80)
               hm = np.where(confirmed, hm, 0)
+              for kind in ("T", "B", "C"):   # (pictures from a one-off check, no longer made)
+                  try:
+                      os.remove(os.path.join(DATA, "hail", f"check_{kind}.png"))
+                  except OSError:
+                      pass
               lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
