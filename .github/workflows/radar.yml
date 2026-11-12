@@ -59,6 +59,9 @@ jobs:
           RANGE_KM = float(os.environ.get("RADAR_RANGE_KM", "256"))  # half-width of the image
           # Second radar, blended into the rain totals towards the coast: Brisbane (Mt Stapylton) 256 km rain rate
           PRODUCT_B = os.environ.get("RADAR_PRODUCT_B", "IDR662")
+          # the same Toowoomba radar's 128 km picture: pixels half the size (about 0.5 km), used near the radar
+          PRODUCT_C = os.environ.get("RADAR_PRODUCT_C", "IDR1083")
+          C_RANGE_KM = 128.0
           B_LAT, B_LON = -27.7178, 153.2400
           B_RANGE_KM = 256.0
           FTP_HOST = "ftp.bom.gov.au"
@@ -334,11 +337,53 @@ jobs:
               return os.path.join(STATE, f"accumB_{day}.npy")
           
           
+          def accum_c_path(day):
+              return os.path.join(STATE, f"accumC_{day}.npy")
+          
+          
+          def onto(n, arr, lat0, lon0, range_km):
+              """Another radar grid (centred on lat0, lon0, half-width range_km) sampled at each cell of an n x n
+              Toowoomba grid: the values, each cell's distance from that radar (km), and whether it's inside its range."""
+              m = arr.shape[0]
+              k, kb = km_per_px(n), 2 * range_km / m
+              rr, cc = np.mgrid[0:n, 0:n].astype(np.float32)
+              x, y = (cc + 0.5 - n / 2) * k, (n / 2 - rr - 0.5) * k
+              lat = RADAR_LAT + y / 110.57
+              lon = RADAR_LON + x / (111.32 * math.cos(math.radians(RADAR_LAT)))
+              xb = (lon - lon0) * 111.32 * math.cos(math.radians(lat0))
+              yb = (lat - lat0) * 110.57
+              cb, rb = m / 2 + xb / kb, m / 2 - yb / kb
+              db = np.hypot(xb, yb)
+              inside = (cb >= 0) & (cb < m) & (rb >= 0) & (rb < m) & (db < range_km * 0.98)
+              return arr[np.clip(rb.astype(int), 0, m - 1), np.clip(cb.astype(int), 0, m - 1)], db, inside
+          
+          
+          def sharpen(day, win, a):
+              """Near the radar, swap in the 128 km picture's total (pixels half the size), on a grid twice as fine,
+              fading back to the 256 km picture between about 110 and 125 km out. Only when the 128 km picture covered
+              most of the day (scaled up to the same time if it missed a little); otherwise the total is unchanged."""
+              c = win.get("c")
+              pc = accum_c_path(day)
+              if not c or not c.get("frames") or not os.path.exists(pc) or c["minutes"] < 0.8 * max(win["minutes"], 1):
+                  return a
+              cc_ = np.load(pc) * (win["minutes"] / c["minutes"])
+              f = max(1, int(round(cc_.shape[0] * RANGE_KM / C_RANGE_KM / a.shape[0])))
+              big = np.repeat(np.repeat(a, f, axis=0), f, axis=1) if f > 1 else a
+              vals, dc, inside = onto(big.shape[0], cc_, RADAR_LAT, RADAR_LON, C_RANGE_KM)
+              wc = np.where(inside, np.clip((C_RANGE_KM * 0.97 - dc) / 15.0, 0, 1), 0)
+              return (big * (1 - wc) + vals * wc).astype(np.float32)
+          
+          
           def merged_radar(day, win):
-              """The day's radar total on the Toowoomba grid, blended with the Brisbane radar where it reaches: each
-              spot leans on the nearer radar, fading smoothly between them. If the Brisbane radar missed a little of the
-              day its total is scaled up to the same time; if it missed more than a fifth, Toowoomba is used alone."""
+              """The day's radar total on the Toowoomba grid (sharpened near the radar, see sharpen()), blended with the
+              Brisbane radar where it reaches: each spot leans on the nearer radar, fading smoothly between them. If the
+              Brisbane radar missed a little of the day its total is scaled up to the same time; if it missed more than
+              a fifth, Toowoomba is used alone."""
               a = load_accum(day, win["n"])
+              try:
+                  a = sharpen(day, win, a)
+              except Exception as e:
+                  log(f"  128 km picture not used for {day}: {e}")
               b = win.get("b")
               pb = accum_b_path(day)
               if not b or not b.get("frames") or not os.path.exists(pb) or b["minutes"] < 0.8 * max(win["minutes"], 1):   # only when it covered most of the day
@@ -361,13 +406,14 @@ jobs:
               return ((wa * a + wb * bs) / (wa + wb)).astype(np.float32)
           
           
-          def hail_path(day, b=False):
-              return os.path.join(STATE, f"hail{'B' if b else ''}_{day}.npy")
+          def hail_path(day, kind=""):
+              return os.path.join(STATE, f"hail{kind}_{day}.npy")
           
           
-          def note_hail(day, rate, b=False):
-              """Keep the strongest echo seen at each spot today (Toowoomba grid, or the Brisbane radar's own)."""
-              p = hail_path(day, b)
+          def note_hail(day, rate, kind=""):
+              """Keep the strongest echo seen at each spot today (on each picture's own grid: "" Toowoomba 256 km,
+              "C" Toowoomba 128 km, "B" Brisbane)."""
+              p = hail_path(day, kind)
               hm = np.load(p) if os.path.exists(p) else np.zeros(rate.shape, np.float32)
               if hm.shape != rate.shape:
                   hm = np.zeros(rate.shape, np.float32)
@@ -382,21 +428,11 @@ jobs:
               stronger echo. A lone pixel with no strong neighbour is dropped (radar noise)."""
               p = hail_path(day)
               hm = np.load(p) if os.path.exists(p) else np.zeros((n, n), np.float32)
-              pb = hail_path(day, True)
-              if os.path.exists(pb):
-                  bb = np.load(pb)
-                  m = bb.shape[0]
-                  k, kb = km_per_px(n), 2 * B_RANGE_KM / m
-                  rr, cc = np.mgrid[0:n, 0:n].astype(np.float32)
-                  x, y = (cc + 0.5 - n / 2) * k, (n / 2 - rr - 0.5) * k
-                  lat = RADAR_LAT + y / 110.57
-                  lon = RADAR_LON + x / (111.32 * math.cos(math.radians(RADAR_LAT)))
-                  xb = (lon - B_LON) * 111.32 * math.cos(math.radians(B_LAT))
-                  yb = (lat - B_LAT) * 110.57
-                  cb, rb = m / 2 + xb / kb, m / 2 - yb / kb
-                  inside = (cb >= 0) & (cb < m) & (rb >= 0) & (rb < m) & (np.hypot(xb, yb) < B_RANGE_KM * 0.98)
-                  bs = bb[np.clip(rb.astype(int), 0, m - 1), np.clip(cb.astype(int), 0, m - 1)]
-                  hm = np.maximum(hm, np.where(inside, bs, 0))
+              for kind, lat0, lon0, rng in (("B", B_LAT, B_LON, B_RANGE_KM), ("C", RADAR_LAT, RADAR_LON, C_RANGE_KM)):
+                  pk = hail_path(day, kind)
+                  if os.path.exists(pk):
+                      vals, _, inside = onto(n, np.load(pk), lat0, lon0, rng)
+                      hm = np.maximum(hm, np.where(inside, vals, 0))
               lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
@@ -963,6 +999,41 @@ jobs:
                   if last:
                       st["last_ts"] = last.isoformat()
           
+                  # the Toowoomba radar's 128 km picture, added up on its own finer grid (swapped in near the radar)
+                  try:
+                      last_c = dt.datetime.fromisoformat(st["last_ts_c"]) if st.get("last_ts_c") else None
+                      names_c = src.list_frames(PRODUCT_C)
+                      new_c = sorted((t, nm) for t, nm in ((parse_frame_time(nm), nm) for nm in names_c) if t and (last_c is None or t > last_c))
+                      got = 0
+                      for t, nm in new_c:
+                          day = window_for(t)
+                          win = st["windows"].get(day)
+                          if day in st["done"] or not win:
+                              last_c = t
+                              continue
+                          rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm))
+                          step = (t - last_c).total_seconds() / 60 if last_c else NOMINAL_STEP_MIN
+                          if step > MAX_STEP_MIN:
+                              step = NOMINAL_STEP_MIN
+                          c = win.setdefault("c", {"frames": 0, "minutes": 0.0, "n": rate.shape[0]})
+                          p = accum_c_path(day)
+                          acc = np.load(p) if os.path.exists(p) else np.zeros(rate.shape, np.float32)
+                          if acc.shape != rate.shape:
+                              acc = np.zeros(rate.shape, np.float32)
+                          acc += rate * (step / 60.0)
+                          os.makedirs(STATE, exist_ok=True)
+                          np.save(p, acc)
+                          note_hail(day, rate, "C")
+                          c["frames"] += 1
+                          c["minutes"] = round(c["minutes"] + step, 1)
+                          last_c = t
+                          got += 1
+                      if last_c:
+                          st["last_ts_c"] = last_c.isoformat()
+                      log(f"  Toowoomba 128 km picture: {got} new frame(s) of {len(names_c)} on the server")
+                  except Exception as e:
+                      log(f"  Toowoomba 128 km picture skipped: {e}")
+
                   # the Brisbane radar's frames, added up on its own grid (blended in when a day's map is made)
                   try:
                       last_b = dt.datetime.fromisoformat(st["last_ts_b"]) if st.get("last_ts_b") else None
@@ -985,7 +1056,7 @@ jobs:
                           acc += rate * (step / 60.0)
                           os.makedirs(STATE, exist_ok=True)
                           np.save(p, acc)
-                          note_hail(day, rate, b=True)
+                          note_hail(day, rate, "B")
                           b["frames"] += 1
                           b["minutes"] = round(b["minutes"] + step, 1)
                           last_b = t
@@ -1033,9 +1104,11 @@ jobs:
                           os.remove(accum_path(day))
                           if os.path.exists(accum_b_path(day)):
                               os.remove(accum_b_path(day))
-                          for b in (False, True):
-                              if os.path.exists(hail_path(day, b)):
-                                  os.remove(hail_path(day, b))
+                          if os.path.exists(accum_c_path(day)):
+                              os.remove(accum_c_path(day))
+                          for kind in ("", "B", "C"):
+                              if os.path.exists(hail_path(day, kind)):
+                                  os.remove(hail_path(day, kind))
                       except OSError:
                           pass
                       log(f"Finished {day}: {win['frames']} frames, {meta['coverage_pct']}% of the day, "
@@ -1053,7 +1126,7 @@ jobs:
                   # (until the previous day is finished at 9:25am, its running map stays up rather than the new day's)
                   if cur in st["windows"] and not any(d < cur for d in st["windows"]):
                       w = st["windows"][cur]
-                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
+                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           write_today(cur, merged_radar(cur, w),
                                       {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")}, positions)
