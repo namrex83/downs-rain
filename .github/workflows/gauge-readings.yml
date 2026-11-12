@@ -1,0 +1,63 @@
+name: Gauge readings from the page
+
+# The Rainfall tab's "Add gauge readings" form opens a GitHub issue titled "Gauge readings ..." with one reading
+# per line. When the site owner submits it, this adds them to my_gauges.csv, re-runs the radar job so the map is
+# re-corrected, replies with what was added and closes the issue. Issues from anyone else are ignored.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: gauge-readings
+  cancel-in-progress: false
+
+jobs:
+  add:
+    if: github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, 'Gauge readings')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Add the readings to my_gauges.csv
+        id: add
+        env:
+          BODY: ${{ github.event.issue.body }}
+          ISSUE: ${{ github.event.issue.number }}
+          PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # only to say which names have no saved position; never written out
+        run: python3 .github/add_readings.py
+
+      - name: Save
+        if: steps.add.outputs.added != '0'
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add my_gauges.csv
+          git commit -q -m "Gauge readings from the page (issue #$ISSUE)"
+          for i in 1 2 3 4; do
+            git push -q origin HEAD:main && break
+            sleep $((i * 4)); git pull -q --rebase origin main
+          done
+
+      - name: Re-run the radar job
+        if: steps.add.outputs.added != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run radar.yml --ref main
+
+      - name: Reply and close
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          [ -f report.md ] || echo "Something went wrong adding these readings; nothing was added." > report.md
+          gh issue comment "$ISSUE" --body-file report.md
+          gh issue close "$ISSUE"

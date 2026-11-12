@@ -145,6 +145,16 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .hailkey .hk1{background:repeating-linear-gradient(135deg,rgba(214,0,214,.95) 0 2px,transparent 2px 5px);outline:1px solid rgba(214,0,214,.5)}
 .hailkey .hk2{background:rgba(214,0,214,.8)}
 .hailtxt{color:#b000b0}
+.addread{margin-top:10px;font:600 .85rem var(--body);color:var(--accent);background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer}
+#readDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
+#readDlg::backdrop{background:rgba(10,30,50,.45)}
+#readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
+#readDlg .rdday{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
+#readDlg input{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);min-width:0}
+.rdrow{display:grid;grid-template-columns:1fr 82px;gap:6px;margin-bottom:6px}
+.linkbtn{background:none;border:0;color:var(--accent);font:600 .85rem var(--body);padding:6px 0;cursor:pointer}
+.rdbtns{display:flex;justify-content:flex-end;gap:16px;align-items:center;margin-top:8px}
+.rdbtns .primary{background:var(--accent);color:var(--accent-ink,#fff);border:0;border-radius:999px;padding:9px 16px;font:600 .9rem var(--body);cursor:pointer}
 .gnote{font-size:.78rem;color:var(--ink-3);text-align:left;padding-top:8px}
 .rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
 #dayField{order:3;flex:1 1 100%}
@@ -412,7 +422,20 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
+    <button class="addread" id="addRead" type="button">＋ Add gauge readings</button>
   </section>
+  <dialog id="readDlg" aria-labelledby="readTitle">
+    <form method="dialog" id="readForm">
+      <h3 id="readTitle">Add gauge readings</h3>
+      <label class="rdday">Rain day, to 9am on <input type="date" id="readDay" required></label>
+      <div id="readRows"></div>
+      <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
+      <p class="note">This opens GitHub with your readings filled in: tap <b>Submit new issue</b> there (signed in as the site owner).
+        The map is re-corrected a few minutes later. Gauge positions are never sent: they stay in your private list.
+        A new gauge needs its position added to that list once (ask Claude).</p>
+      <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send to GitHub</button></div>
+    </form>
+  </dialog>
   <section class="panel radarOnly" hidden>
     <p class="note">The Bureau of Meteorology's South East Queensland radars, Toowoomba (Mt Kynoch), Brisbane (Mt Stapylton), Marburg and Gympie (Mt Kanigan), at 128, 256 or 512 km range (not every radar has every range), the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
@@ -778,6 +801,51 @@ async function draw(){
     g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${unused(x)?" *":""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${x.unplaced?"not used":x.radar_mm==null?"out of range":fmt(x.radar_mm)}</td><td class="n">${x.unplaced?"–":pctDiff(x.mm, x.radar_mm)}</td><td class="n">${x.ignored||x.unplaced?"–":fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>` + unusedNote(g);
   drawGauges(); declutter();
 }
+// "Add gauge readings": a form that opens a GitHub issue with one reading per line ("date,name,,,mm"). When the
+// site owner submits it, .github/workflows/gauge-readings.yml adds them to my_gauges.csv and re-runs the radar
+// job. Gauge names used before are suggested; positions are never sent (they stay in the PRIVATE_GAUGES secret).
+const REPO = "namrex83/downs-rain";
+let readNames = null;
+async function gaugeNames(){
+  if (readNames) return readNames;
+  try {
+    const txt = await (await fetch(`https://raw.githubusercontent.com/${REPO}/main/my_gauges.csv` + bust())).text();
+    const seen = new Map();
+    for (const ln of txt.split("\n")){ const p = ln.split(","); if (p.length === 5 && /^\d{4}-/.test(p[0])) seen.set(p[1].trim(), p[0]); }
+    readNames = [...seen.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(x => x[0]);
+  } catch(e){ readNames = []; }
+  return readNames;
+}
+function readRow(name = "", mm = ""){
+  const d = document.createElement("div"); d.className = "rdrow";
+  d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm">`;
+  d.children[0].value = name; d.children[1].value = mm;
+  $("readRows").appendChild(d);
+}
+$("addRead").onclick = async () => {
+  const qh = new Date(Date.now() + 36e5 * 10).getUTCHours();
+  $("readDay").value = qh < 9 ? runningEnd() : addDays(runningEnd(), -1);   // before 9am: the day ending this morning
+  $("readRows").innerHTML = "";
+  const names = await gaugeNames();
+  if (!$("readList")) { const dl = document.createElement("datalist"); dl.id = "readList"; document.body.appendChild(dl); }
+  $("readList").innerHTML = names.map(n => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+  const recent = names.filter(n => /ddcgi/i.test(n)).slice(0, 6);
+  (recent.length ? recent : ["", "", ""]).forEach(n => readRow(n));
+  $("readDlg").showModal();
+};
+$("readMore").onclick = () => readRow();
+$("readCancel").onclick = () => $("readDlg").close();
+$("readForm").onsubmit = e => {
+  e.preventDefault();
+  const day = $("readDay").value;
+  const rows = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim()])
+    .filter(([n, mm]) => n && mm !== "" && !isNaN(+mm));
+  if (!day || !rows.length) { alert("Enter the rain day and at least one gauge with its mm."); return; }
+  const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
+  const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`;
+  window.open(url, "_blank", "noopener");
+  $("readDlg").close();
+};
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
 // listed in the table by name, but their positions are never sent to the page, so they get no dot. Values show when zoomed in, or tap a dot.
 let gaugeSites = [], gaugesOn = true;
