@@ -438,14 +438,27 @@ jobs:
               k = km_per_px(n)
               rr, cc = np.mgrid[0:n, 0:n].astype(np.float32)
               dT = np.hypot((cc + 0.5 - n / 2) * k, (n / 2 - rr - 0.5) * k)
+              # Where a second picture also covers the spot, it has to see at least heavy rain there too (within about 2 km,
+              # as the radars line up slightly differently): clutter (e.g. sea echoes off the coast) shows on one radar only.
+              hT = hm.copy()
+              second = np.full((n, n), np.nan, np.float32)          # nan: no second picture here
               pb = hail_path(day, "B")
               if os.path.exists(pb):
-                  vals, dB, inside = onto(n, np.load(pb), B_LAT, B_LON, B_RANGE_KM)
-                  hm = np.where(inside & (dB < dT), vals, hm)
+                  vals, dB, inB = onto(n, np.load(pb), B_LAT, B_LON, B_RANGE_KM)
+                  useB = inB & (dB < dT)
+                  hm = np.where(useB, vals, hm)
+                  second = np.where(useB, hT, np.where(inB, vals, second))
               pc = hail_path(day, "C")
               if os.path.exists(pc):
-                  vals, _, inside = onto(n, np.load(pc), RADAR_LAT, RADAR_LON, C_RANGE_KM)
-                  hm = np.where(inside & (dT < 110), vals, hm)
+                  vals, _, inC = onto(n, np.load(pc), RADAR_LAT, RADAR_LON, C_RANGE_KM)
+                  useC = inC & (dT < 110)
+                  hm = np.where(useC, vals, hm)
+                  second = np.where(useC, hT, second)
+              r2 = max(1, int(round(2 / k)))
+              pad = np.pad(np.nan_to_num(second, nan=-1), r2, constant_values=-1)
+              near = np.max([pad[r2 + dr:r2 + dr + n, r2 + dc:r2 + dc + n] for dr in range(-r2, r2 + 1) for dc in range(-r2, r2 + 1)], axis=0)
+              confirmed = np.isnan(second) | (near >= 80)
+              hm = np.where(confirmed, hm, 0)
               lv = (hm >= HAIL_POSSIBLE).astype(np.float32) + (hm >= HAIL_LIKELY)
               hit = (lv > 0).astype(np.int32)
               pad = np.pad(hit, 1)
