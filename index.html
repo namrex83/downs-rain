@@ -838,8 +838,9 @@ async function gaugeNames(){
 let knownGauges = null;
 const gaugeKey = n => n.toLowerCase().replace("(ddcgi)", "").split(/\s+/).filter(Boolean).join(" ");
 async function loadKnown(){
-  if (knownGauges) return;
-  try { knownGauges = new Set(await getJSON("data/gauge_known.json")); } catch(e){ knownGauges = null; }
+  if (knownGauges && knownGauges.size) return;
+  try { knownGauges = new Set(await getJSON("data/gauge_known.json")); }
+  catch(e){ knownGauges = new Set((await gaugeNames()).map(gaugeKey)); }   // can't load it: names sent before count as known
 }
 const isNewGauge = n => !!n && knownGauges && !knownGauges.has(gaugeKey(n));
 let pickRow = null;   // a row waiting for its spot to be tapped on the map
@@ -850,19 +851,19 @@ function rowLoc(d){
   if (d.loc){
     box.innerHTML = `<span class="ok">✓ Location set (${d.loc[0].toFixed(3)}, ${d.loc[1].toFixed(3)})</span> <button type="button" class="linkbtn" data-a="clear">change</button>`;
   } else {
-    box.innerHTML = `<span>New gauge: where is it?</span><span class="rdlocbtns"><button type="button" data-a="gps">📍 Use my location</button><button type="button" data-a="map">🗺 Pick on map</button>${tapAt ? '<button type="button" data-a="pin">Use the map pin</button>' : ""}</span>`;
+    box.innerHTML = `<span>New gauge: where is it?</span><span class="rdlocbtns"><button type="button" data-a="gps">📍 I'm at the gauge</button><button type="button" data-a="map">🗺 Pick on map</button></span>`;
   }
 }
 function readRow(name = "", mm = ""){
   const d = document.createElement("div"); d.className = "rdrow"; d.loc = null;
   d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm"><div class="rdloc" hidden></div>`;
   d.children[0].value = name; d.children[1].value = mm;
-  d.children[0].addEventListener("change", () => { d.loc = null; rowLoc(d); });
+  let typed = d.children[0].value;
+  d.children[0].addEventListener("input", () => { if (d.children[0].value !== typed) { typed = d.children[0].value; d.loc = null; } rowLoc(d); });
   d.children[0].addEventListener("blur", () => rowLoc(d));
   d.querySelector(".rdloc").onclick = e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.a === "clear") { d.loc = null; rowLoc(d); }
-    if (b.dataset.a === "pin" && tapAt) { d.loc = [tapAt.lat, tapAt.lng]; rowLoc(d); }
     if (b.dataset.a === "gps"){
       if (!navigator.geolocation) { alert("This phone can't share its location here. Use Pick on map instead."); return; }
       b.textContent = "Finding you…";
@@ -913,7 +914,7 @@ function readIssue(){
   const pins = all.filter(([n, , loc]) => n && loc);
   if (!day || !rows.length) { alert("Enter the rain day and at least one gauge with its mm."); return null; }
   const missing = rows.filter(([n, , loc]) => isNewGauge(n) && !loc).map(([n]) => n);
-  if (missing.length) { alert(`Please set where ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"}: tap "Use my location" (if you're at the gauge) or "Pick on map" under ${missing.length > 1 ? "them" : "it"}.`); return null; }
+  if (missing.length) { alert(`Please set where ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"}: tap "I'm at the gauge" or "Pick on map" under ${missing.length > 1 ? "them" : "it"}.`); return null; }
   const posLines = pins.map(([n, , loc]) => `pos,${n},${loc[0].toFixed(5)},${loc[1].toFixed(5)}`);
   const who = $("readWho").value.trim();
   const body = `Readings for the rain day to 9am ${day}${who ? ` from ${who}` : ""}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
