@@ -4,10 +4,9 @@ Adds gauge readings sent from the page's "Add gauge readings" form (as a GitHub 
 Run by .github/workflows/gauge-readings.yml, only for issues opened by the repository owner. The issue body is in
 the BODY environment variable; each reading is a line "date,name,,,mm" (date = the morning of the 9am reading).
 A reading for a gauge and day already in the file replaces the old one. Gauge positions are never taken from the
-issue in plain form. A line "pos,name,<locked position>" carries a new gauge's position, locked (encrypted) on the
-phone with the site's public key: it's checked here with the private key (the GAUGE_KEY secret) and saved, still
-locked, in gauge_positions.json, which the radar job unlocks with the same key. Writes a short report to report.md
-for the reply on the issue.
+issue for the private gauges (those stay in the PRIVATE_GAUGES secret). A line "pos,name,lat,lon" (the 📍 button)
+saves a new gauge's position in gauge_positions.json; those gauges are public (a dot on the map). Writes a short
+report to report.md for the reply on the issue.
 """
 import datetime as dt
 import json
@@ -16,19 +15,8 @@ import re
 
 CSV = "my_gauges.csv"
 POS = "gauge_positions.json"
-POS_LINE = re.compile(r"^\s*pos\s*,\s*([^,#\n]{1,60}?)\s*,\s*([A-Za-z0-9+/=]{100,700})\s*$")
-
-
-def unlock(b64):
-    """[lat, lon] from a locked position, using the GAUGE_KEY secret (raises if it can't)."""
-    import base64
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    key = serialization.load_pem_private_key(os.environ["GAUGE_KEY"].encode(), password=None)
-    plain = key.decrypt(base64.b64decode(b64), padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
-    lat, lon = json.loads(plain)
-    return float(lat), float(lon)
 LINE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})\s*,\s*([^,#\n]{1,60}?)\s*,\s*,\s*,\s*(\d{1,3}(?:\.\d{1,2})?)\s*$")
+POS_LINE = re.compile(r"^\s*pos\s*,\s*([^,#\n]{1,60}?)\s*,\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$")
 
 
 def site_key(name):   # as in radar.py: case, spacing and a "(DDCGI)" tag don't matter
@@ -45,15 +33,13 @@ def main():
         pm = POS_LINE.match(raw)
         if pm:
             name = " ".join(pm.group(1).split())
-            try:
-                lat, lon = unlock(pm.group(2))
-                if not (-45 <= lat <= -9 and 110 <= lon <= 155):
-                    raise ValueError("outside Australia")
+            lat, lon = float(pm.group(2)), float(pm.group(3))
+            if -45 <= lat <= -9 and 110 <= lon <= 155:
                 positions = {k: v for k, v in positions.items() if site_key(k) != site_key(name)}
-                positions[name] = pm.group(2)
+                positions[name] = [round(lat, 5), round(lon, 5)]
                 saved.append(name)
-            except Exception as e:
-                failed.append(f"{name} ({'no GAUGE_KEY secret yet' if 'GAUGE_KEY' in str(e) else 'could not be read'})")
+            else:
+                failed.append(f"{name} (that position isn't in Australia)")
             continue
         if not raw.strip() or raw.strip().startswith(("#", "<!--", ">")) or "," not in raw:
             continue
@@ -109,7 +95,7 @@ def main():
         out.append("No readings found in this issue, so nothing was added.")
     if saved:
         out.append("")
-        out.append(f"Saved the position (locked, not readable here) for: {', '.join(saved)}.")
+        out.append(f"Saved the position for: {', '.join(saved)} (from the map pin; shown as a dot on the map).")
     if failed:
         out.append("")
         out.append(f"Couldn't save the position for: {', '.join(failed)}.")

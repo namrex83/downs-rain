@@ -437,10 +437,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <label class="rdday">Rain day, to 9am on <input type="date" id="readDay" required></label>
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
-      <p class="note" id="readPinNote" hidden>📍 on: that gauge's position is saved from the map pin, locked so only the site's own jobs can read it.</p>
+      <p class="note" id="readPinNote" hidden>📍 on: that gauge's position is saved from the map pin, and it shows as a dot on the map from then on.</p>
       <p class="note">This opens GitHub with your readings filled in: tap <b>Submit new issue</b> there (signed in as the site owner).
         The map is re-corrected a few minutes later. For a <b>new gauge</b>, put the map pin on it first (tap the map, or My location)
-        and tap <b>📍</b> on its row: the position is saved once, locked so it never shows publicly.</p>
+        and tap <b>📍</b> on its row: its position is saved once, so later readings only need the mm.</p>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send to GitHub</button></div>
     </form>
   </dialog>
@@ -813,15 +813,6 @@ async function draw(){
 // site owner submits it, .github/workflows/gauge-readings.yml adds them to my_gauges.csv and re-runs the radar
 // job. Gauge names used before are suggested; positions are never sent (they stay in the PRIVATE_GAUGES secret).
 const REPO = "namrex83/downs-rain";
-// A new gauge's position (the map pin) is locked on the phone with this public key before it's sent; only the
-// GitHub jobs, holding the matching private key (the GAUGE_KEY secret), can unlock it.
-const GAUGE_PUBKEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkSESLkuYtW9EzkcAPaPbh4VPEpUD0J5v8J6nsv0W3k0Jzc5it079TsgVQJtkL7EtCjGnCqj7r0rEK0Gw2WgCKrMFY3SDfTmWrbDht1VXPZk1/nWMz3IKk+4Cjft9UVX9+rKCLArrU3VUne6rqBA7/Qd1XxWx3Y6kxTop99VdwqvbWCPpnyVvRBB5uqRC7RTUHKaiwhy6cIvTUpLTCcOMrf+1WA/JwOXYohPTnpBWktUP4BK9FkgjmRFKQB1nuWiLlL45l7/xoCaPXleZbY3BdAYgaA3FaZj8+A2UCW9liUcS3LtG/i8beDU43JSDUr5KF/kOGKTFjWwlKqomIyrmeQIDAQAB";
-async function lockPosition(lat, lon){
-  const der = Uint8Array.from(atob(GAUGE_PUBKEY), c => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey("spki", der, {name: "RSA-OAEP", hash: "SHA-256"}, false, ["encrypt"]);
-  const ct = await crypto.subtle.encrypt({name: "RSA-OAEP"}, key, new TextEncoder().encode(JSON.stringify([+lat.toFixed(5), +lon.toFixed(5)])));
-  return btoa(String.fromCharCode(...new Uint8Array(ct)));
-}
 let readNames = null;
 async function gaugeNames(){
   if (readNames) return readNames;
@@ -867,13 +858,9 @@ $("readForm").onsubmit = async e => {
   if (!day || (!rows.length && !pins.length)) { alert("Enter the rain day and at least one gauge with its mm."); return; }
   const win = window.open("about:blank", "_blank");   // opened now, while the tap still counts, then sent to GitHub
   if (win) win.opener = null;
-  let posLines = [];
-  if (pins.length){
-    try { posLines = await Promise.all(pins.map(async ([n]) => `pos,${n},${await lockPosition(tapAt.lat, tapAt.lng)}`)); }
-    catch(err){ if (win) win.close(); alert("Couldn't lock the position on this phone, so it wasn't sent. Try again, or send the readings without 📍."); return; }
-  }
+  const posLines = pins.map(([n]) => `pos,${n},${tapAt.lat.toFixed(5)},${tapAt.lng.toFixed(5)}`);
   const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
-    + (posLines.length ? "\n\nNew gauge position (locked):\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
+    + (posLines.length ? "\n\nNew gauge position (from the map pin):\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
   const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`;
   if (win) win.location.href = url; else location.href = url;
   $("readDlg").close();

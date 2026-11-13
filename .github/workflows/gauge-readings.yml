@@ -24,9 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install
-        run: pip install -q cryptography
-
       - name: Add the readings to my_gauges.csv
         id: add
         env:
@@ -34,7 +31,6 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # only to say which names have no saved position; never written out
           PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}
-          GAUGE_KEY: ${{ secrets.GAUGE_KEY }}   # unlocks new gauges' positions to check them; they're saved still locked
         run: python3 .github/add_readings.py
 
       - name: Save
