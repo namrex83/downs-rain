@@ -202,11 +202,13 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 #map.full{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;min-height:0!important;z-index:3000;border-radius:0!important;margin:0!important}
 body.mapfull{overflow:hidden}
 #map.full .leaflet-top{top:env(safe-area-inset-top,0px)}
-.fstools{display:none!important}
-#map.full .fstools.on{display:flex!important;flex-wrap:wrap;gap:6px;margin:0 0 calc(30px + env(safe-area-inset-bottom,0px)) 10px!important}
-.fstools button{font:600 .9rem var(--body);background:#fff;color:#1c2621;border:0;border-radius:999px;padding:9px 14px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
-.fstools button[aria-pressed=true]{background:var(--accent);color:#fff}
-.fstools button[hidden]{display:none}
+.fspanel{position:absolute;left:0;right:0;bottom:0;z-index:1000;max-height:58%;overflow:auto;background:var(--bg,#eef3f8);
+  border-radius:16px 16px 0 0;box-shadow:0 -4px 18px rgba(0,30,60,.3);padding:10px 12px calc(22px + env(safe-area-inset-bottom,0px))}
+.fspanel .controls{margin:0}
+.fspanel.shut{background:none;box-shadow:none;padding:0 12px calc(26px + env(safe-area-inset-bottom,0px));overflow:visible}
+.fspanel.shut .controls{display:none}
+.fstoggle{display:block;margin:0 auto 8px;font:600 .85rem var(--body);background:#fff;color:#1c2621;border:0;border-radius:999px;padding:7px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer}
+.fspanel.shut .fstoggle{margin:0}
 .locate a.busy svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
@@ -314,7 +316,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
-  <div class="controls rainOnly">
+  <div class="controls rainOnly" id="rControls">
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
@@ -1120,31 +1122,27 @@ const FullScreen = L.Control.extend({ options: {position: "topleft"}, onAdd(){
 }});
 new FullScreen().addTo(map); setTimeout(() => { fsBtn.innerHTML = FS_OPEN; fsBtn.title = "Full screen map"; fsBtn.setAttribute("aria-label", fsBtn.title); }, 0);
 addEventListener("keydown", e => { if (e.key === "Escape" && $("map").classList.contains("full")) setFull(false); });
-// In full screen on Rainfall the page's buttons are out of sight, so a small bar at the bottom of the map repeats
-// the ones worth having there: extra dots (add / clear) and hail on/off. They work the same as the page's own.
-let fsBox = null;
+// In full screen on Rainfall the page's own controls panel (view, show, gauges, hail, see-through, extra dots, rain
+// day) moves onto the bottom of the map, with an "Options" button to fold it away; it moves back on leaving.
+let fsPanel = null, fsHome = null, fsOpen = true;
 function fsSync(){
-  if (!fsBox) return;
-  fsBox.classList.toggle("on", tab === "rain");
-  const [dotsB, clearB, hailB] = fsBox.children;
-  dotsB.textContent = dotMode ? "Tap the map… (done)" : "＋ Add dots"; dotsB.setAttribute("aria-pressed", dotMode);
-  clearB.hidden = !dots.length;
-  hailB.textContent = `Hail: ${hailOn ? "on" : "off"}`; hailB.setAttribute("aria-pressed", hailOn);
+  const want = $("map").classList.contains("full") && tab === "rain", rc = $("rControls");
+  if (want && !fsPanel){
+    fsHome = document.createComment("rControls home"); rc.parentNode.insertBefore(fsHome, rc);
+    fsPanel = L.DomUtil.create("div", "fspanel", map.getContainer());
+    fsPanel.innerHTML = '<button type="button" class="fstoggle"></button>';
+    fsPanel.appendChild(rc);
+    L.DomEvent.disableClickPropagation(fsPanel); L.DomEvent.disableScrollPropagation(fsPanel);
+    fsPanel.querySelector(".fstoggle").onclick = () => { fsOpen = !fsOpen; fsSync(); };
+  } else if (!want && fsPanel){
+    fsHome.parentNode.insertBefore(rc, fsHome); fsHome.remove(); fsHome = null;
+    fsPanel.remove(); fsPanel = null;
+  }
+  if (fsPanel){
+    fsPanel.classList.toggle("shut", !fsOpen);
+    fsPanel.querySelector(".fstoggle").textContent = fsOpen ? "Options ▾" : "Options ▴";
+  }
 }
-const FsTools = L.Control.extend({ options: {position: "bottomleft"}, onAdd(){
-  fsBox = L.DomUtil.create("div", "fstools");
-  fsBox.innerHTML = '<button type="button" data-k="dots"></button><button type="button" data-k="clear">Clear dots</button><button type="button" data-k="hail"></button>';
-  L.DomEvent.disableClickPropagation(fsBox);
-  fsBox.onclick = e => {
-    const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.k === "dots") $("dotAdd").click();
-    if (b.dataset.k === "clear") $("dotClear").click();
-    if (b.dataset.k === "hail") $("hSeg").querySelector(`[data-h="${hailOn ? 0 : 1}"]`).click();
-    setTimeout(fsSync, 0);
-  };
-  return fsBox;
-}});
-new FsTools().addTo(map); setTimeout(fsSync, 0);
 function locateMe(btn){
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return; }
   btn.classList.add("busy");
