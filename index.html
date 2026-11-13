@@ -855,7 +855,7 @@ $("readMore").onclick = () => readRow();
 $("readCancel").onclick = () => $("readDlg").close();
 // Readings go to the owner by email (Web3Forms, so the address isn't on the page), with a link that opens the GitHub
 // issue already filled in: the owner checks them, taps it and submits. "Site owner" skips the email.
-const WEB3FORMS_KEY = "";   // the access key from web3forms.com (it only lets the form send email to the owner)
+const WEB3FORMS_KEY = "fe9e8ac1-6429-4f50-8ea1-b730b4ef51f0";   // the access key from web3forms.com (it only lets the form send email to the owner)
 try { $("readWho").value = localStorage.getItem("readWho") || ""; } catch(e){}
 function readIssue(){
   const day = $("readDay").value;
