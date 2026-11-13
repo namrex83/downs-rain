@@ -324,7 +324,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p>
     <p class="sub" id="subTemp" hidden>Temperature forecast from the ECMWF weather model.</p>
     <p class="sub" id="subSoil" hidden>Soil temperature forecast at 10 cm from the weather models.</p></div>
-    <div class="seg"><button id="tFc" aria-pressed="true">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tRain" aria-pressed="false">Rainfall</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tOut" aria-pressed="false">Outlook</button></div>
+    <div class="seg"><button id="tRain" aria-pressed="true">Rainfall</button><button id="tFc" aria-pressed="false">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms</button><button id="tOut" aria-pressed="false">Outlook</button></div>
   </header>
 
   <div class="controls rainOnly" id="rControls">
@@ -547,7 +547,7 @@ const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "week", ring = null,   /* the Rainfall tab opens on the last 7 days */ siloDays = [];
 const isSilo = d => siloDays.includes(d);   // days before the radar record (or missed by it), from SILO's gauge-based map
 const allDays = () => [...new Set([...idx.days, ...siloDays])].sort();
-let tab = "fc";   // "fc" (forecast), "storms", "radar" or "rain"; the page always opens on Forecast
+let tab = "rain";   // "rain", "fc" (forecast), "temp", "wind", "radar", "soil", "storms" or "outlook"; the page always opens on Rainfall
 // after a pull-down refresh (the address has ?r=), stay on the tab you were on
 try { const t = localStorage.getItem("tab"); if (new URLSearchParams(location.search).has("r") && ["fc","temp","wind","radar","rain","soil","storms","outlook"].includes(t)) tab = t; } catch(e){}
 try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "outlook"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
