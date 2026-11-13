@@ -448,7 +448,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
       <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
       <input type="checkbox" id="readBot" tabindex="-1" autocomplete="off" hidden>
-      <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. The first time you send a gauge, it asks where it is.</p>
+      <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. For a new gauge, tap <b>I'm at the gauge</b> or <b>Pick on map</b> under it so we know where it is.</p>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send</button></div>
       <button type="button" class="linkbtn rdowner" id="readOwner">Site owner: send straight to GitHub</button>
     </form>
@@ -846,13 +846,14 @@ async function loadKnown(){
 const isNewGauge = n => !!n && knownGauges && !knownGauges.has(gaugeKey(n));
 let pickRow = null;   // a row waiting for its spot to be tapped on the map
 function rowLoc(d){
+  // every row offers the two location buttons from the start; a gauge the site already knows shows a tick instead
   const box = d.querySelector(".rdloc"), n = d.children[0].value.trim();
-  if (!isNewGauge(n)) { box.hidden = true; return; }
   box.hidden = false;
+  if (n && knownGauges && !isNewGauge(n)) { box.innerHTML = `<span class="ok">✓ saved gauge</span>`; return; }
   if (d.loc){
     box.innerHTML = `<span class="ok">✓ Location set (${d.loc[0].toFixed(3)}, ${d.loc[1].toFixed(3)})</span> <button type="button" class="linkbtn" data-a="clear">change</button>`;
   } else {
-    box.innerHTML = `<span>New gauge: where is it?</span><span class="rdlocbtns"><button type="button" data-a="gps">📍 I'm at the gauge</button><button type="button" data-a="map">🗺 Pick on map</button></span>`;
+    box.innerHTML = `<span class="rdlocbtns"><button type="button" data-a="gps">📍 I'm at the gauge</button><button type="button" data-a="map">🗺 Pick on map</button></span>`;
   }
 }
 function readRow(name = "", mm = ""){
