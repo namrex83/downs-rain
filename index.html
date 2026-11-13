@@ -146,8 +146,24 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .hailkey .hk2{background:rgba(214,0,214,.8)}
 .hailtxt{color:#b000b0}
 .addfield{flex:1 1 100%}
-.addread{font:600 .9rem var(--body);color:#fff;background:var(--accent);border:0;border-radius:999px;padding:9px 16px;cursor:pointer;align-self:flex-start;box-shadow:0 1px 5px rgba(0,40,80,.25)}
-.fspanel .addread{padding:6px 12px;font-size:.8rem}
+/* the readings button: bright and full width so nobody misses it, with a gentle pulse when the page opens */
+.addread{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font:700 1rem var(--body);color:#2a1a00;background:#fbbf24;
+  border:0;border-radius:12px;padding:11px 16px;cursor:pointer;box-shadow:0 2px 10px rgba(180,110,0,.35);animation:addpulse 1.6s ease-in-out 3}
+.addread:active{background:#f59e0b}
+@keyframes addpulse{0%,100%{box-shadow:0 2px 10px rgba(180,110,0,.35)}50%{box-shadow:0 0 0 6px rgba(251,191,36,.35),0 2px 10px rgba(180,110,0,.35)}}
+.fspanel .addread{width:auto;padding:6px 12px;font-size:.8rem;animation:none}
+/* the rarely changed Rainfall options fold away under "More options" (all shown in full screen) */
+.rmore{display:contents}
+.rmore[hidden]{display:none}
+.morefield{flex:0 0 auto;justify-content:flex-end;order:4}
+#weekField{order:3}
+.rmore > .field{order:5}   /* the picker and More options share a row, the folded options come after */
+@media (min-width:1000px){ #dayField,#weekField{flex:1 1 270px} }
+.morebtn{font:600 .85rem var(--body);color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;white-space:nowrap}
+#dayField,#weekField{flex:1 1 170px;min-width:0}
+#dayField select,#weekField select{width:100%}
+.fspanel .rmore[hidden]{display:contents!important}
+.fspanel .morefield{display:none}
 #readDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #readDlg::backdrop{background:rgba(10,30,50,.45)}
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
@@ -168,7 +184,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rdbtns .primary{background:var(--accent);color:var(--accent-ink,#fff);border:0;border-radius:999px;padding:9px 16px;font:600 .9rem var(--body);cursor:pointer}
 .gnote{font-size:.78rem;color:var(--ink-3);text-align:left;padding-top:8px}
 .rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
-#dayField{order:3;flex:1 1 100%}
+#dayField{order:3;flex:1 1 200px;min-width:0}
 #dayField select{width:100%;font:600 1.05rem var(--body);min-height:44px;padding:6px 40px 6px 12px;border:2px solid var(--accent);
   -webkit-appearance:none;appearance:none;cursor:pointer;
   background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%231d6fb8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center}
@@ -291,6 +307,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   .field{gap:2px}
   label,.eyebrow{font-size:.6rem}
   .seg button{font-size:.8rem;min-height:32px;padding:0 9px}
+  .morebtn{min-height:34px;font-size:.8rem;padding:0 11px}
+  .controls.radarOnly .eyebrow{display:none}   /* Radar: the buttons say what they are */
+  #rSite button,#rRange button{padding:0 7px;font-size:.76rem}
   #sFieldWrap{flex:1 1 100%}
   select{font-size:.85rem;min-height:34px;padding:4px 8px}
   /* four tabs: put them on their own full-width row under the title */
@@ -298,7 +317,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   header>div:first-child{flex:1 1 100%}
   header .seg{flex:1 1 100%}
   header .seg button{flex:1 1 auto;min-width:0;min-height:54px;font-size:.72rem;padding:0 1px;letter-spacing:-.01em}
-  #dayField{order:3;flex:1 1 100%}
+  #dayField{order:3;flex:1 1 200px;min-width:0}
   #dayField select{font-size:1rem;min-height:42px}
   #map{min-height:240px}
   .tap{padding:6px 10px;font-size:.85rem}
@@ -328,11 +347,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </header>
 
   <div class="controls rainOnly" id="rControls">
-    <div class="field addfield"><button class="addread" id="addRead" type="button">＋ Add gauge readings</button></div>
+    <div class="field addfield"><button class="addread" id="addRead" type="button"><span aria-hidden="true">🌧</span> Add your rain gauge reading</button></div>
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field" id="weekField"><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
+    <div class="field morefield"><button type="button" class="morebtn" id="rMoreBtn" aria-expanded="false">More options ▾</button></div>
+    <div class="rmore" id="rMore" hidden>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg"><button id="mCorr" aria-pressed="true">Gauge-corrected</button><button id="mRaw" aria-pressed="false">Radar only</button></div></div>
     <div class="field"><span class="eyebrow">Gauges</span>
@@ -342,6 +363,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
     <div class="field"><span class="eyebrow">Extra dots</span>
       <div class="seg"><button id="dotAdd" aria-pressed="false">＋ Add dots</button><button id="dotClear" hidden>Clear</button></div></div>
+    </div>
   </div>
 
   <div class="controls stormOnly" hidden>
@@ -1099,6 +1121,15 @@ function refreshDots(){
 function setDotMode(on){ dotMode = on; $("dotAdd").setAttribute("aria-pressed", on); $("dotAdd").textContent = on ? "Tap the map… (done)" : "＋ Add dots"; fsSync(); }
 $("dotAdd").onclick = () => setDotMode(!dotMode);
 $("dotClear").onclick = () => { dots.length = 0; dotLayer.clearLayers(); $("dotClear").hidden = true; setDotMode(false); };
+// "More options" on Rainfall: shows or folds away Show, Gauges, Hail, See-through and Extra dots (remembered)
+function setMore(open){
+  $("rMore").hidden = !open; $("rMoreBtn").setAttribute("aria-expanded", open);
+  $("rMoreBtn").textContent = open ? "Fewer options ▴" : "More options ▾";
+  try { localStorage.setItem("rMore", open ? "1" : "0"); } catch(e){}
+  fitMap();
+}
+$("rMoreBtn").onclick = () => setMore($("rMore").hidden);
+try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $("rMoreBtn").setAttribute("aria-expanded", true); $("rMoreBtn").textContent = "Fewer options ▴"; } } catch(e){}
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
 // The blue circle shows how accurate the phone thinks its position is.
@@ -1191,7 +1222,7 @@ function fitMap(){
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
   const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : 240;
+  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5)) : 240;
   el.style.minHeight = least + "px";
   let h = Math.max(least, innerHeight - top - legend - 10);
   el.style.height = h + "px";
