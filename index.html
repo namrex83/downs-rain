@@ -578,7 +578,7 @@ try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "o
 // tabs keeps wherever the map has been moved to
 const HOME = [-27.4, 152.2], HOME_ZOOM = 8;   // South East Queensland, Dalby to the coast
 const SPOT = {name: "Toowoomba", ll: [-27.56, 151.95]};   // the chart and day buttons read here until a spot is tapped
-const map = L.map("map", {zoomControl: true, zoomSnap: 0.25}).setView(HOME, HOME_ZOOM);
+const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13}).setView(HOME, HOME_ZOOM);   // past about 13 the rain data (0.5-2 km squares) only gets blockier
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
 map.getPane("labels").style.zIndex = 450;
