@@ -157,6 +157,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #readPinNote{margin:4px 0 0}
 .linkbtn{background:none;border:0;color:var(--accent);font:600 .85rem var(--body);padding:6px 0;cursor:pointer}
 .rdbtns{display:flex;justify-content:flex-end;gap:16px;align-items:center;margin-top:8px}
+.rdowner{display:block;margin:10px 0 0 auto;font-size:.75rem;color:var(--ink-3)}
 .rdbtns .primary{background:var(--accent);color:var(--accent-ink,#fff);border:0;border-radius:999px;padding:9px 16px;font:600 .9rem var(--body);cursor:pointer}
 .gnote{font-size:.78rem;color:var(--ink-3);text-align:left;padding-top:8px}
 .rangefield{flex:1 1 120px;max-width:220px} .rangefield input{width:100%;accent-color:var(--accent);min-height:32px;margin:0}
@@ -438,10 +439,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
       <p class="note" id="readPinNote" hidden>📍 on: that gauge's position is saved from the map pin, so it can correct the map. It's listed in the gauge table (no dot on the map).</p>
-      <p class="note">This opens GitHub with your readings filled in: tap <b>Submit new issue</b> there (signed in as the site owner).
-        The map is re-corrected a few minutes later. For a <b>new gauge</b>, put the map pin on it first (tap the map, or My location)
-        and tap <b>📍</b> on its row: its position is saved once, so later readings only need the mm.</p>
-      <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send to GitHub</button></div>
+      <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
+      <input type="checkbox" id="readBot" tabindex="-1" autocomplete="off" hidden>
+      <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. For a <b>new gauge</b>, put the map pin on it
+        first (tap the map, or My location) and tap <b>📍</b> on its row, so its position is known.</p>
+      <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send</button></div>
+      <button type="button" class="linkbtn rdowner" id="readOwner">Site owner: send straight to GitHub</button>
     </form>
   </dialog>
   <section class="panel radarOnly" hidden>
@@ -843,27 +846,56 @@ $("addRead").onclick = async () => {
   const names = await gaugeNames();
   if (!$("readList")) { const dl = document.createElement("datalist"); dl.id = "readList"; document.body.appendChild(dl); }
   $("readList").innerHTML = names.map(n => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
-  const recent = names.filter(n => /ddcgi/i.test(n)).slice(0, 6);
-  (recent.length ? recent : ["", "", ""]).forEach(n => readRow(n));
+  let mine = [];   // the gauges last sent from this phone, so each person starts with their own
+  try { mine = JSON.parse(localStorage.getItem("readMine") || "[]"); } catch(e){}
+  (mine.length ? mine : ["", "", ""]).forEach(n => readRow(n));
   $("readDlg").showModal();
 };
 $("readMore").onclick = () => readRow();
 $("readCancel").onclick = () => $("readDlg").close();
-$("readForm").onsubmit = async e => {
-  e.preventDefault();
+// Readings go to the owner by email (Web3Forms, so the address isn't on the page), with a link that opens the GitHub
+// issue already filled in: the owner checks them, taps it and submits. "Site owner" skips the email.
+const WEB3FORMS_KEY = "";   // the access key from web3forms.com (it only lets the form send email to the owner)
+try { $("readWho").value = localStorage.getItem("readWho") || ""; } catch(e){}
+function readIssue(){
   const day = $("readDay").value;
   const all = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim(), r.children[2].getAttribute("aria-pressed") === "true"]);
   const rows = all.filter(([n, mm]) => n && mm !== "" && !isNaN(+mm));
   const pins = all.filter(([n, , p]) => n && p);
-  if (!day || (!rows.length && !pins.length)) { alert("Enter the rain day and at least one gauge with its mm."); return; }
-  const win = window.open("about:blank", "_blank");   // opened now, while the tap still counts, then sent to GitHub
-  if (win) win.opener = null;
+  if (!day || (!rows.length && !pins.length)) { alert("Enter the rain day and at least one gauge with its mm."); return null; }
   const posLines = pins.map(([n]) => `pos,${n},${tapAt.lat.toFixed(5)},${tapAt.lng.toFixed(5)}`);
-  const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
+  const who = $("readWho").value.trim();
+  const body = `Readings for the rain day to 9am ${day}${who ? ` from ${who}` : ""}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
     + (posLines.length ? "\n\nNew gauge position (from the map pin):\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
-  const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`;
-  if (win) win.location.href = url; else location.href = url;
+  try { localStorage.setItem("readMine", JSON.stringify([...new Set(all.filter(([n]) => n).map(([n]) => n))].slice(0, 12))); } catch(e){}
+  return {day, rows, pins, who, body, url: `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`};
+}
+$("readOwner").onclick = () => {
+  const r = readIssue(); if (!r) return;
+  const win = window.open(r.url, "_blank"); if (win) win.opener = null; else location.href = r.url;
   $("readDlg").close();
+};
+$("readForm").onsubmit = async e => {
+  e.preventDefault();
+  if ($("readBot").checked) return;   // filled in by a spam robot
+  const r = readIssue(); if (!r) return;
+  try { localStorage.setItem("readWho", r.who); } catch(_){}
+  if (!WEB3FORMS_KEY) { alert("Sending readings by email isn't switched on yet. Please send them to Namrex Weather Co. another way for now."); return; }
+  $("readSend").disabled = true; $("readSend").textContent = "Sending…";
+  const lines = r.rows.map(([n, mm]) => `${n}: ${+mm} mm`).join("\n");
+  const message = `Rain gauge readings for the rain day to 9am ${r.day}, from ${r.who || "(no name given)"}:\n\n${lines || "(no readings)"}`
+    + (r.pins.length ? `\n\nNew gauge position from the map pin: ${r.pins.map(p => p[0]).join(", ")} at ${tapAt.lat.toFixed(5)}, ${tapAt.lng.toFixed(5)}` : "")
+    + `\n\nTo add them to the map, open this link and tap "Submit new issue":\n${r.url}`;
+  try {
+    const res = await fetch("https://api.web3forms.com/submit", {method: "POST", headers: {"Content-Type": "application/json", Accept: "application/json"},
+      body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: `Gauge readings ${r.day}${r.who ? ` from ${r.who}` : ""}`, from_name: "SEQ Weather Desk", message})});
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message || "not sent");
+    alert("Thanks! Your readings have been sent. They'll show on the map once they've been checked and added.");
+    $("readDlg").close();
+  } catch(err){
+    alert("Sorry, the readings couldn't be sent just now. Please try again in a minute.");
+  } finally { $("readSend").disabled = false; $("readSend").textContent = "Send"; }
 };
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
 // listed in the table by name, but their positions are never sent to the page, so they get no dot. Values show when zoomed in, or tap a dot.
