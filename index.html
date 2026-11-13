@@ -150,6 +150,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #readDlg::backdrop{background:rgba(10,30,50,.45)}
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
 #readDlg .rdday{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
+#readDlg select{font:inherit;font-size:16px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);width:100%}
 #readDlg input{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);min-width:0}
 .rdrow{display:grid;grid-template-columns:1fr 82px;gap:6px;margin-bottom:8px}
 .rdloc{grid-column:1/-1;font-size:.8rem;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:-2px}
@@ -442,7 +443,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <dialog id="readDlg" aria-labelledby="readTitle">
     <form method="dialog" id="readForm">
       <h3 id="readTitle">Add gauge readings</h3>
-      <label class="rdday">Rain day, to 9am on <input type="date" id="readDay" required></label>
+      <label class="rdday">Which rain? (gauges are read at 9am) <select id="readDay" required></select></label>
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
       <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
@@ -889,7 +890,12 @@ function pickDone(ll){
 }
 $("addRead").onclick = async () => {
   const qh = new Date(Date.now() + 36e5 * 10).getUTCHours();
-  $("readDay").value = qh < 9 ? runningEnd() : addDays(runningEnd(), -1);   // before 9am: the day ending this morning
+  // the rain days to choose from, each spelled out (9am one day to 9am the next); it starts on the one ending 9am today
+  const today = qh < 9 ? runningEnd() : addDays(runningEnd(), -1);
+  const opts = [[addDays(today, 1), "since 9am today (so far)"], [today, "to 9am today"], [addDays(today, -1), "to 9am yesterday"]];
+  for (let k = 2; k <= 6; k++) opts.push([addDays(today, -k), `to 9am ${part(addDays(today, -k), {weekday: "long"})}`]);
+  $("readDay").innerHTML = opts.map(([d, txt]) => `<option value="${d}">${rainDay(d)} · rain ${txt}</option>`).join("");
+  $("readDay").value = today;
   $("readRows").innerHTML = "";
   const names = await gaugeNames();
   if (!$("readList")) { const dl = document.createElement("datalist"); dl.id = "readList"; document.body.appendChild(dl); }
@@ -935,12 +941,12 @@ $("readForm").onsubmit = async e => {
   if (!WEB3FORMS_KEY) { alert("Sending readings by email isn't switched on yet. Please send them to Namrex Weather Co. another way for now."); return; }
   $("readSend").disabled = true; $("readSend").textContent = "Sending…";
   const lines = r.rows.map(([n, mm]) => `${n}: ${+mm} mm`).join("\n");
-  const message = `Rain gauge readings for the rain day to 9am ${r.day}, from ${r.who || "(no name given)"}:\n\n${lines || "(no readings)"}`
+  const message = `Rain gauge readings for ${rainDay(r.day)} (9am to 9am), from ${r.who || "(no name given)"}:\n\n${lines || "(no readings)"}`
     + (r.pins.length ? `\n\nNew gauge${r.pins.length > 1 ? "s" : ""}: ${r.pins.map(([n, , loc]) => `${n} at ${loc[0].toFixed(5)}, ${loc[1].toFixed(5)}`).join("; ")}` : "")
     + `\n\nTo add them to the map, open this link and tap "Submit new issue":\n${r.url}`;
   try {
     const res = await fetch("https://api.web3forms.com/submit", {method: "POST", headers: {"Content-Type": "application/json", Accept: "application/json"},
-      body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: `Gauge readings ${r.day}${r.who ? ` from ${r.who}` : ""}`, from_name: "SEQ Weather Desk", message})});
+      body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: `Gauge readings ${rainDay(r.day)}${r.who ? ` from ${r.who}` : ""}`, from_name: "SEQ Weather Desk", message})});
     const j = await res.json();
     if (!j.success) throw new Error(j.message || "not sent");
     alert("Thanks! Your readings have been sent. They'll show on the map once they've been checked and added.");
