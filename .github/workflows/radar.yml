@@ -643,14 +643,14 @@ jobs:
                           continue
                       if secret is None:
                           secret = private_sites()
-                      if public_pos is None:   # gauges whose position was sent from the page (📍): public, shown on the map
+                      if public_pos is None:   # gauges whose position was sent from the page (📍): listed in the table, no dot
                           try:
                               public_pos = {site_key(k): (float(v[0]), float(v[1])) for k, v in json.load(open(os.path.join(ROOT, "gauge_positions.json"))).items()}
                           except (OSError, ValueError, TypeError, IndexError):
                               public_pos = {}
                       if site_key(parts[1]) not in secret and site_key(parts[1]) in public_pos:
                           lat, lon = public_pos[site_key(parts[1])]
-                          out.append({"name": parts[1], "lat": lat, "lon": lon, "mm": mm, "source": "mine"})
+                          out.append({"name": parts[1], "lat": lat, "lon": lon, "mm": mm, "source": "mine", "private": True})
                           continue
                       if site_key(parts[1]) in secret:
                           lat, lon = secret[site_key(parts[1])]

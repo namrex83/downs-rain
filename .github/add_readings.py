@@ -5,7 +5,7 @@ Run by .github/workflows/gauge-readings.yml, only for issues opened by the repos
 the BODY environment variable; each reading is a line "date,name,,,mm" (date = the morning of the 9am reading).
 A reading for a gauge and day already in the file replaces the old one. Gauge positions are never taken from the
 issue for the private gauges (those stay in the PRIVATE_GAUGES secret). A line "pos,name,lat,lon" (the 📍 button)
-saves a new gauge's position in gauge_positions.json; those gauges are public (a dot on the map). Writes a short
+saves a new gauge's position in gauge_positions.json (used for the correction; listed in the table, no dot). Writes a short
 report to report.md for the reply on the issue.
 """
 import datetime as dt
@@ -95,7 +95,7 @@ def main():
         out.append("No readings found in this issue, so nothing was added.")
     if saved:
         out.append("")
-        out.append(f"Saved the position for: {', '.join(saved)} (from the map pin; shown as a dot on the map).")
+        out.append(f"Saved the position for: {', '.join(saved)} (from the map pin). It's used to correct the map and listed in the gauge table.")
     if failed:
         out.append("")
         out.append(f"Couldn't save the position for: {', '.join(failed)}.")
