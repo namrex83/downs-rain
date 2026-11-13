@@ -151,10 +151,14 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
 #readDlg .rdday{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
 #readDlg input{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);min-width:0}
-.rdrow{display:grid;grid-template-columns:1fr 74px 40px;gap:6px;margin-bottom:6px}
-.rdpin{border:1px solid var(--line);border-radius:8px;background:none;font-size:1.05rem;cursor:pointer;opacity:.45}
-.rdpin[aria-pressed=true]{opacity:1;background:var(--accent);border-color:var(--accent)}
-#readPinNote{margin:4px 0 0}
+.rdrow{display:grid;grid-template-columns:1fr 82px;gap:6px;margin-bottom:8px}
+.rdloc{grid-column:1/-1;font-size:.8rem;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:-2px}
+.rdloc .ok{color:#1b7f3b;font-weight:600}
+.rdlocbtns{display:flex;flex-wrap:wrap;gap:6px}
+.rdlocbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:6px 10px;cursor:pointer}
+#pickBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:3500;background:var(--accent);color:#fff;font:600 .95rem var(--body);padding:10px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,30,60,.35);display:flex;gap:12px;align-items:center;white-space:nowrap}
+#pickBar[hidden]{display:none}
+#pickBar button{background:#fff;color:var(--accent);border:0;border-radius:999px;padding:4px 10px;font:600 .85rem var(--body)}
 .linkbtn{background:none;border:0;color:var(--accent);font:600 .85rem var(--body);padding:6px 0;cursor:pointer}
 .rdbtns{display:flex;justify-content:flex-end;gap:16px;align-items:center;margin-top:8px}
 .rdowner{display:block;margin:10px 0 0 auto;font-size:.75rem;color:var(--ink-3)}
@@ -441,15 +445,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <label class="rdday">Rain day, to 9am on <input type="date" id="readDay" required></label>
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
-      <p class="note" id="readPinNote" hidden>📍 on: that gauge's position is saved from the map pin, so it can correct the map. It's listed in the gauge table (no dot on the map).</p>
       <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
       <input type="checkbox" id="readBot" tabindex="-1" autocomplete="off" hidden>
-      <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. For a <b>new gauge</b>, put the map pin on it
-        first (tap the map, or My location) and tap <b>📍</b> on its row, so its position is known.</p>
+      <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. The first time you send a gauge, it asks where it is.</p>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send</button></div>
       <button type="button" class="linkbtn rdowner" id="readOwner">Site owner: send straight to GitHub</button>
     </form>
   </dialog>
+  <div id="pickBar" hidden>Tap the map where the gauge is <button type="button" id="pickCancel">Cancel</button></div>
   <section class="panel radarOnly" hidden>
     <p class="note">The Bureau of Meteorology's South East Queensland radars, Toowoomba (Mt Kynoch), Brisbane (Mt Stapylton), Marburg and Gympie (Mt Kanigan), at 128, 256 or 512 km range (not every radar has every range), the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
@@ -830,17 +833,58 @@ async function gaugeNames(){
   } catch(e){ readNames = []; }
   return readNames;
 }
+// Gauges with a saved position (names only, from data/gauge_known.json). A name not on it is a new gauge: its row
+// asks where it is (phone location, a spot picked on the map, or the map pin) and won't send without one.
+let knownGauges = null;
+const gaugeKey = n => n.toLowerCase().replace("(ddcgi)", "").split(/\s+/).filter(Boolean).join(" ");
+async function loadKnown(){
+  if (knownGauges) return;
+  try { knownGauges = new Set(await getJSON("data/gauge_known.json")); } catch(e){ knownGauges = null; }
+}
+const isNewGauge = n => !!n && knownGauges && !knownGauges.has(gaugeKey(n));
+let pickRow = null;   // a row waiting for its spot to be tapped on the map
+function rowLoc(d){
+  const box = d.querySelector(".rdloc"), n = d.children[0].value.trim();
+  if (!isNewGauge(n)) { box.hidden = true; return; }
+  box.hidden = false;
+  if (d.loc){
+    box.innerHTML = `<span class="ok">✓ Location set (${d.loc[0].toFixed(3)}, ${d.loc[1].toFixed(3)})</span> <button type="button" class="linkbtn" data-a="clear">change</button>`;
+  } else {
+    box.innerHTML = `<span>New gauge: where is it?</span><span class="rdlocbtns"><button type="button" data-a="gps">📍 Use my location</button><button type="button" data-a="map">🗺 Pick on map</button>${tapAt ? '<button type="button" data-a="pin">Use the map pin</button>' : ""}</span>`;
+  }
+}
 function readRow(name = "", mm = ""){
-  const d = document.createElement("div"); d.className = "rdrow";
-  d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm"><button type="button" class="rdpin" aria-pressed="false" title="Save the map pin as this gauge's position (new gauges)">📍</button>`;
+  const d = document.createElement("div"); d.className = "rdrow"; d.loc = null;
+  d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm"><div class="rdloc" hidden></div>`;
   d.children[0].value = name; d.children[1].value = mm;
-  d.children[2].onclick = () => {
-    const on = d.children[2].getAttribute("aria-pressed") !== "true";
-    if (on && !tapAt) { alert("Put the map pin on the gauge first: close this, tap the map where the gauge is (or use My location), then open the form again."); return; }
-    d.children[2].setAttribute("aria-pressed", on);
-    $("readPinNote").hidden = ![...$("readRows").children].some(r => r.children[2].getAttribute("aria-pressed") === "true");
+  d.children[0].addEventListener("change", () => { d.loc = null; rowLoc(d); });
+  d.children[0].addEventListener("blur", () => rowLoc(d));
+  d.querySelector(".rdloc").onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.a === "clear") { d.loc = null; rowLoc(d); }
+    if (b.dataset.a === "pin" && tapAt) { d.loc = [tapAt.lat, tapAt.lng]; rowLoc(d); }
+    if (b.dataset.a === "gps"){
+      if (!navigator.geolocation) { alert("This phone can't share its location here. Use Pick on map instead."); return; }
+      b.textContent = "Finding you…";
+      navigator.geolocation.getCurrentPosition(pos => { d.loc = [pos.coords.latitude, pos.coords.longitude]; rowLoc(d); },
+        () => { alert("Couldn't get your location. Check location is allowed for this site, or use Pick on map."); rowLoc(d); },
+        {enableHighAccuracy: true, timeout: 20000});
+    }
+    if (b.dataset.a === "map"){
+      pickRow = d; $("readDlg").close();
+      $("pickBar").hidden = false;
+      $("map").scrollIntoView({behavior: "smooth", block: "center"});   // the form is opened from below the table
+    }
   };
   $("readRows").appendChild(d);
+  rowLoc(d);
+}
+function pickDone(ll){
+  $("pickBar").hidden = true;
+  const d = pickRow; pickRow = null;
+  if (d && ll) d.loc = [ll.lat, ll.lng];
+  if (d) rowLoc(d);
+  $("readDlg").showModal();
 }
 $("addRead").onclick = async () => {
   const qh = new Date(Date.now() + 36e5 * 10).getUTCHours();
@@ -851,10 +895,12 @@ $("addRead").onclick = async () => {
   $("readList").innerHTML = names.map(n => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
   let mine = [];   // the gauges last sent from this phone, so each person starts with their own
   try { mine = JSON.parse(localStorage.getItem("readMine") || "[]"); } catch(e){}
+  await loadKnown();
   (mine.length ? mine : ["", "", ""]).forEach(n => readRow(n));
   $("readDlg").showModal();
 };
 $("readMore").onclick = () => readRow();
+$("pickCancel").onclick = () => pickDone(null);
 $("readCancel").onclick = () => $("readDlg").close();
 // Readings go to the owner by email (Web3Forms, so the address isn't on the page), with a link that opens the GitHub
 // issue already filled in: the owner checks them, taps it and submits. "Site owner" skips the email.
@@ -862,14 +908,16 @@ const WEB3FORMS_KEY = "fe9e8ac1-6429-4f50-8ea1-b730b4ef51f0";   // the access ke
 try { $("readWho").value = localStorage.getItem("readWho") || ""; } catch(e){}
 function readIssue(){
   const day = $("readDay").value;
-  const all = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim(), r.children[2].getAttribute("aria-pressed") === "true"]);
+  const all = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim(), r.loc]);
   const rows = all.filter(([n, mm]) => n && mm !== "" && !isNaN(+mm));
-  const pins = all.filter(([n, , p]) => n && p);
-  if (!day || (!rows.length && !pins.length)) { alert("Enter the rain day and at least one gauge with its mm."); return null; }
-  const posLines = pins.map(([n]) => `pos,${n},${tapAt.lat.toFixed(5)},${tapAt.lng.toFixed(5)}`);
+  const pins = all.filter(([n, , loc]) => n && loc);
+  if (!day || !rows.length) { alert("Enter the rain day and at least one gauge with its mm."); return null; }
+  const missing = rows.filter(([n, , loc]) => isNewGauge(n) && !loc).map(([n]) => n);
+  if (missing.length) { alert(`Please set where ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"}: tap "Use my location" (if you're at the gauge) or "Pick on map" under ${missing.length > 1 ? "them" : "it"}.`); return null; }
+  const posLines = pins.map(([n, , loc]) => `pos,${n},${loc[0].toFixed(5)},${loc[1].toFixed(5)}`);
   const who = $("readWho").value.trim();
   const body = `Readings for the rain day to 9am ${day}${who ? ` from ${who}` : ""}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
-    + (posLines.length ? "\n\nNew gauge position (from the map pin):\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
+    + (posLines.length ? "\n\nNew gauge position:\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
   try { localStorage.setItem("readMine", JSON.stringify([...new Set(all.filter(([n]) => n).map(([n]) => n))].slice(0, 12))); } catch(e){}
   return {day, rows, pins, who, body, url: `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`};
 }
@@ -887,7 +935,7 @@ $("readForm").onsubmit = async e => {
   $("readSend").disabled = true; $("readSend").textContent = "Sending…";
   const lines = r.rows.map(([n, mm]) => `${n}: ${+mm} mm`).join("\n");
   const message = `Rain gauge readings for the rain day to 9am ${r.day}, from ${r.who || "(no name given)"}:\n\n${lines || "(no readings)"}`
-    + (r.pins.length ? `\n\nNew gauge position from the map pin: ${r.pins.map(p => p[0]).join(", ")} at ${tapAt.lat.toFixed(5)}, ${tapAt.lng.toFixed(5)}` : "")
+    + (r.pins.length ? `\n\nNew gauge${r.pins.length > 1 ? "s" : ""}: ${r.pins.map(([n, , loc]) => `${n} at ${loc[0].toFixed(5)}, ${loc[1].toFixed(5)}`).join("; ")}` : "")
     + `\n\nTo add them to the map, open this link and tap "Submit new issue":\n${r.url}`;
   try {
     const res = await fetch("https://api.web3forms.com/submit", {method: "POST", headers: {"Content-Type": "application/json", Accept: "application/json"},
@@ -1005,7 +1053,7 @@ function setPin(label){
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
 const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
-map.on("click", ev => { if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
+map.on("click", ev => { if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
 
 // Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
 // several spots can be compared (or screenshotted) at once. They follow the day or view picked; Clear removes them.

@@ -624,6 +624,22 @@ jobs:
               return out
           
           
+          def write_known_gauges():
+              """data/gauge_known.json: the (matching) names of the local gauges that have a position, private or from
+              the page, so the page's form knows when a gauge is new and asks where it is. Names only, never positions."""
+              keys = set(private_sites())
+              try:
+                  keys |= {site_key(k) for k in json.load(open(os.path.join(ROOT, "gauge_positions.json")))}
+              except (OSError, ValueError):
+                  pass
+              p = os.path.join(DATA, "gauge_known.json")
+              text = json.dumps(sorted(keys))
+              if not os.path.exists(p) or open(p).read() != text:
+                  os.makedirs(DATA, exist_ok=True)
+                  with open(p, "w") as f:
+                      f.write(text)
+          
+          
           def read_my_gauges(day):
               """Optional my_gauges.csv with lines: date,name,lat,lon,mm (date = the 9am reading day). A line with
               no lat/lon (date,name,,,mm) is a private gauge: its position comes from the PRIVATE_GAUGES secret."""
@@ -1175,6 +1191,10 @@ jobs:
           
                   recorrect_changed_days()
           
+                  try:
+                      write_known_gauges()
+                  except Exception as e:
+                      log(f"  known gauge list skipped: {e}")
                   try:
                       write_obs(positions)
                   except Exception as e:
