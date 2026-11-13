@@ -202,8 +202,10 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 #map.full{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;min-height:0!important;z-index:3000;border-radius:0!important;margin:0!important}
 body.mapfull{overflow:hidden}
 #map.full .leaflet-top{top:env(safe-area-inset-top,0px)}
-.fspanel{position:absolute;left:0;right:0;bottom:0;z-index:1000;max-height:58%;overflow:auto;background:var(--bg,#eef3f8);
-  border-radius:16px 16px 0 0;box-shadow:0 -4px 18px rgba(0,30,60,.3);padding:10px 12px calc(22px + env(safe-area-inset-bottom,0px))}
+.fspanel{position:absolute;left:0;right:0;bottom:0;z-index:1000;max-height:58%;overflow:auto;background:rgba(240,245,250,.38);
+  -webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);   /* see-through, so the map shows behind the options */
+  border-radius:16px 16px 0 0;box-shadow:0 -2px 10px rgba(0,30,60,.18);padding:10px 12px calc(22px + env(safe-area-inset-bottom,0px))}
+.fspanel .eyebrow,.fspanel label{color:#1c2621;text-shadow:0 0 3px #fff,0 0 6px #fff}
 .fspanel .controls{margin:0}
 .fspanel.shut{background:none;box-shadow:none;padding:0 12px calc(26px + env(safe-area-inset-bottom,0px));overflow:visible}
 .fspanel.shut .controls{display:none}
