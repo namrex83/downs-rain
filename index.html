@@ -145,7 +145,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .hailkey .hk1{background:repeating-linear-gradient(135deg,rgba(214,0,214,.95) 0 2px,transparent 2px 5px);outline:1px solid rgba(214,0,214,.5)}
 .hailkey .hk2{background:rgba(214,0,214,.8)}
 .hailtxt{color:#b000b0}
-.addread{margin-top:10px;font:600 .85rem var(--body);color:var(--accent);background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer}
+.addfield{flex:1 1 100%}
+.addread{font:600 .9rem var(--body);color:#fff;background:var(--accent);border:0;border-radius:999px;padding:9px 16px;cursor:pointer;align-self:flex-start;box-shadow:0 1px 5px rgba(0,40,80,.25)}
+.fspanel .addread{padding:6px 12px;font-size:.8rem}
 #readDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #readDlg::backdrop{background:rgba(10,30,50,.45)}
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
@@ -326,6 +328,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </header>
 
   <div class="controls rainOnly" id="rControls">
+    <div class="field addfield"><button class="addread" id="addRead" type="button">＋ Add gauge readings</button></div>
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
@@ -454,7 +457,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
-    <button class="addread" id="addRead" type="button">＋ Add gauge readings</button>
   </section>
   <dialog id="readDlg" aria-labelledby="readTitle">
     <form method="dialog" id="readForm">
@@ -865,12 +867,11 @@ function rowLoc(d){
   // every row offers the two location buttons from the start; a gauge the site already knows shows a tick instead
   const box = d.querySelector(".rdloc"), n = d.children[0].value.trim();
   box.hidden = false;
-  if (n && knownGauges && !isNewGauge(n)) { box.innerHTML = `<span class="ok">✓ saved gauge</span>`; return; }
-  if (d.loc){
-    box.innerHTML = `<span class="ok">✓ Location set (${d.loc[0].toFixed(3)}, ${d.loc[1].toFixed(3)})</span> <button type="button" class="linkbtn" data-a="clear">change</button>`;
-  } else {
-    box.innerHTML = `<span class="rdlocbtns"><button type="button" data-a="gps">📍 I'm at the gauge</button><button type="button" data-a="map">🗺 Pick on map</button></span>`;
-  }
+  const html = n && knownGauges && !isNewGauge(n) ? `<span class="ok">✓ saved gauge</span>`
+    : d.loc ? `<span class="ok">✓ Location set (${d.loc[0].toFixed(3)}, ${d.loc[1].toFixed(3)})</span> <button type="button" class="linkbtn" data-a="clear">change</button>`
+    : `<span class="rdlocbtns"><button type="button" data-a="gps">📍 I'm at the gauge</button><button type="button" data-a="map">🗺 Pick on map</button></span>`;
+  // only redraw when it changes: redrawing as the name box loses focus would swallow a tap on these buttons
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 function readRow(name = "", mm = ""){
   const d = document.createElement("div"); d.className = "rdrow"; d.loc = null;
