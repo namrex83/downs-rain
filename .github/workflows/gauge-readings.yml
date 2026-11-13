@@ -30,6 +30,7 @@ jobs:
           BODY: ${{ github.event.issue.body }}
           ISSUE: ${{ github.event.issue.number }}
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # only to say which names have no saved position; never written out
+          PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}
         run: python3 .github/add_readings.py
 
       - name: Save

@@ -57,10 +57,12 @@ def main():
         kept += [f"{day},{name},,,{mm:g}" for day, name, mm in new]
         with open(CSV, "w") as f:
             f.write("\n".join(kept) + "\n")
-    try:
-        secret = {site_key(k) for k in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}")}
-    except ValueError:
-        secret = set()
+    secret = set()
+    for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA"):
+        try:
+            secret |= {site_key(k) for k in json.loads(os.environ.get(var) or "{}")}
+        except (ValueError, TypeError):
+            pass
     unplaced = sorted({name for _, name, _ in new if site_key(name) not in secret})
     out = []
     if new:
@@ -74,7 +76,7 @@ def main():
     if unplaced:
         out.append("")
         out.append(f"No saved position yet for: {', '.join(unplaced)}. These show in the gauge table but can't correct "
-                   "the map until their position is added to the private gauge list (ask Claude to add it).")
+                   "the map until their position is added to the private gauge list (the PRIVATE_GAUGES_EXTRA secret; ask Claude how).")
     if bad:
         out.append("")
         out.append("Couldn't read these lines (left out): " + "; ".join(f"`{b}`" for b in bad[:10]))

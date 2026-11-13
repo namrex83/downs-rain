@@ -615,11 +615,13 @@ jobs:
               """Positions of local gauges, {name: (lat, lon)}, from the PRIVATE_GAUGES secret (JSON {name: [lat, lon]}).
               They're used in the correction and listed by name in the gauge table, but their positions are
               never written to anything public (no dot on the map, no lat/lon in the data files)."""
-              try:
-                  return {site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get("PRIVATE_GAUGES") or "{}").items()}
-              except (ValueError, TypeError, IndexError):
-                  log("  PRIVATE_GAUGES secret isn't valid JSON; local gauges skipped")
-                  return {}
+              out = {}
+              for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA"):   # the second list is for gauges added later
+                  try:
+                      out.update({site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get(var) or "{}").items()})
+                  except (ValueError, TypeError, IndexError, AttributeError):
+                      log(f"  {var} secret isn't valid JSON; the gauges in it are skipped")
+              return out
           
           
           def read_my_gauges(day):
@@ -1211,6 +1213,7 @@ jobs:
       - name: Process radar
         env:
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
+          PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}   # more, in the same form (gauges added later)
         run: python radar.py
 
       - name: Season total
