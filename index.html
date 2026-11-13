@@ -151,7 +151,10 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
 #readDlg .rdday{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
 #readDlg input{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);min-width:0}
-.rdrow{display:grid;grid-template-columns:1fr 82px;gap:6px;margin-bottom:6px}
+.rdrow{display:grid;grid-template-columns:1fr 74px 40px;gap:6px;margin-bottom:6px}
+.rdpin{border:1px solid var(--line);border-radius:8px;background:none;font-size:1.05rem;cursor:pointer;opacity:.45}
+.rdpin[aria-pressed=true]{opacity:1;background:var(--accent);border-color:var(--accent)}
+#readPinNote{margin:4px 0 0}
 .linkbtn{background:none;border:0;color:var(--accent);font:600 .85rem var(--body);padding:6px 0;cursor:pointer}
 .rdbtns{display:flex;justify-content:flex-end;gap:16px;align-items:center;margin-top:8px}
 .rdbtns .primary{background:var(--accent);color:var(--accent-ink,#fff);border:0;border-radius:999px;padding:9px 16px;font:600 .9rem var(--body);cursor:pointer}
@@ -434,9 +437,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <label class="rdday">Rain day, to 9am on <input type="date" id="readDay" required></label>
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
+      <p class="note" id="readPinNote" hidden>📍 on: that gauge's position is saved from the map pin, locked so only the site's own jobs can read it.</p>
       <p class="note">This opens GitHub with your readings filled in: tap <b>Submit new issue</b> there (signed in as the site owner).
-        The map is re-corrected a few minutes later. Gauge positions are never sent: they stay in your private list.
-        A new gauge needs its position added to that list once (ask Claude).</p>
+        The map is re-corrected a few minutes later. For a <b>new gauge</b>, put the map pin on it first (tap the map, or My location)
+        and tap <b>📍</b> on its row: the position is saved once, locked so it never shows publicly.</p>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send to GitHub</button></div>
     </form>
   </dialog>
@@ -809,6 +813,15 @@ async function draw(){
 // site owner submits it, .github/workflows/gauge-readings.yml adds them to my_gauges.csv and re-runs the radar
 // job. Gauge names used before are suggested; positions are never sent (they stay in the PRIVATE_GAUGES secret).
 const REPO = "namrex83/downs-rain";
+// A new gauge's position (the map pin) is locked on the phone with this public key before it's sent; only the
+// GitHub jobs, holding the matching private key (the GAUGE_KEY secret), can unlock it.
+const GAUGE_PUBKEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkSESLkuYtW9EzkcAPaPbh4VPEpUD0J5v8J6nsv0W3k0Jzc5it079TsgVQJtkL7EtCjGnCqj7r0rEK0Gw2WgCKrMFY3SDfTmWrbDht1VXPZk1/nWMz3IKk+4Cjft9UVX9+rKCLArrU3VUne6rqBA7/Qd1XxWx3Y6kxTop99VdwqvbWCPpnyVvRBB5uqRC7RTUHKaiwhy6cIvTUpLTCcOMrf+1WA/JwOXYohPTnpBWktUP4BK9FkgjmRFKQB1nuWiLlL45l7/xoCaPXleZbY3BdAYgaA3FaZj8+A2UCW9liUcS3LtG/i8beDU43JSDUr5KF/kOGKTFjWwlKqomIyrmeQIDAQAB";
+async function lockPosition(lat, lon){
+  const der = Uint8Array.from(atob(GAUGE_PUBKEY), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("spki", der, {name: "RSA-OAEP", hash: "SHA-256"}, false, ["encrypt"]);
+  const ct = await crypto.subtle.encrypt({name: "RSA-OAEP"}, key, new TextEncoder().encode(JSON.stringify([+lat.toFixed(5), +lon.toFixed(5)])));
+  return btoa(String.fromCharCode(...new Uint8Array(ct)));
+}
 let readNames = null;
 async function gaugeNames(){
   if (readNames) return readNames;
@@ -822,8 +835,14 @@ async function gaugeNames(){
 }
 function readRow(name = "", mm = ""){
   const d = document.createElement("div"); d.className = "rdrow";
-  d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm">`;
+  d.innerHTML = `<input list="readList" placeholder="Gauge name" maxlength="60" aria-label="Gauge name"><input type="number" inputmode="decimal" min="0" max="600" step="0.1" placeholder="mm" aria-label="Rain in mm"><button type="button" class="rdpin" aria-pressed="false" title="Save the map pin as this gauge's position (new gauges)">📍</button>`;
   d.children[0].value = name; d.children[1].value = mm;
+  d.children[2].onclick = () => {
+    const on = d.children[2].getAttribute("aria-pressed") !== "true";
+    if (on && !tapAt) { alert("Put the map pin on the gauge first: close this, tap the map where the gauge is (or use My location), then open the form again."); return; }
+    d.children[2].setAttribute("aria-pressed", on);
+    $("readPinNote").hidden = ![...$("readRows").children].some(r => r.children[2].getAttribute("aria-pressed") === "true");
+  };
   $("readRows").appendChild(d);
 }
 $("addRead").onclick = async () => {
@@ -839,15 +858,24 @@ $("addRead").onclick = async () => {
 };
 $("readMore").onclick = () => readRow();
 $("readCancel").onclick = () => $("readDlg").close();
-$("readForm").onsubmit = e => {
+$("readForm").onsubmit = async e => {
   e.preventDefault();
   const day = $("readDay").value;
-  const rows = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim()])
-    .filter(([n, mm]) => n && mm !== "" && !isNaN(+mm));
-  if (!day || !rows.length) { alert("Enter the rain day and at least one gauge with its mm."); return; }
-  const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
+  const all = [...$("readRows").children].map(r => [r.children[0].value.replace(/[,#\n]/g, " ").trim(), r.children[1].value.trim(), r.children[2].getAttribute("aria-pressed") === "true"]);
+  const rows = all.filter(([n, mm]) => n && mm !== "" && !isNaN(+mm));
+  const pins = all.filter(([n, , p]) => n && p);
+  if (!day || (!rows.length && !pins.length)) { alert("Enter the rain day and at least one gauge with its mm."); return; }
+  const win = window.open("about:blank", "_blank");   // opened now, while the tap still counts, then sent to GitHub
+  if (win) win.opener = null;
+  let posLines = [];
+  if (pins.length){
+    try { posLines = await Promise.all(pins.map(async ([n]) => `pos,${n},${await lockPosition(tapAt.lat, tapAt.lng)}`)); }
+    catch(err){ if (win) win.close(); alert("Couldn't lock the position on this phone, so it wasn't sent. Try again, or send the readings without 📍."); return; }
+  }
+  const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
+    + (posLines.length ? "\n\nNew gauge position (locked):\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
   const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`;
-  window.open(url, "_blank", "noopener");
+  if (win) win.location.href = url; else location.href = url;
   $("readDlg").close();
 };
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are

@@ -616,6 +616,23 @@ jobs:
               They're used in the correction and listed by name in the gauge table, but their positions are
               never written to anything public (no dot on the map, no lat/lon in the data files)."""
               out = {}
+              # positions added from the page's form, saved locked (encrypted) in gauge_positions.json
+              pp = os.path.join(ROOT, "gauge_positions.json")
+              if os.path.exists(pp) and os.environ.get("GAUGE_KEY"):
+                  try:
+                      import base64
+                      from cryptography.hazmat.primitives import hashes, serialization
+                      from cryptography.hazmat.primitives.asymmetric import padding
+                      key = serialization.load_pem_private_key(os.environ["GAUGE_KEY"].encode(), password=None)
+                      for name, b64 in json.load(open(pp)).items():
+                          try:
+                              lat, lon = json.loads(key.decrypt(base64.b64decode(b64), padding.OAEP(
+                                  mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)))
+                              out[site_key(name)] = (float(lat), float(lon))
+                          except Exception:
+                              log(f"  couldn't unlock the saved position for {name}")
+                  except Exception as e:
+                      log(f"  saved gauge positions skipped: {e}")
               for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA"):   # the second list is for gauges added later
                   try:
                       out.update({site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get(var) or "{}").items()})
@@ -1196,7 +1213,7 @@ jobs:
           EOF_RADAR_PY
 
       - name: Install
-        run: pip install numpy pillow requests
+        run: pip install numpy pillow requests cryptography
 
       - name: Get the published site
         env:
@@ -1214,6 +1231,7 @@ jobs:
         env:
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
           PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}   # more, in the same form (gauges added later)
+          GAUGE_KEY: ${{ secrets.GAUGE_KEY }}   # unlocks the positions saved (locked) in gauge_positions.json from the page
         run: python radar.py
 
       - name: Season total

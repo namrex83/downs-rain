@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install
+        run: pip install -q cryptography
+
       - name: Add the readings to my_gauges.csv
         id: add
         env:
@@ -31,6 +34,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # only to say which names have no saved position; never written out
           PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}
+          GAUGE_KEY: ${{ secrets.GAUGE_KEY }}   # unlocks new gauges' positions to check them; they're saved still locked
         run: python3 .github/add_readings.py
 
       - name: Save
@@ -41,6 +45,7 @@ jobs:
           git config user.name "radar-bot"
           git config user.email "radar-bot@users.noreply.github.com"
           git add my_gauges.csv
+          if [ -f gauge_positions.json ]; then git add gauge_positions.json; fi
           git commit -q -m "Gauge readings from the page (issue #$ISSUE)"
           for i in 1 2 3 4; do
             git push -q origin HEAD:main && break
