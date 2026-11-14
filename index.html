@@ -148,7 +148,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .addfield{flex:1 1 100%}
 /* the readings button: bright and full width so nobody misses it, with a gentle pulse when the page opens */
 .addread{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font:700 1rem var(--body);color:#2a1a00;background:#fbbf24;
-  border:0;border-radius:12px;padding:11px 16px;cursor:pointer;box-shadow:0 2px 10px rgba(180,110,0,.35);animation:addpulse 1.6s ease-in-out 3}
+  border:0;border-radius:12px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(180,110,0,.35);animation:addpulse 1.6s ease-in-out 3}
 .addread:active{background:#f59e0b}
 @keyframes addpulse{0%,100%{box-shadow:0 2px 10px rgba(180,110,0,.35)}50%{box-shadow:0 0 0 6px rgba(251,191,36,.35),0 2px 10px rgba(180,110,0,.35)}}
 .fspanel .addfield{display:none}   /* full screen is for looking: the readings button stays on the page */
@@ -290,6 +290,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .slegend span{font:500 .6rem var(--mono);color:var(--ink-2);white-space:nowrap}
 .slegend.cats span{font:600 .68rem var(--body);white-space:normal;line-height:1.15;display:block;padding-right:4px}
 @media (max-width:600px){
+  /* Rainfall "More options" on a phone: see-through (small), catchment and extra dots share one row */
+  .rmore > .rangefield{flex:0 0 92px}
+  .rmore > .catchfield{flex:1 1 120px;min-width:0}
+  .rmore > .catchfield select{width:100%;min-height:32px;font-size:.8rem;padding:2px 6px}
+  .rmore > .field{gap:1px}
+  #dotAdd{padding:0 9px;font-size:.78rem}
   /* Forecast on phones: controls on two tight rows (totals, then model + loop), so the map and the rain chart fit on the first screen */
   #fControls{gap:6px 8px}
   #fControls .eyebrow, #fControls label{display:none}
