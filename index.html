@@ -158,7 +158,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .morefield{flex:0 0 auto;justify-content:flex-end;order:4}
 #weekField{order:3}
 .rmore > .field{order:5}
-.catchinfo{border-left:4px solid #0b3d6e}   /* the picker and More options share a row, the folded options come after */
+.catchinfo{border-left:4px solid #e00000}   /* the picker and More options share a row, the folded options come after */
 @media (min-width:1000px){ #dayField,#weekField{flex:1 1 270px} }
 .morebtn{font:600 .85rem var(--body);color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;white-space:nowrap}
 #dayField,#weekField{flex:1 1 170px;min-width:0}
@@ -787,7 +787,12 @@ function drawCatch(){
   $("catchInfo").hidden = true;
   const c = CATCH && CATCH.find(x => x.id === $("catchSel").value);
   if (!c || tab !== "rain") return;
-  catchLayer = L.polygon(c.outline.map(([lo, la]) => [la, lo]), {color: "#0b3d6e", weight: 2.5, dashArray: "7 5", fill: false, interactive: false}).addTo(map);
+  // a thick red line with a white edge, so it stands out over any rain colour or the satellite picture
+  const ring = c.outline.map(([lo, la]) => [la, lo]);
+  catchLayer = L.layerGroup([
+    L.polygon(ring, {color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
+    L.polygon(ring, {color: "#e00000", weight: 4, fill: false, interactive: false})]).addTo(map);
+  catchLayer.getBounds = () => L.latLngBounds(ring);
   const grid = meta && ((mode === "raw" && meta.grid_raw && meta.source !== "SILO") ? meta.grid_raw : meta.grid);
   if (!grid || !meta.bounds) return;
   const cells = catchMask(c, meta);
