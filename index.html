@@ -813,7 +813,7 @@ async function loadCatch(){
   if (CATCH) return;
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
   $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`).join("");
-  try { const v = localStorage.getItem("catch"); if (v && CATCH.some(c => c.id === v)) $("catchSel").value = v; } catch(e){}
+  if (CATCH.some(c => c.id === "condamine_all")) $("catchSel").value = "condamine_all";   // opens on the whole river
   if (FW) markCatchOptions(FW);
 }
 function inRing(x, y, ring){
@@ -879,14 +879,6 @@ async function catchRain(){
 }
 // A spot inside a catchment for its label: inside its outline, not inside a smaller catchment drawn over it, and
 // as near its middle as that allows.
-function inRing(lat, lon, ring){   // ring: [[lon, lat], ...]
-  let k = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) k = !k;
-  }
-  return k;
-}
 function labelSpot(c){
   const xs = c.outline.map(p => p[0]), ys = c.outline.map(p => p[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
@@ -894,8 +886,8 @@ function labelSpot(c){
   let best = null, bd = Infinity;
   for (let i = 1; i < N; i++) for (let j = 1; j < N; j++){
     const lon = x0 + (x1 - x0) * i / N, lat = y0 + (y1 - y0) * j / N;
-    if (!inRing(lat, lon, c.outline) || smaller.some(o => inRing(lat, lon, o.outline))) continue;
-    const near = [-1, 1].every(d => inRing(lat + d * (y1 - y0) / N, lon, c.outline) && inRing(lat, lon + d * (x1 - x0) / N, c.outline));   // not on the edge
+    if (!inRing(lon, lat, c.outline) || smaller.some(o => inRing(lon, lat, o.outline))) continue;
+    const near = [-1, 1].every(d => inRing(lon, lat + d * (y1 - y0) / N, c.outline) && inRing(lon + d * (x1 - x0) / N, lat, c.outline));   // not on the edge
     const dd = (lon - mx) ** 2 + (lat - my) ** 2 + (near ? 0 : 1e3);
     if (dd < bd) { bd = dd; best = [lat, lon]; }
   }
@@ -904,7 +896,7 @@ function labelSpot(c){
 function drawCatchLabels(selId){   // each catchment's (or just the picked one's) average rain over the last 7 days (to now) at a spot inside it
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
   if (!CATCH || !WET) return;
-  catchLabels = L.layerGroup(CATCH.filter(c => !selId || c.id === selId).map(c => {   // a picked catchment: just its own
+  catchLabels = L.layerGroup(CATCH.filter(c => selId ? c.id === selId : c.id !== "condamine_all").map(c => {   // a picked catchment: just its own
     const w = wetNow(c.id); if (!w) return null;
     const mm = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
     if (!c._spot) c._spot = labelSpot(c);
@@ -997,7 +989,8 @@ const GAUGE_NAMES = {hodgson: /^Hodgson Creek/i, myall: /^Myall Creek/i, jimbour
   jinghi: /^Jing?h?i/i, charleys: /^Charleys Creek/i, wilkie: /^Wilkie Creek/i, northbranch: /^((Oakey|Gowrie|Doctors|West|East) Creek|Bowenville$)/i};
 const STRETCH = {   // the river's own stretches, by the Bureau's table order (it lists gauges down the river): after one gauge, up to another
   condamine_tum: [null, /^Condamine River at Tummaville$/i], condamine_mid: [/^Condamine River at Tummaville$/i, /^Condamine River at Loudoun Bridge$/i],
-  condamine_low: [/^Condamine River at Loudoun Bridge$/i, /^Condamine River at Chinchilla Weir TW$/i]};
+  condamine_low: [/^Condamine River at Loudoun Bridge$/i, /^Condamine River at Chinchilla Weir TW$/i],
+  condamine_all: [null, /^Condamine River at Chinchilla Weir TW$/i]};
 function gaugeRows(fw){   // [{name, row}] one per gauge with a height, in the Bureau's order
   const rv = (fw && fw.rivers) || {}, hd = rv.headers || [], seen = new Set();
   const iName = Math.max(0, hd.findIndex(h => /station/i.test(h))), iH = hd.findIndex(h => /height/i.test(h));
@@ -1010,8 +1003,8 @@ function inCatch(cid, rows, iName){
   if (b < 0) return [];
   return rows.filter((r, i) => {   // two creeks sit out of river order in the table
     const n = r[iName];
-    if (/^Hodgson Creek/i.test(n)) return cid === "condamine_mid";   // joins below Tummaville
-    if (/^Dalrymple Creek/i.test(n)) return cid === "condamine_tum";
+    if (/^Hodgson Creek/i.test(n)) return cid === "condamine_mid" || cid === "condamine_all";   // joins below Tummaville
+    if (/^Dalrymple Creek/i.test(n)) return cid === "condamine_tum" || cid === "condamine_all";
     return i > a && i <= b;
   });
 }
