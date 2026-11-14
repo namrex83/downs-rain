@@ -157,7 +157,8 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rmore[hidden]{display:none}
 .morefield{flex:0 0 auto;justify-content:flex-end;order:4}
 #weekField{order:3}
-.rmore > .field{order:5}   /* the picker and More options share a row, the folded options come after */
+.rmore > .field{order:5}
+.catchinfo{border-left:4px solid #0b3d6e}   /* the picker and More options share a row, the folded options come after */
 @media (min-width:1000px){ #dayField,#weekField{flex:1 1 270px} }
 .morebtn{font:600 .85rem var(--body);color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;white-space:nowrap}
 #dayField,#weekField{flex:1 1 170px;min-width:0}
@@ -361,6 +362,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Hail cores</span>
       <div class="seg" id="hSeg"><button data-h="1" aria-pressed="true">On</button><button data-h="0" aria-pressed="false">Off</button></div></div>
     <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
+    <div class="field catchfield"><label for="catchSel">Catchment</label><select id="catchSel"><option value="">None</option></select></div>
     <div class="field"><span class="eyebrow">Extra dots</span>
       <div class="seg"><button id="dotAdd" aria-pressed="false">＋ Add dots</button><button id="dotClear" hidden>Clear</button></div></div>
     </div>
@@ -428,6 +430,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <div id="mapRow"><div id="map"></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
+  <div class="tap rainOnly catchinfo" id="catchInfo" hidden></div>
   <div class="stats rainOnly" id="stats"></div>
   <div class="rTimeline radarOnly" id="rTimeline" hidden>
     <div class="tlmid">
@@ -712,6 +715,7 @@ async function init(){
   for (let end = ad[ad.length - 1]; end && end >= ad[0]; end = addDays(end, -7)) ends.push(end);
   $("weekSel").innerHTML = ends.map((d, i) => `<option value="${i ? d : "latest"}">${span(addDays(d, -7), d)}${i ? "" : " (latest)"}</option>`).join("");
   $("weekSel").onchange = show;
+  await loadCatch();
   try { const d = await stormDay(); if (d && view === "week") { sel.value = d; setView("day"); return; } } catch(e){}
   if (tab === "rain") show();
 }
@@ -742,7 +746,59 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); drawCatch(); fitMap(); }
+
+// Catchments (assets/catchments.json, traced from terrain data): the chosen one's outline on the map, and the average
+// rain over it for the view shown, with the volume that is (1 mm over 1 km² = 1 ML). The choice is remembered.
+let CATCH = null, catchLayer = null;
+const catchMasks = {};
+async function loadCatch(){
+  if (CATCH) return;
+  try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
+  $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${c.area_km2.toLocaleString()} km²)</option>`).join("");
+  try { const v = localStorage.getItem("catch"); if (v && CATCH.some(c => c.id === v)) $("catchSel").value = v; } catch(e){}
+}
+function inRing(x, y, ring){
+  let a = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) a = !a;
+  }
+  return a;
+}
+function catchMask(c, m){   // the tap-to-read cells whose centres fall inside the catchment
+  const key = `${c.id}|${m.grid_w}x${m.grid_h}|${m.bounds.join()}`;
+  if (catchMasks[key]) return catchMasks[key];
+  const [s, w, n, e] = m.bounds, W = m.grid_w, H = m.grid_h, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const xs = c.outline.map(p => p[0]), ys = c.outline.map(p => p[1]);
+  const lo0 = Math.min(...xs), lo1 = Math.max(...xs), la0 = Math.min(...ys), la1 = Math.max(...ys), out = [];
+  for (let r = 0; r < H; r++){
+    const lat = 360 / Math.PI * Math.atan(Math.exp(merc(n) - (r + .5) / H * (merc(n) - merc(s)))) - 90;
+    if (lat < la0 || lat > la1) continue;
+    for (let k = 0; k < W; k++){
+      const lon = w + (k + .5) / W * (e - w);
+      if (lon >= lo0 && lon <= lo1 && inRing(lon, lat, c.outline)) out.push(r * W + k);
+    }
+  }
+  return (catchMasks[key] = out);
+}
+function drawCatch(){
+  if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; }
+  $("catchInfo").hidden = true;
+  const c = CATCH && CATCH.find(x => x.id === $("catchSel").value);
+  if (!c || tab !== "rain") return;
+  catchLayer = L.polygon(c.outline.map(([lo, la]) => [la, lo]), {color: "#0b3d6e", weight: 2.5, dashArray: "7 5", fill: false, interactive: false}).addTo(map);
+  const grid = meta && ((mode === "raw" && meta.grid_raw && meta.source !== "SILO") ? meta.grid_raw : meta.grid);
+  if (!grid || !meta.bounds) return;
+  const cells = catchMask(c, meta);
+  let sum = 0, n = 0;
+  for (const k of cells){ const v = grid[k]; if (v != null && v >= 0) { sum += v; n++; } }
+  if (!n) return;
+  const avg = sum / n / 10, ml = Math.round(avg * c.area_km2 / 10) * 10;
+  const when = view === "week" ? "over the 7 days" : view === "fortnight" ? "over the 14 days" : view === "season" ? "this season" : $("day").value === "today" ? "since 9am" : "that day";
+  $("catchInfo").innerHTML = `<b>${c.name} catchment</b> ${when}: average <b>${fmt(avg)} mm</b> over ${c.area_km2.toLocaleString()} km², about <b>${ml.toLocaleString()} ML</b> of rain${n < cells.length * 0.9 ? " (part of it is outside the radar's reach)" : ""}.`;
+  $("catchInfo").hidden = false;
+}
 
 // Hail: spots where the radar's echo reached the top of its scale (about 63 dBZ and up): in one scan of the day,
 // possible; in two or more, likely. From data/hail/<day>.json (made by the radar job). Shown over the Daily
@@ -1129,6 +1185,8 @@ function setMore(open){
   fitMap();
 }
 $("rMoreBtn").onclick = () => setMore($("rMore").hidden);
+$("catchSel").onchange = () => { try { localStorage.setItem("catch", $("catchSel").value); } catch(e){} drawCatch(); fitMap();
+  if (catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [20, 20], maxZoom: 10}); };   // show the whole catchment
 try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $("rMoreBtn").setAttribute("aria-expanded", true); $("rMoreBtn").textContent = "Fewer options ▴"; } } catch(e){}
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
@@ -1220,7 +1278,7 @@ function fitMap(){
   el.style.width = "";
   const top = el.getBoundingClientRect().top + scrollY;
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
-  const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
+  const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "catchInfo", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
   const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5)) : 240;
   el.style.minHeight = least + "px";
@@ -1237,7 +1295,7 @@ fitMap(); addEventListener("orientationchange", () => setTimeout(fitMap, 300));
 if (window.ResizeObserver) {
   let queued = false;
   const ro = new ResizeObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; fitMap(); }); } });
-  ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline", "fChart", "wDays", "tDays"].forEach(id => $(id) && ro.observe($(id)));   // the day buttons sit above the map
+  ["legendBox", "tap", "catchInfo", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline", "fChart", "wDays", "tDays"].forEach(id => $(id) && ro.observe($(id)));   // the day buttons sit above the map
 }
 let rw = innerWidth, rh = innerHeight;   // phones: refit on a width change only (the address bar changes the height)
 addEventListener("resize", () => { if (innerWidth !== rw || (innerWidth > 600 && innerHeight !== rh)) { rw = innerWidth; rh = innerHeight; fitMap(); } });
@@ -2808,7 +2866,7 @@ function setTab(t, first){
   if (idx) legend();   // the Forecast tab shares the rainfall legend
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
-  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
+  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; } $("catchInfo").hidden = true; }
   fsSync();
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
