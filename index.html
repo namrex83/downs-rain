@@ -857,7 +857,7 @@ function drawGaugeDots(list){   // list: [{name, lvl, text}]
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (!RMAP || tab !== "catch" || !list) return;
   riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => a.lvl.localeCompare(b.lvl)).map(x =>   // worst on top
-    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: x.lvl === "g2" ? 10 : 12, color: "#fff", weight: 3, fillColor: GCOL[x.lvl], fillOpacity: 1})
+    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
@@ -1023,7 +1023,7 @@ function drawRivers(fw){
   const rows = all.filter(r => g(r, iH) !== "" && !seen.has(g(r, iName)) && seen.add(g(r, iName)));   // one row per gauge
   const flood = r => /minor|moderate|major/i.test(g(r, iC)), rising = r => /rising/i.test(g(r, iT));
   const lvl = r => /major/i.test(g(r, iC)) ? "g4" : /moderate/i.test(g(r, iC)) ? "g3" : flood(r) ? "g2" : rising(r) ? "g1" : "g0";
-  drawGaugeDots(rows.filter(flood).map(r =>   // only gauges in flood (minor or worse) on the map
+  drawGaugeDots(rows.map(r =>   // every gauge; those in flood big
  ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`})));
   if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
@@ -1036,7 +1036,7 @@ function drawRivers(fw){
   const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
   $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
   $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
-  $("riverKey").innerHTML = `<i class="gdot g4"></i>major <i class="gdot g3"></i>moderate <i class="gdot g2"></i>minor flood <i class="gdot g1"></i>rising, below flood <i class="gdot g0"></i>steady or falling${RMAP ? " · gauges in flood are also shown on the map in their rough position" : ""}`;
+  $("riverKey").innerHTML = `<i class="gdot g4"></i>major <i class="gdot g3"></i>moderate <i class="gdot g2"></i>minor flood <i class="gdot g1"></i>rising, below flood <i class="gdot g0"></i>steady or falling${RMAP ? " · the dots on the map show each gauge in its rough position, bigger when in flood" : ""}`;
 }
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
