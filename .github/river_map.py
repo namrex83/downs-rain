@@ -65,7 +65,7 @@ flood = json.load(open("data/flood_warn.json"))
 rv = flood.get("rivers") or {}
 hd = rv.get("headers") or []
 iN = max(0, next((i for i, h in enumerate(hd) if re.search("station", h, re.I)), 0))
-names = sorted({r[iN] for r in rv.get("rows", []) if r and r[iN]})
+names = list(dict.fromkeys(r[iN] for r in rv.get("rows", []) if r and r[iN] and len(r[iN]) < 80))   # in the Bureau's order, down each river
 print(f"{len(names)} gauges")
 parsed = {n: split(n) for n in names}
 ways = sorted({w for w, _ in parsed.values() if w} | {"Condamine River"})
@@ -116,6 +116,29 @@ for n, (way, ps) in parsed.items():
         print(f"  {n}: {best[1]}")
     else:
         missing.append(n)
+# a gauge whose place can't be found, between two placed gauges on the same creek or river: the Bureau lists each
+# river's gauges in order downstream, so put it that far between them along the line
+for n in list(missing):
+    way = parsed[n][0]
+    line = geo.get(way) if way else None
+    if line is None:
+        continue
+    same = [m for m in names if parsed[m][0] == way]
+    k = same.index(n)
+    up = next((same[j] for j in range(k - 1, -1, -1) if same[j] in out), None)
+    down = next((same[j] for j in range(k + 1, len(same)) if same[j] in out), None)
+    if not up or not down:
+        continue
+    gap = [m for m in same[same.index(up) + 1:same.index(down)] if m not in out]
+    pieces = list(line.geoms) if hasattr(line, "geoms") else [line]
+    a, b = Point(out[up][1], out[up][0]), Point(out[down][1], out[down][0])
+    piece = min(pieces, key=lambda g: g.distance(a) + g.distance(b))
+    da, db = piece.project(a), piece.project(b)
+    for i, m in enumerate(gap):
+        pt = piece.interpolate(da + (db - da) * (i + 1) / (len(gap) + 1))
+        out[m] = [round(pt.y, 4), round(pt.x, 4)]
+        missing.remove(m)
+        print(f"  {m}: between {up} and {down}")
 print(f"placed {len(out)}, not found {len(missing)}: {missing}")
 
 streams = []
