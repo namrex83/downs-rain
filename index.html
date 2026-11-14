@@ -408,7 +408,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls catchOnly" id="cControls" hidden>
     <div class="field"><span class="eyebrow">Rain on the map</span>
-      <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="true">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="false">Off</button></div></div>
+      <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
     <div class="field rangefield copfield"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
     <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
@@ -845,7 +845,7 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null, cView = "week", catchLabels = null;
+let catchAll = null, cView = "none", catchLabels = null;
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
 map.createPane("labelPane").style.zIndex = 465;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
