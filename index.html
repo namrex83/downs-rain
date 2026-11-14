@@ -2010,7 +2010,9 @@ function gSample(o, vals, lat, lon){
 async function fChart(){
   if (tab !== "fc") return;
   const pinned = tapAt, at = pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), still = () => tapAt === pinned && tab === "fc";   // stop if the pin moved meanwhile
+  if (!FC || FC.pinned !== pinned) await fChartDaily(at, pinned, still, true);   // the site's own three models straight away
   try {
+    if (!still()) return;
     const H = await omHourly(at.lat, at.lng);
     for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
     if (!still()) return;
@@ -2027,7 +2029,7 @@ function hourlyGaveUp(){   // the hourly chart had nothing reaching the end of t
 }
 // the day-by-day chart from the site's own model maps (and Open-Meteo's daily totals): used when the hourly
 // forecasts can't be had, or none of them reaches the end of the days picked
-async function fChartDaily(at, pinned, still){
+async function fChartDaily(at, pinned, still, quick){   // quick: the site's three models only, while Open-Meteo is asked
   for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
   if (!still()) return;
   const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
@@ -2039,8 +2041,8 @@ async function fChartDaily(at, pinned, still){
     o.days.forEach((d, k) => { if (!open(d)) return; const v = gSample(o, o.mm10[k], at.lat, at.lng); if (v == null) return; tot += v; pts.push([d, tot]); });
     if (pts.length) lines.push({m, pts, tot, name: F_NAME[m], col: F_COL[m], main: true});
   }
-  let omNote = "";
-  try {
+  let omNote = quick ? " The other models are loading…" : "";
+  if (!quick) try {
     const om = await omDays(at.lat, at.lng);
     if (!still()) return;
     for (const [m, ds] of Object.entries(om)){
