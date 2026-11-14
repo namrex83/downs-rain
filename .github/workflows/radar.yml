@@ -627,6 +627,48 @@ jobs:
           FLOOD_WORDS = ("condamine", "myall", "charleys", "charley's", "hodgson", "oakey creek", "jandowae", "jimbour", "wilkie", "jingi", "jinghi")
           
           
+          def river_heights(src, names):
+              """The Bureau's latest river height tables (IDQ6xxxx.html on the FTP site) for the Condamine system. Which
+              products those are is found once by looking through them and remembered in state/river_ids.json. Returns
+              {"headers": [...], "rows": [[cell, ...], ...], "products": [...]} with the table rows as text."""
+              import html as H
+              cache = os.path.join(STATE, "river_ids.json")
+              ids = json.load(open(cache)) if os.path.exists(cache) else None
+              cand = sorted(x for x in names if x.startswith("IDQ6") and x.endswith(".html"))
+              if ids is None:
+                  ids = []
+                  for n in cand:
+                      try:
+                          t = src.get("/anon/gen/fwo", n).decode("latin-1", "replace")
+                      except Exception:
+                          continue
+                      if "river height" in t.lower() and ("Condamine" in t or "Myall Creek" in t):
+                          ids.append(n)
+                  os.makedirs(STATE, exist_ok=True)
+                  json.dump(ids, open(cache, "w"))
+                  log(f"  river height tables for the Condamine: {ids} (of {len(cand)} looked at)")
+              headers, rows = [], []
+              cell = lambda c: " ".join(H.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+              for n in ids:
+                  try:
+                      t = src.get("/anon/gen/fwo", n).decode("latin-1", "replace")
+                  except Exception as e:
+                      log(f"  {n}: {e}")
+                      continue
+                  for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I):
+                      ths = re.findall(r"<th[^>]*>(.*?)</th>", tr, re.S | re.I)
+                      tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S | re.I)
+                      if ths and not tds and not headers:
+                          headers = [cell(x) for x in ths]
+                      elif tds:
+                          r = [cell(x) for x in tds]
+                          if r and r[0]:
+                              rows.append(r)
+              if rows:
+                  log(f"  river heights: {len(rows)} rows; headers {headers}; e.g. {rows[:3]}")
+              return {"products": ids, "headers": headers, "rows": rows}
+          
+          
           def write_flood_warnings(src):
               """Current Bureau flood warnings (the IDQ2xxxx text products on the BOM FTP site) that mention this river
               system: data/flood_warn.json, for the Rainfall tab's catchment watch. Also logs the river-height
@@ -647,13 +689,12 @@ jobs:
                   title = next((ln for ln in lines if "flood" in ln.lower() and ("warning" in ln.lower() or "watch" in ln.lower())), lines[0] if lines else n)
                   issued = next((ln for ln in lines if ln.lower().startswith("issued at")), "")
                   warn.append({"id": n[:-4], "title": title[:160], "issued": issued[:120], "text": text[:6000]})
-              rivers = sorted(x for x in names if x.startswith("IDQ6"))
-              log(f"  flood warnings for this river system: {[w['id'] + ' ' + w['title'] for w in warn] or 'none'}; "
-                  f"{len(rivers)} IDQ6 files, e.g. {rivers[:40]}")
-              out = {"checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "warnings": warn}
+              log(f"  flood warnings for this river system: {[w['id'] + ' ' + w['title'] for w in warn] or 'none'}")
+              out = {"checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "warnings": warn,
+                     "rivers": river_heights(src, names)}
               p = os.path.join(DATA, "flood_warn.json")
               old = json.load(open(p)) if os.path.exists(p) else {}
-              if old.get("warnings") != warn or not old:
+              if {k: v for k, v in old.items() if k != "checked"} != {k: v for k, v in out.items() if k != "checked"}:
                   with open(p, "w") as f:
                       json.dump(out, f, separators=(",", ":"))
           
