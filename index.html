@@ -181,6 +181,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
+.clabel{background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:10px;padding:1px 6px;font:700 .8rem var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.68rem;margin-left:1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
@@ -404,8 +405,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls catchOnly" id="cControls" hidden>
-    <div class="field"><span class="eyebrow">Rain on the map</span>
-      <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="true">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="false">Off</button></div></div>
     <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="controls stormOnly" hidden>
@@ -513,7 +512,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap windOld" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOld" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
-  <div id="legendBox" class="rainOnly fcOnly catchOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
+  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
@@ -841,8 +840,9 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null, cView = "week";
+let catchAll = null, cView = "none", catchLabels = null;   // the Catchments map has no rain overlay: each catchment shows its average
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
+map.createPane("labelPane").style.zIndex = 455;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
 // Rough gauge positions and the creek and river lines from OpenStreetMap (data/river_map.json, made by river-map.yml)
 let RMAP = undefined, streamLayer = null, riverDots = null;
@@ -857,26 +857,52 @@ function drawGaugeDots(list){   // list: [{name, lvl, text}]
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (!RMAP || tab !== "catch" || !list) return;
   riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => a.lvl.localeCompare(b.lvl)).map(x =>   // worst on top
-    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: x.lvl === "g0" ? 5 : 7, color: "#fff", weight: 2, fillColor: GCOL[x.lvl], fillOpacity: 1})
+    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: x.lvl === "g2" ? 10 : 12, color: "#fff", weight: 3, fillColor: GCOL[x.lvl], fillOpacity: 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
 // days, the season), drawn under the outlines without changing what the Rainfall tab shows.
-async function catchRain(){
-  if (tab !== "catch" || !idx) return;
-  [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
-  legend();
-  if (cView === "none") { if (overlay) map.removeLayer(overlay); return; }
-  const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
-  view = cView;
-  if (cView === "day") $("day").value = idx.days[idx.days.length - 1];
-  if (cView === "week") $("weekSel").value = "latest";
-  try { await draw(); } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
-  gaugeLayer.clearLayers();
-  if (tab !== "catch" && overlay) map.removeLayer(overlay);
+function catchRain(){   // no rain picture on the Catchments map
+  if (tab === "catch" && overlay) map.removeLayer(overlay);
+}
+// A spot inside a catchment for its label: inside its outline, not inside a smaller catchment drawn over it, and
+// as near its middle as that allows.
+function inRing(lat, lon, ring){   // ring: [[lon, lat], ...]
+  let k = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) k = !k;
+  }
+  return k;
+}
+function labelSpot(c){
+  const xs = c.outline.map(p => p[0]), ys = c.outline.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const smaller = CATCH.filter(o => o.id !== c.id && o.area_km2 < c.area_km2), N = 24;
+  let best = null, bd = Infinity;
+  for (let i = 1; i < N; i++) for (let j = 1; j < N; j++){
+    const lon = x0 + (x1 - x0) * i / N, lat = y0 + (y1 - y0) * j / N;
+    if (!inRing(lat, lon, c.outline) || smaller.some(o => inRing(lat, lon, o.outline))) continue;
+    const near = [-1, 1].every(d => inRing(lat + d * (y1 - y0) / N, lon, c.outline) && inRing(lat, lon + d * (x1 - x0) / N, c.outline));   // not on the edge
+    const dd = (lon - mx) ** 2 + (lat - my) ** 2 + (near ? 0 : 1e3);
+    if (dd < bd) { bd = dd; best = [lat, lon]; }
+  }
+  return best || [my, mx];
+}
+function drawCatchLabels(selId){   // each catchment's average rain over the last 7 days (to now) at a spot inside it
+  if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
+  if (!CATCH || !WET) return;
+  catchLabels = L.layerGroup(CATCH.map(c => {
+    const w = wetNow(c.id); if (!w) return null;
+    const mm = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
+    if (!c._spot) c._spot = labelSpot(c);
+    return L.marker(c._spot, {pane: "labelPane", interactive: false, keyboard: false,
+      icon: L.divIcon({className: "clabel" + (c.id === selId ? " sel" : ""), html: `${fmt(mm)}<small>mm</small>`, iconSize: null})});
+  }).filter(Boolean)).addTo(map);
 }
 function clearCatchTab(){
   if (catchAll) { map.removeLayer(catchAll); catchAll = null; }
+  if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
   if (streamLayer) { map.removeLayer(streamLayer); streamLayer = null; }
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; }
@@ -899,8 +925,9 @@ function drawCatchTab(){
   catchAll = L.layerGroup([...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
     L.polygon(c.outline.map(([lo, la]) => [la, lo]), {pane: "catchPane", color: "#0b3d6e", weight: 1.6, opacity: .9, fillColor: "#3b82f6", fillOpacity: .04})
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
+  drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
-  if (!c) { $("catchInfo").innerHTML = "Tap a catchment on the map, or pick one above, for its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
+  if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average rain over the last 7 days. Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
   const ring = c.outline.map(([lo, la]) => [la, lo]);
   catchLayer = L.layerGroup([
     L.polygon(ring, {pane: "catchPane", color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
@@ -3188,7 +3215,6 @@ function setTab(t, first){
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tCatch").onclick = () => tab !== "catch" && setTab("catch");
-$("cView").onclick = e => { const b = e.target.closest("button"); if (!b) return; cView = b.dataset.v; catchRain(); };
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
 $("tWind").onclick = () => tab !== "wind" && setTab("wind");
