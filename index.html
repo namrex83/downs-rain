@@ -801,10 +801,11 @@ async function show(){ if (tab !== "rain") return; await draw(); await drawHail(
 // rain over it for the view shown, with the volume that is (1 mm over 1 km² = 1 ML). The choice is remembered.
 let CATCH = null, catchLayer = null;
 const catchMasks = {};
+const areaTxt = c => c.area_km2 < 20 ? `${Math.round(c.area_km2 * 100).toLocaleString()} ha` : `${c.area_km2.toLocaleString()} km²`;
 async function loadCatch(){
   if (CATCH) return;
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
-  $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${c.area_km2.toLocaleString()} km²)</option>`).join("");
+  $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`).join("");
   try { const v = localStorage.getItem("catch"); if (v && CATCH.some(c => c.id === v)) $("catchSel").value = v; } catch(e){}
 }
 function inRing(x, y, ring){
@@ -865,7 +866,7 @@ function drawCatchTab(){
   if (!w) { $("catchInfo").innerHTML = `<b>${c.name}</b> (${c.area_km2.toLocaleString()} km²): rain figures appear after the next radar update.`; $("catchInfo").hidden = false; return; }
   const sum = n => w.ser.slice(-n).reduce((a, v) => a + (v || 0), 0), ml = mm => (Math.round(mm * c.area_km2 / 10) * 10).toLocaleString();
   const last = w.ser[w.ser.length - 1] || 0, d7 = sum(7) + w.todayMm, d30 = sum(30) + w.todayMm;
-  $("catchInfo").innerHTML = `<b>${c.name}</b> · ${c.area_km2.toLocaleString()} km² <span class="gnote2">${c.note}</span>
+  $("catchInfo").innerHTML = `<b>${c.name}</b> · catchment ${areaTxt(c)}${c.dam_ha ? ` (the dam itself about ${c.dam_ha} ha)` : ""} <span class="gnote2">${c.note}</span>
     Average rain over the catchment: <b>${fmt(last)} mm</b> to 9am ${part(WET.to, {weekday: "short", day: "numeric", month: "short"})}${w.todayMm ? `, ${fmt(w.todayMm)} mm since` : ""} · last 7 days <b>${fmt(d7)} mm</b> (about ${ml(d7)} ML) · 30 days ${fmt(d30)} mm.`;
   $("catchInfo").hidden = false;
   groundWet(c);
@@ -873,7 +874,8 @@ function drawCatchTab(){
 function pickCatch(fit){
   try { localStorage.setItem("catch", $("catchSel").value); } catch(e){}
   drawCatchTab(); drawWatch(); fitMap();
-  if (fit && catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [20, 20], maxZoom: 10});
+  const c = CATCH && CATCH.find(x => x.id === $("catchSel").value);
+  if (fit && catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [20, 20], maxZoom: c && c.area_km2 < 20 ? 13 : 10});   // farm dams: zoom right in
 }
 // How wet the ground is in the chosen catchment now, from data/catch_wet.json (its average rain each day for the last 30
 // days, made by the jobs). Wetness from a running rain index that fades 10% a day (clay soils hold water for a couple of
@@ -977,7 +979,7 @@ async function groundWet(c){
   const {Ia, run} = runoffParams(cls);
   $("catchInfo").insertAdjacentHTML("beforeend", `<div class="ground"><b>Ground:</b> <span class="gtag" style="background:${cls.col}">${cls.t}</span> (wetness index ${Math.round(api)})
     · rain in the last 5 days <b>${fmt(d5)} mm</b> · 14 days ${fmt(d14)} mm · 30 days ${fmt(d30)} mm${todayMm ? ` (incl. ${fmt(todayMm)} mm since 9am)` : ""}.<br>
-    Run-off starts after roughly <b>${Math.round(Ia)} mm</b> of rain in a day; 25 mm would run off about ${fmt(run(25))} mm, 50 mm about ${fmt(run(50))} mm.
+    Run-off starts after roughly <b>${Math.round(Ia)} mm</b> of rain in a day; 25 mm would run off about ${fmt(run(25))} mm, 50 mm about ${fmt(run(50))} mm${c.dam_ha ? `, which on this catchment is roughly <b>${fmt(run(25) * c.area_km2)} ML</b> and <b>${fmt(run(50) * c.area_km2)} ML</b> into the dam (plus rain falling straight on the dam: ${fmt(c.dam_ha / 100 * 25)} and ${fmt(c.dam_ha / 100 * 50)} ML)` : ""}.
     <span class="gnote2">Rough guide (standard run-off method for clay soils, not checked against real stream flows).</span></div>`);
   fitMap();
 }

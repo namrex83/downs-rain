@@ -293,7 +293,13 @@ def catch_wet():
             lats = np.degrees(2 * np.arctan(np.exp(ys)) - np.pi / 2)
             lons = w_ + (np.arange(W) + .5) / W * (e_ - w_)
             LON, LAT = np.meshgrid(lons, lats)
-            masks[key] = {c["id"]: in_polygon(LAT, LON, c["outline"]) for c in catchments}
+            masks[key] = {}
+            for c in catchments:
+                mk = in_polygon(LAT, LON, c["outline"])
+                if not mk.any():   # smaller than a grid square (a farm dam's catchment): the square at its middle
+                    cy = np.mean([p[1] for p in c["outline"]]); cx = np.mean([p[0] for p in c["outline"]])
+                    mk[np.unravel_index(np.argmin((LAT - cy) ** 2 + (LON - cx) ** 2), mk.shape)] = True
+                masks[key][c["id"]] = mk
         out = {}
         for cid, mk in masks[key].items():
             v = g[mk]; v = v[v >= 0]
