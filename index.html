@@ -811,6 +811,7 @@ async function loadCatch(){
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
   $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`).join("");
   try { const v = localStorage.getItem("catch"); if (v && CATCH.some(c => c.id === v)) $("catchSel").value = v; } catch(e){}
+  if (FW) markCatchOptions(FW);
 }
 function inRing(x, y, ring){
   let a = false;
@@ -927,24 +928,52 @@ async function floodDot(){
 const KEY_GAUGES = /^(Condamine River at (Tummaville|Cecil Plains|Loudoun Bridge|Chinchilla Weir TW)|Myall Creek at Dalby|Charleys Creek at Chinchilla)$/i;
 const LOCAL_GAUGES = /^(Condamine River|Myall|Oakey|Hodgson|Jimbour|Jandowae|Cooranga|Charleys|Wilkie|Jinghi|Jingi)/i;   // our catchments
 const shortGauge = n => n.replace(/^Condamine River at /i, "").replace(/ Creek at /i, " Ck, ").replace(/ River at /i, " R, ");
+// Which of the Bureau's gauges are in each catchment: by creek name, and for the Condamine catchments by the table's
+// order (it runs down the river: everything listed before the gauge that closes a catchment is upstream of it).
+const GAUGE_NAMES = {hodgson: /^Hodgson Creek/i, myall: /^Myall Creek/i, jimbour: /^Jimbour Creek/i, jandowae: /^(Jandowae|Cooranga) Creek/i,
+  jinghi: /^Jing?h?i/i, charleys: /^Charleys Creek/i, wilkie: /^Wilkie Creek/i, northbranch: /^((Oakey|Gowrie|Doctors|West|East) Creek|Bowenville$)/i};
+const GAUGE_UPTO = {condamine_cecil: /^Condamine River at Cecil Plains$/i, condamine_dalby: /^Condamine River at Loudoun Bridge$/i, condamine_chinchilla: /^Condamine River at Chinchilla Weir TW$/i};
+function gaugeRows(fw){   // [{name, row}] one per gauge with a height, in the Bureau's order
+  const rv = (fw && fw.rivers) || {}, hd = rv.headers || [], seen = new Set();
+  const iName = Math.max(0, hd.findIndex(h => /station/i.test(h))), iH = hd.findIndex(h => /height/i.test(h));
+  return (rv.rows || []).filter(r => r[iH] !== "" && r[iH] != null && !seen.has(r[iName]) && seen.add(r[iName]));
+}
+function inCatch(cid, rows, iName){
+  if (GAUGE_NAMES[cid]) return rows.filter(r => GAUGE_NAMES[cid].test(r[iName]));
+  if (GAUGE_UPTO[cid]) { const k = rows.findIndex(r => GAUGE_UPTO[cid].test(r[iName]));
+    return k < 0 ? [] : rows.filter((r, i) => i <= k || (cid === "condamine_cecil" ? /^Dalrymple Creek/i : /^(Dalrymple Creek|Condamine River at Loudoun)/i).test(r[iName])); }
+  return [];
+}
+let FW = null;
+function markCatchOptions(fw){   // 🔴 in the list for catchments with a gauge at minor flood or worse
+  const hd = ((fw && fw.rivers) || {}).headers || [], iN = Math.max(0, hd.findIndex(h => /station/i.test(h))), iC = hd.findIndex(h => /class/i.test(h));
+  const rows = gaugeRows(fw);
+  for (const o of $("catchSel").options){
+    if (!o.value) continue;
+    const c = CATCH.find(x => x.id === o.value), bad = iC >= 0 && inCatch(o.value, rows, iN).some(r => /minor|moderate|major/i.test(r[iC]));
+    o.textContent = `${bad ? "🔴 " : ""}${c.name} (${areaTxt(c)})`;
+  }
+}
 function drawRivers(fw){
-  const rv = fw.rivers || {}, hd = rv.headers || [], all = rv.rows || [];
+  const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
+  const sel = $("catchSel").value, iName0 = Math.max(0, hd.findIndex(h => /station/i.test(h)));
+  const all = sel ? inCatch(sel, gaugeRows(fw), iName0) : allRows;
   const col = re => hd.findIndex(h => re.test(h));
   const iName = Math.max(0, col(/station/i)), iTime = col(/time/i), iH = col(/height/i), iT = col(/tend/i), iC = col(/class/i);
   const g = (r, i) => i >= 0 && i < r.length ? r[i] : "";
   const iD = col(/datum/i), seen = new Set();
   const rows = all.filter(r => g(r, iH) !== "" && !seen.has(g(r, iName)) && seen.add(g(r, iName)));   // one row per gauge
-  if (!rows.length) { $("rivers").innerHTML = ""; $("sumRiv").innerHTML = "🌊 River heights appear after the next radar update"; return; }
+  if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const flood = r => /minor|moderate|major/i.test(g(r, iC)), rising = r => /rising/i.test(g(r, iT));
   const tr = r => `<tr><td>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
-  const top = rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
+  const top = sel ? rows : rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
   const rest = rows.filter(r => !top.includes(r));
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th></tr></thead>`;
   $("rivers").innerHTML = head + `<tbody>${top.map(tr).join("")}</tbody>`;
   $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
-  const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && local(r));
-  $("sumRiv").innerHTML = `🌊 <b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
+  const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
+  $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
   $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
 }
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
@@ -966,9 +995,10 @@ async function drawWatch(){
   }).filter(Boolean).sort((a, b) => b.q - a.q || b.w.api - a.w.api);
   const d = fc.days;
   const busy = rows.filter(r => r.watch.c !== "w1"), showAll = drawWatch.all !== false;   // all catchments unless "Show fewer"
-  const shown = showAll ? rows : [...busy, ...rows.filter(r => r.watch.c === "w1").sort((a, b) => b.rain - a.rain).slice(0, 3)];
-  $("sumWatch").innerHTML = `🌧 <b>Catchment watch:</b> ${busy.length ? busy.map(r => `${r.c.name.replace(/ \(.*\)/, "")} <span class="wtag ${r.watch.c}">${r.watch.t}</span>`).join(", ") : "all Low for the next 3 days"}`;
-  $("watchAll").hidden = shown.length === rows.length && !showAll;
+  const pick = $("catchSel").value;
+  const shown = pick ? rows.filter(r => r.c.id === pick) : showAll ? rows : [...busy, ...rows.filter(r => r.watch.c === "w1").sort((a, b) => b.rain - a.rain).slice(0, 3)];
+  $("sumWatch").innerHTML = pick && shown[0] ? `🌧 <b>Next 3 days:</b> ${fmt(shown[0].rain)} mm forecast · <span class="wtag ${shown[0].watch.c}">${shown[0].watch.t}</span>` : `🌧 <b>Catchment watch:</b> ${busy.length ? busy.map(r => `${r.c.name.replace(/ \(.*\)/, "")} <span class="wtag ${r.watch.c}">${r.watch.t}</span>`).join(", ") : "all Low for the next 3 days"}`;
+  $("watchAll").hidden = !!pick || (shown.length === rows.length && !showAll);
   $("watchAll").textContent = showAll ? "Show fewer" : `Show all ${rows.length} catchments`;
   $("watchAll").onclick = () => { drawWatch.all = !showAll; drawWatch(); };
   $("watch").innerHTML = `<thead><tr><th>Catchment</th><th>Ground</th><th class="n">Rain</th><th class="n">Run-off</th><th>Watch</th></tr></thead><tbody>` +
@@ -980,11 +1010,15 @@ async function drawWatch(){
     + `Run-off: roughly how much of it would run off the land (mm over the whole catchment), given how wet the ground is now. `
     + `A rough guide from a standard run-off method, not yet checked against real creek flows, and not a flood warning: for floods, follow the Bureau of Meteorology's flood warnings. Tap a catchment to show it on the map.`;
   try {   // a current Bureau flood warning for this river system, from data/flood_warn.json (checked by the radar job)
-    const fw = await getJSON("data/flood_warn.json");
-    drawRivers(fw);
+    const fw = FW = await getJSON("data/flood_warn.json");
+    drawRivers(fw); markCatchOptions(fw);
+    const iN = Math.max(0, ((fw.rivers || {}).headers || []).findIndex(h => /station/i.test(h)));
+    const mine = pick ? inCatch(pick, gaugeRows(fw), iN).map(r => r[iN]) : null;
+    const about = w => { const t = w.text.replace(/\s+/g, " ");   // the warning's lines wrap mid-name
+      return !mine || mine.some(n => t.includes(n.replace(/ \(.*\)| (HG|TW|Tm|Alert)$/g, "")) || t.includes(n.split(" at ")[1] || "@@") || (!/^Condamine River/.test(n) && t.includes(n.split(" at ")[0]))); };   // a gauge, its place or its creek
     const head = t => (t.match(/^[A-Z][A-Z ,'-]{12,}$/m) || [""])[0];   // the warning's headline, e.g. MINOR FLOODING OCCURRING AT TUMMAVILLE
-    $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn fsec" open><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
-      || `<p class="fnone">✅ No Bureau of Meteorology flood warning for the Condamine system right now.</p>`;
+    $("floodWarn").innerHTML = (fw.warnings || []).filter(about).map(w => `<details class="fwarn fsec" open><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
+      || `<p class="fnone">✅ No Bureau of Meteorology flood warning ${pick ? "for this catchment" : "for the Condamine system"} right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
   $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
     $("catchSel").value = tr.dataset.id; $("catchSel").onchange(); drawWatch(); $("map").scrollIntoView({behavior: "smooth", block: "center"}); };
