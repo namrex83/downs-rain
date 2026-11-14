@@ -858,8 +858,8 @@ function drawStreams(){
 function drawGaugeDots(list){   // list: [{name, lvl, text}]
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (!RMAP || tab !== "catch" || !list) return;
-  riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => a.lvl.localeCompare(b.lvl)).map(x =>   // worst on top
-    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: 1})
+  riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
+    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .45 : 1, opacity: x.other ? .5 : 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
@@ -1036,8 +1036,9 @@ function drawRivers(fw){
   const rows = all.filter(r => g(r, iH) !== "" && !seen.has(g(r, iName)) && seen.add(g(r, iName)));   // one row per gauge
   const flood = r => /minor|moderate|major/i.test(g(r, iC)), rising = r => /rising/i.test(g(r, iT));
   const lvl = r => /major/i.test(g(r, iC)) ? "g4" : /moderate/i.test(g(r, iC)) ? "g3" : flood(r) ? "g2" : rising(r) ? "g1" : "g0";
-  drawGaugeDots(rows.map(r =>   // every gauge; those in flood big
- ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`})));
+  const seenAll = new Set(), every = allRows.filter(r => g(r, iH) !== "" && !seenAll.has(g(r, iName)) && seenAll.add(g(r, iName)));
+  drawGaugeDots(every.map(r =>   // every gauge, those in flood big; outside a picked catchment faded
+ ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, other: sel && !rows.includes(r)})));
   if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
