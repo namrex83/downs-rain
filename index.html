@@ -182,7 +182,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
 .tubelab span{display:none;font:700 italic .7rem var(--body);white-space:nowrap;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff;transform:translate(-50%,-140%);display:none} .tubezoom .tubelab span{display:inline-block}
-.clabel{background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:10px;padding:1px 6px;font:700 .8rem var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.68rem;margin-left:1px} .clabel.sel{border-color:#e00000;color:#e00000}
+.clabelpin{overflow:visible} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
@@ -847,7 +847,7 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
 let catchAll = null, cView = "week", catchLabels = null;
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
-map.createPane("labelPane").style.zIndex = 455;   // each catchment's average rain
+map.createPane("labelPane").style.zIndex = 465;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
 // Rough gauge positions and the creek and river lines from OpenStreetMap (data/river_map.json, made by river-map.yml)
 let RMAP = undefined, streamLayer = null, riverDots = null;
@@ -923,13 +923,14 @@ function drawGaugeDots(list){   // list: [{name, lvl, text}]
 async function catchRain(){
   if (tab !== "catch" || !idx) return;
   [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
-  legend(); drawCatchLabels($("catchSel").value);
-  if (cView === "none") { if (overlay) map.removeLayer(overlay); return; }
+  legend();
+  if (cView === "none") { if (overlay) map.removeLayer(overlay); CMETA = null; drawCatchLabels($("catchSel").value); return; }
   const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
   view = cView;
   if (cView === "day") $("day").value = idx.days[idx.days.length - 1];
   if (cView === "week") $("weekSel").value = "latest";
-  try { await draw(); } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
+  try { await draw(); CMETA = meta; } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
+  drawCatchLabels($("catchSel").value);
   gaugeLayer.clearLayers();
   if (tab !== "catch" && overlay) map.removeLayer(overlay);
 }
@@ -949,15 +950,26 @@ function labelSpot(c){
   }
   return best || [my, mx];
 }
-function drawCatchLabels(selId){   // each catchment's (or just the picked one's) average rain over the last 7 days (to now) at a spot inside it
+// Each catchment's average (Av) and highest (Max) rain at a spot inside it: from the rain map shown (its grid squares
+// inside the outline), or with the map off, the 7-day average from the catchment figures.
+let CMETA = null;
+function drawCatchLabels(selId){
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
-  if (!CATCH || !WET) return;
+  if (!CATCH) return;
   catchLabels = L.layerGroup(CATCH.filter(c => selId ? c.id === selId : c.id !== "condamine_all").map(c => {   // a picked catchment: just its own
-    const w = wetNow(c.id); if (!w) return null;
-    const mm = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
+    let av = null, mx = null;
+    if (CMETA && CMETA.grid) {
+      const v = catchMask(c, CMETA).map(i => CMETA.grid[i]).filter(x => x >= 0);
+      // Max: the third-highest square, so one stray radar spike can't set it but a real storm core (always several squares) does
+      if (v.length) { av = v.reduce((a, b) => a + b, 0) / v.length / 10; mx = v.sort((a, b) => b - a)[Math.min(2, v.length - 1)] / 10; }
+    } else {
+      const w = wetNow(c.id); if (w) av = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
+    }
+    if (av == null) return null;
     if (!c._spot) c._spot = labelSpot(c);
     return L.marker(c._spot, {pane: "labelPane", interactive: false, keyboard: false,
-      icon: L.divIcon({className: "clabel" + (c.id === selId ? " sel" : ""), html: `${fmt(mm)}<small>mm</small>`, iconSize: null})});
+      icon: L.divIcon({className: "clabelpin", iconSize: [0, 0],
+        html: `<div class="clabel${c.id === selId ? " sel" : ""}"><small>Av</small> ${fmt(av)}<small>mm</small>${mx != null ? `<br><small>Max</small> ${fmt(mx)}<small>mm</small>` : ""}</div>`})});
   }).filter(Boolean)).addTo(map);
 }
 function clearCatchTab(){
@@ -989,7 +1001,7 @@ function drawCatchTab(){
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
-  if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average rain over the last 7 days. Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
+  if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (7-day average when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
   const ring = c.outline.map(([lo, la]) => [la, lo]);
   catchLayer = L.layerGroup([
     L.polygon(ring, {pane: "catchPane", color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
