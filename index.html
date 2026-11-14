@@ -163,6 +163,15 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .fwarn{background:#fee2e2;border:1px solid #dc2626;border-radius:10px;padding:8px 10px;margin:0 0 8px;color:#7f1d1d}
 .fwarn summary{cursor:pointer} .fwarn pre{white-space:pre-wrap;font:.78rem/1.4 var(--mono);margin:8px 0 0;color:#1c2621}
 .fnone{margin:0 0 6px;font-size:.8rem;color:#256b3a}
+.floodfield{flex:0 0 auto}
+.floodbtn{position:relative;font:600 .85rem var(--body);color:#fff;background:#0b5394;border:0;border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;white-space:nowrap}
+.floodbtn[aria-expanded=true]{background:#062f57}
+.fdot{position:absolute;top:-3px;right:-3px;width:13px;height:13px;border-radius:50%;background:#dc2626;border:2px solid #fff}
+.watchtop{display:flex;justify-content:space-between;align-items:center}
+.watchsub{margin:12px 0 4px;font:700 .9rem var(--body)} .watchsub span{font-weight:500;color:var(--ink-3);font-size:.8rem}
+#watchPanel .catchfield select{width:100%}
+#watchPanel td.fl{font-weight:700;color:#b91c1c}
+#riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
@@ -300,8 +309,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 @media (max-width:600px){
   /* Rainfall "More options" on a phone: see-through (small), catchment and extra dots share one row */
   .rmore > .rangefield{flex:0 0 92px}
-  .rmore > .catchfield{flex:1 1 120px;min-width:0}
-  .rmore > .catchfield select{width:100%;min-height:32px;font-size:.8rem;padding:2px 6px}
+  .floodbtn{min-height:34px;font-size:.8rem;padding:0 11px}
   .rmore > .field{gap:1px}
   #dotAdd{padding:0 9px;font-size:.78rem}
   /* Forecast on phones: controls on two tight rows (totals, then model + loop), so the map and the rain chart fit on the first screen */
@@ -370,6 +378,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field" id="weekField"><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
+    <div class="field floodfield"><button type="button" class="floodbtn" id="floodBtn" aria-expanded="false">🌊 Catchments &amp; floods<i class="fdot" id="floodDot" hidden></i></button></div>
     <div class="field morefield"><button type="button" class="morebtn" id="rMoreBtn" aria-expanded="false">More options ▾</button></div>
     <div class="rmore" id="rMore" hidden>
     <div class="field"><span class="eyebrow">Show</span>
@@ -379,7 +388,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Hail cores</span>
       <div class="seg" id="hSeg"><button data-h="1" aria-pressed="true">On</button><button data-h="0" aria-pressed="false">Off</button></div></div>
     <div class="field rangefield"><label for="op">See-through</label><input type="range" id="op" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
-    <div class="field catchfield"><label for="catchSel">Catchment</label><select id="catchSel"><option value="">None</option></select></div>
     <div class="field"><span class="eyebrow">Extra dots</span>
       <div class="seg"><button id="dotAdd" aria-pressed="false">＋ Add dots</button><button id="dotClear" hidden>Clear</button></div></div>
     </div>
@@ -496,9 +504,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
 
-  <section class="panel rainOnly" id="watchPanel" hidden>
-    <h3 class="watchh">Catchment watch <span>next 3 days</span></h3>
+  <section class="panel" id="watchPanel" hidden>
+    <div class="watchtop"><h3 class="watchh">Catchments &amp; floods</h3><button type="button" class="linkbtn" id="floodClose">Close ✕</button></div>
     <div id="floodWarn"></div>
+    <div class="field catchfield"><label for="catchSel">Show a catchment on the map</label><select id="catchSel"><option value="">None</option></select></div>
+    <h4 class="watchsub">River heights now <span id="riverWhen"></span></h4>
+    <div class="tablewrap"><table id="rivers"></table></div>
+    <div id="riversAll"></div>
+    <h4 class="watchsub">Catchment watch <span>next 3 days</span></h4>
     <div class="tablewrap"><table id="watch"></table></div>
     <p class="note" id="watchNote"></p>
   </section>
@@ -769,7 +782,7 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); drawCatch(); drawWatch(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); drawCatch(); if (!$("watchPanel").hidden) drawWatch(); else floodDot(); fitMap(); }
 
 // Catchments (assets/catchments.json, traced from terrain data): the chosen one's outline on the map, and the average
 // rain over it for the view shown, with the volume that is (1 mm over 1 km² = 1 ML). The choice is remembered.
@@ -848,6 +861,36 @@ function wetNow(id){
   const api = ser.reduce((a, v) => a * 0.9 + (v || 0), 0) * 0.9 + todayMm;
   return {ser, todayMm, api, cls: clsOf(api)};
 }
+// The "Catchments & floods" button: opens the panel (flood warnings, river heights, catchment picker, watch table) and
+// shows a red dot when the Bureau has a flood warning out for the Condamine system.
+async function floodDot(){
+  try { const fw = await getJSON("data/flood_warn.json"); $("floodDot").hidden = !(fw.warnings || []).length; } catch(e){}
+}
+function setFlood(open){
+  $("watchPanel").hidden = !open; $("floodBtn").setAttribute("aria-expanded", open);
+  if (open) { drawWatch(); $("watchPanel").scrollIntoView({behavior: "smooth", block: "start"}); }
+  fitMap();
+}
+// River heights from the Bureau's table for the Condamine-Balonne (data/flood_warn.json "rivers"): gauges in flood
+// first, then the main local ones; all the others fold away under "All gauges".
+const KEY_GAUGES = /tummaville|cecil plains|loudoun|myall creek|dalby|jimbour|warra|jandowae|charley|chinchilla|hodgson|oakey creek|felton|millbrook|centenary bridge|condamine river at condamine/i;
+function drawRivers(fw){
+  const rv = fw.rivers || {}, hd = rv.headers || [], all = rv.rows || [];
+  const col = re => hd.findIndex(h => re.test(h));
+  const iName = Math.max(0, col(/station/i)), iTime = col(/time/i), iH = col(/height/i), iT = col(/tend/i), iC = col(/class/i), iX = col(/crossing/i);
+  const g = (r, i) => i >= 0 && i < r.length ? r[i] : "";
+  const rows = all.filter(r => g(r, iH) !== "");
+  if (!rows.length) { $("rivers").innerHTML = `<tbody><tr><td>River heights appear after the next radar update.</td></tr></tbody>`; $("riverWhen").textContent = ""; return; }
+  const flood = r => /minor|moderate|major/i.test(g(r, iC));
+  const arrow = t => /rising/i.test(t) ? "▲ rising" : /falling/i.test(t) ? "▼ falling" : t;
+  const row = r => `<tr><td>${g(r, iName)}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)} m</td><td>${arrow(g(r, iT))}</td><td${flood(r) ? ' class="fl"' : ""}>${g(r, iC).replace("Below Flood Level", "below flood")}</td><td>${g(r, iTime)}</td></tr>`;
+  const top = rows.filter(r => flood(r) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a));
+  const rest = rows.filter(r => !top.includes(r));
+  const head = `<thead><tr><th>Gauge</th><th class="n">Height</th><th>Trend</th><th>Flood class</th><th>Time</th></tr></thead>`;
+  $("rivers").innerHTML = head + `<tbody>${top.map(row).join("")}</tbody>`;
+  $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges in the Condamine–Balonne</summary><div class="tablewrap"><table>${head}<tbody>${rest.map(row).join("")}</tbody></table></div></details>` : "";
+  $("riverWhen").textContent = `${top.filter(flood).length ? `· ${top.filter(flood).length} in flood · ` : "· "}Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}`;
+}
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
 // over the catchment: under 3 mm low, 3-10 mm a possible creek rise, over 10 mm a likely rise. Tapping a row picks it.
@@ -855,7 +898,7 @@ async function drawWatch(){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
   await loadCatch();
   const fc = WET && WET.fc;
-  if (!fc || !CATCH || !CATCH.length) { $("watchPanel").hidden = true; return; }
+  if (!fc || !CATCH || !CATCH.length) { $("watch").innerHTML = ""; $("watchNote").textContent = "The catchment watch appears after the next radar update."; return; }
   const rows = CATCH.map(c => {
     const w = wetNow(c.id), f = fc.catchments[c.id];
     if (!w || !f) return null;
@@ -874,9 +917,9 @@ async function drawWatch(){
   $("watchNote").textContent = `Rain: the average of GFS, ECMWF and ECMWF AI over each catchment, 10am ${part(addDays(d[0], -1), {weekday: "short", day: "numeric"})} to 10am ${part(d[d.length - 1], {weekday: "short", day: "numeric", month: "short"})} ("up to" = the wettest model). `
     + `Run-off: roughly how much of it would run off the land (mm over the whole catchment), given how wet the ground is now. `
     + `A rough guide from a standard run-off method, not yet checked against real creek flows, and not a flood warning: for floods, follow the Bureau of Meteorology's flood warnings. Tap a catchment to show it on the map.`;
-  $("watchPanel").hidden = false;
   try {   // a current Bureau flood warning for this river system, from data/flood_warn.json (checked by the radar job)
     const fw = await getJSON("data/flood_warn.json");
+    drawRivers(fw);
     $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn"><summary>⚠️ <b>${w.title}</b>${w.issued ? ` · ${w.issued}` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
       || `<p class="fnone">No Bureau of Meteorology flood warning for the Condamine system right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
@@ -1283,6 +1326,8 @@ function setMore(open){
   fitMap();
 }
 $("rMoreBtn").onclick = () => setMore($("rMore").hidden);
+$("floodBtn").onclick = () => setFlood($("watchPanel").hidden);
+$("floodClose").onclick = () => { setFlood(false); $("rControls").scrollIntoView({behavior: "smooth", block: "center"}); };
 $("catchSel").onchange = () => { try { localStorage.setItem("catch", $("catchSel").value); } catch(e){} drawCatch(); fitMap();
   if (catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [20, 20], maxZoom: 10}); };   // show the whole catchment
 try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $("rMoreBtn").setAttribute("aria-expanded", true); $("rMoreBtn").textContent = "Fewer options ▴"; } } catch(e){}
@@ -2964,7 +3009,7 @@ function setTab(t, first){
   if (idx) legend();   // the Forecast tab shares the rainfall legend
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
-  if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; } $("catchInfo").hidden = true; }
+  if (t !== "rain") { $("watchPanel").hidden = true; $("floodBtn").setAttribute("aria-expanded", false); if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; } $("catchInfo").hidden = true; }
   fsSync();
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
