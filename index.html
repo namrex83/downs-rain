@@ -889,10 +889,10 @@ function labelSpot(c){
   }
   return best || [my, mx];
 }
-function drawCatchLabels(selId){   // each catchment's average rain over the last 7 days (to now) at a spot inside it
+function drawCatchLabels(selId){   // each catchment's (or just the picked one's) average rain over the last 7 days (to now) at a spot inside it
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
   if (!CATCH || !WET) return;
-  catchLabels = L.layerGroup(CATCH.map(c => {
+  catchLabels = L.layerGroup(CATCH.filter(c => !selId || c.id === selId).map(c => {   // a picked catchment: just its own
     const w = wetNow(c.id); if (!w) return null;
     const mm = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
     if (!c._spot) c._spot = labelSpot(c);
