@@ -932,7 +932,9 @@ const shortGauge = n => n.replace(/^Condamine River at /i, "").replace(/ Creek a
 // order (it runs down the river: everything listed before the gauge that closes a catchment is upstream of it).
 const GAUGE_NAMES = {hodgson: /^Hodgson Creek/i, myall: /^Myall Creek/i, jimbour: /^Jimbour Creek/i, jandowae: /^(Jandowae|Cooranga) Creek/i,
   jinghi: /^Jing?h?i/i, charleys: /^Charleys Creek/i, wilkie: /^Wilkie Creek/i, northbranch: /^((Oakey|Gowrie|Doctors|West|East) Creek|Bowenville$)/i};
-const GAUGE_UPTO = {condamine_cecil: /^Condamine River at Cecil Plains$/i, condamine_dalby: /^Condamine River at Loudoun Bridge$/i, condamine_chinchilla: /^Condamine River at Chinchilla Weir TW$/i};
+const STRETCH = {   // the river's own stretches, by the Bureau's table order (it lists gauges down the river): after one gauge, up to another
+  condamine_tum: [null, /^Condamine River at Tummaville$/i], condamine_mid: [/^Condamine River at Tummaville$/i, /^Condamine River at Loudoun Bridge$/i],
+  condamine_low: [/^Condamine River at Loudoun Bridge$/i, /^Condamine River at Chinchilla Weir TW$/i]};
 function gaugeRows(fw){   // [{name, row}] one per gauge with a height, in the Bureau's order
   const rv = (fw && fw.rivers) || {}, hd = rv.headers || [], seen = new Set();
   const iName = Math.max(0, hd.findIndex(h => /station/i.test(h))), iH = hd.findIndex(h => /height/i.test(h));
@@ -940,9 +942,15 @@ function gaugeRows(fw){   // [{name, row}] one per gauge with a height, in the B
 }
 function inCatch(cid, rows, iName){
   if (GAUGE_NAMES[cid]) return rows.filter(r => GAUGE_NAMES[cid].test(r[iName]));
-  if (GAUGE_UPTO[cid]) { const k = rows.findIndex(r => GAUGE_UPTO[cid].test(r[iName]));
-    return k < 0 ? [] : rows.filter((r, i) => i <= k || (cid === "condamine_cecil" ? /^Dalrymple Creek/i : /^(Dalrymple Creek|Condamine River at Loudoun)/i).test(r[iName])); }
-  return [];
+  const st = STRETCH[cid]; if (!st) return [];
+  const at = re => re ? rows.findIndex(r => re.test(r[iName])) : -1, a = at(st[0]), b = at(st[1]);
+  if (b < 0) return [];
+  return rows.filter((r, i) => {   // two creeks sit out of river order in the table
+    const n = r[iName];
+    if (/^Hodgson Creek/i.test(n)) return cid === "condamine_mid";   // joins below Tummaville
+    if (/^Dalrymple Creek/i.test(n)) return cid === "condamine_tum";
+    return i > a && i <= b;
+  });
 }
 let FW = null;
 function markCatchOptions(fw){   // 🔴 in the list for catchments with a gauge at minor flood or worse
@@ -1002,7 +1010,7 @@ async function drawWatch(){
   $("watchAll").textContent = showAll ? "Show fewer" : `Show all ${rows.length} catchments`;
   $("watchAll").onclick = () => { drawWatch.all = !showAll; drawWatch(); };
   $("watch").innerHTML = `<thead><tr><th>Catchment</th><th>Ground</th><th class="n">Rain</th><th class="n">Run-off</th><th>Watch</th></tr></thead><tbody>` +
-    shown.map(r => `<tr data-id="${r.c.id}" class="${$("catchSel").value === r.c.id ? "sel" : ""}"><td>${r.c.name.replace(/ \(.*\)/, "").replace(/^Condamine River above /, "Condamine abv ").replace(/ Creek$/, " Ck")}</td>
+    shown.map(r => `<tr data-id="${r.c.id}" class="${$("catchSel").value === r.c.id ? "sel" : ""}"><td>${r.c.name.replace(/ \(.*\)/, "").replace(/^Condamine River above /, "Condamine abv ").replace(/^Condamine River, /, "Condamine ").replace(/ Creek$/, " Ck")}</td>
       <td><span class="gtag" style="background:${r.w.cls.col}">${r.w.cls.t}</span></td>
       <td class="n">${fmt(r.rain)}${r.wettest > r.rain * 1.6 && r.wettest > 15 ? `<small> (up to ${fmt(r.wettest)})</small>` : ""}</td>
       <td class="n">${fmt(r.q)}</td><td><span class="wtag ${r.watch.c}">${r.watch.t}</span></td></tr>`).join("") + `</tbody>`;
