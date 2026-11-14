@@ -405,6 +405,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls catchOnly" id="cControls" hidden>
+    <div class="field"><span class="eyebrow">Rain on the map</span>
+      <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="true">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="false">Off</button></div></div>
     <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="controls stormOnly" hidden>
@@ -512,7 +514,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap windOld" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOld" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
-  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
+  <div id="legendBox" class="rainOnly fcOnly catchOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
@@ -840,7 +842,7 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null, cView = "none", catchLabels = null;   // the Catchments map has no rain overlay: each catchment shows its average
+let catchAll = null, cView = "week", catchLabels = null;
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
 map.createPane("labelPane").style.zIndex = 455;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
@@ -862,8 +864,18 @@ function drawGaugeDots(list){   // list: [{name, lvl, text}]
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
 // days, the season), drawn under the outlines without changing what the Rainfall tab shows.
-function catchRain(){   // no rain picture on the Catchments map
-  if (tab === "catch" && overlay) map.removeLayer(overlay);
+async function catchRain(){
+  if (tab !== "catch" || !idx) return;
+  [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
+  legend(); drawCatchLabels($("catchSel").value);
+  if (cView === "none") { if (overlay) map.removeLayer(overlay); return; }
+  const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
+  view = cView;
+  if (cView === "day") $("day").value = idx.days[idx.days.length - 1];
+  if (cView === "week") $("weekSel").value = "latest";
+  try { await draw(); } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
+  gaugeLayer.clearLayers();
+  if (tab !== "catch" && overlay) map.removeLayer(overlay);
 }
 // A spot inside a catchment for its label: inside its outline, not inside a smaller catchment drawn over it, and
 // as near its middle as that allows.
@@ -910,6 +922,7 @@ function clearCatchTab(){
 async function startCatchTab(first){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
   await loadCatch();
+  if (pin) { map.removeLayer(pin); pin = null; }   // the Rainfall tab's tap readout
   if (RMAP === undefined) { try { RMAP = await getJSON("data/river_map.json"); } catch(e){ RMAP = null; } }
   if (tab !== "catch") return;
   drawCatchTab(); catchRain();
@@ -1455,7 +1468,7 @@ function setPin(label){
   else { pin.setLatLng(tapAt); pin.setTooltipContent(label); }
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
-const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : readTap();
+const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : tab === "catch" ? null : readTap();
 map.on("click", ev => { if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
 
 // Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
@@ -1486,6 +1499,7 @@ function setMore(open){
 }
 $("rMoreBtn").onclick = () => setMore($("rMore").hidden);
 $("catchSel").onchange = () => pickCatch(true);
+$("cView").onclick = e => { const b = e.target.closest("button"); if (!b) return; cView = b.dataset.v; catchRain(); };
 try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $("rMoreBtn").setAttribute("aria-expanded", true); $("rMoreBtn").textContent = "Fewer options ▴"; } } catch(e){}
 
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
