@@ -180,7 +180,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #cControls .catchfield{flex:1 1 220px;min-width:0} #cControls .catchfield select{width:100%}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
-.watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem}
+.watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
 .wtag{font-weight:700;border-radius:6px;padding:1px 7px;font-size:.82em;white-space:nowrap}
@@ -518,9 +518,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
 
   <section class="panel catchOnly" id="watchPanel" hidden>
-    <div class="tap catchinfo" id="catchInfo" hidden></div>
-    <h3 class="watchh">Floods</h3>
-    <div id="floodWarn"></div>
     <details class="fsec" id="secRiv" open><summary id="sumRiv">🌊 River heights</summary>
       <div class="tablewrap"><table id="rivers" class="slim"></table></div>
       <p class="note" id="riverWhen"></p>
@@ -531,6 +528,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <button type="button" class="linkbtn" id="watchAll" hidden></button>
       <details class="fhow"><summary>ⓘ How this works</summary><p class="note" id="watchNote"></p></details>
     </details>
+    <div class="tap catchinfo" id="catchInfo" hidden></div>
+    <h3 class="watchh">Flood warnings</h3>
+    <div id="floodWarn"></div>
   </section>
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
