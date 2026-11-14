@@ -651,11 +651,11 @@ const satLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/servi
 const satellite = L.layerGroup([
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"})
 ]);
-let base = "sat";
-try { base = localStorage.getItem("base") || "sat"; } catch(e){}
+let base = "map";   // the street map unless Satellite is picked (a new setting name, so everyone starts on the map)
+try { base = localStorage.getItem("base2") || "map"; } catch(e){}
 (base === "map" ? streets : satellite).addTo(map);
-L.control.layers({"Satellite": satellite, "Map": streets}, null, {position: "topright"}).addTo(map);
-map.on("baselayerchange", e => { try { localStorage.setItem("base", e.name === "Map" ? "map" : "sat"); } catch(_){} });
+L.control.layers({"Map": streets, "Satellite": satellite}, null, {position: "topright"}).addTo(map);
+map.on("baselayerchange", e => { try { localStorage.setItem("base2", e.name === "Map" ? "map" : "sat"); } catch(_){} });
 map.setMaxZoom(17);
 gaugeLayer = L.layerGroup().addTo(map);
 
