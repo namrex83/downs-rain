@@ -168,6 +168,14 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .floodbtn[aria-expanded=true]{background:#062f57}
 .fdot{position:absolute;top:-3px;right:-3px;width:13px;height:13px;border-radius:50%;background:#dc2626;border:2px solid #fff}
 .watchtop{display:flex;justify-content:space-between;align-items:center}
+.fsec{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 8px;background:var(--panel)}
+.fsec > summary{cursor:pointer;list-style:none;line-height:1.4} .fsec > summary::-webkit-details-marker{display:none}
+.fsec > summary::after{content:" ▾";color:var(--ink-3)} .fsec[open] > summary::after{content:" ▴"}
+.fsec[open] > summary{margin-bottom:6px}
+.fwarn.fsec{background:#fee2e2;border-color:#dc2626}
+.fsub{font-size:.85em;color:#7f1d1d}
+table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
+.fhow summary{cursor:pointer;color:var(--accent);font-size:.8rem;margin-top:4px}
 .watchsub{margin:12px 0 4px;font:700 .9rem var(--body)} .watchsub span{font-weight:500;color:var(--ink-3);font-size:.8rem}
 #watchPanel .catchfield select{width:100%}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
@@ -506,14 +514,18 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel" id="watchPanel" hidden>
     <div class="watchtop"><h3 class="watchh">Catchments &amp; floods</h3><button type="button" class="linkbtn" id="floodClose">Close ✕</button></div>
     <div id="floodWarn"></div>
+    <details class="fsec" id="secRiv"><summary id="sumRiv">🌊 River heights</summary>
+      <div class="tablewrap"><table id="rivers" class="slim"></table></div>
+      <p class="note" id="riverWhen"></p>
+      <div id="riversAll"></div>
+    </details>
+    <details class="fsec" id="secWatch"><summary id="sumWatch">🌧 Catchment watch</summary>
+      <div class="tablewrap"><table id="watch" class="slim"></table></div>
+      <button type="button" class="linkbtn" id="watchAll" hidden></button>
+      <details class="fhow"><summary>ⓘ How this works</summary><p class="note" id="watchNote"></p></details>
+    </details>
     <div class="field catchfield"><label for="catchSel">Show a catchment on the map</label><select id="catchSel"><option value="">None</option></select></div>
     <div class="tap catchinfo" id="catchInfo" hidden></div>
-    <h4 class="watchsub">River heights now <span id="riverWhen"></span></h4>
-    <div class="tablewrap"><table id="rivers"></table></div>
-    <div id="riversAll"></div>
-    <h4 class="watchsub">Catchment watch <span>next 3 days</span></h4>
-    <div class="tablewrap"><table id="watch"></table></div>
-    <p class="note" id="watchNote"></p>
   </section>
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
@@ -871,25 +883,30 @@ function setFlood(open){
   if (open) { drawWatch(); $("watchPanel").scrollIntoView({behavior: "smooth", block: "start"}); }
   fitMap();
 }
-// River heights from the Bureau's table for the Condamine-Balonne (data/flood_warn.json "rivers"): gauges in flood
-// first, then the main local ones; all the others fold away under "All gauges".
-const KEY_GAUGES = /tummaville|cecil plains|loudoun|myall creek|dalby|jimbour|warra|jandowae|charley|chinchilla|hodgson|oakey creek|felton|millbrook|centenary bridge|condamine river at condamine/i;
+// River heights from the Bureau's table for the Condamine-Balonne (data/flood_warn.json "rivers"). Shown: gauges in
+// flood or rising, and a few key ones; all the others fold away under "All gauges". Names shortened to fit a phone.
+const KEY_GAUGES = /^(Condamine River at (Tummaville|Cecil Plains|Loudoun Bridge|Chinchilla Weir TW)|Myall Creek at Dalby|Charleys Creek at Chinchilla)$/i;
+const LOCAL_GAUGES = /^(Condamine River|Myall|Oakey|Hodgson|Jimbour|Jandowae|Cooranga|Charleys|Wilkie|Jinghi|Jingi)/i;   // our catchments
+const shortGauge = n => n.replace(/^Condamine River at /i, "").replace(/ Creek at /i, " Ck, ").replace(/ River at /i, " R, ");
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], all = rv.rows || [];
   const col = re => hd.findIndex(h => re.test(h));
-  const iName = Math.max(0, col(/station/i)), iTime = col(/time/i), iH = col(/height/i), iT = col(/tend/i), iC = col(/class/i), iX = col(/crossing/i);
+  const iName = Math.max(0, col(/station/i)), iTime = col(/time/i), iH = col(/height/i), iT = col(/tend/i), iC = col(/class/i);
   const g = (r, i) => i >= 0 && i < r.length ? r[i] : "";
-  const rows = all.filter(r => g(r, iH) !== "");
-  if (!rows.length) { $("rivers").innerHTML = `<tbody><tr><td>River heights appear after the next radar update.</td></tr></tbody>`; $("riverWhen").textContent = ""; return; }
-  const flood = r => /minor|moderate|major/i.test(g(r, iC));
-  const arrow = t => /rising/i.test(t) ? "▲ rising" : /falling/i.test(t) ? "▼ falling" : t;
-  const row = r => `<tr><td>${g(r, iName)}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)} m</td><td>${arrow(g(r, iT))}</td><td${flood(r) ? ' class="fl"' : ""}>${g(r, iC).replace("Below Flood Level", "below flood")}</td><td>${g(r, iTime)}</td></tr>`;
-  const top = rows.filter(r => flood(r) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a));
+  const iD = col(/datum/i), seen = new Set();
+  const rows = all.filter(r => g(r, iH) !== "" && !seen.has(g(r, iName)) && seen.add(g(r, iName)));   // one row per gauge
+  if (!rows.length) { $("rivers").innerHTML = ""; $("sumRiv").innerHTML = "🌊 River heights appear after the next radar update"; return; }
+  const flood = r => /minor|moderate|major/i.test(g(r, iC)), rising = r => /rising/i.test(g(r, iT));
+  const tr = r => `<tr><td>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
+  const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
+  const top = rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
   const rest = rows.filter(r => !top.includes(r));
-  const head = `<thead><tr><th>Gauge</th><th class="n">Height</th><th>Trend</th><th>Flood class</th><th>Time</th></tr></thead>`;
-  $("rivers").innerHTML = head + `<tbody>${top.map(row).join("")}</tbody>`;
-  $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges in the Condamine–Balonne</summary><div class="tablewrap"><table>${head}<tbody>${rest.map(row).join("")}</tbody></table></div></details>` : "";
-  $("riverWhen").textContent = `${top.filter(flood).length ? `· ${top.filter(flood).length} in flood · ` : "· "}Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}`;
+  const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th></tr></thead>`;
+  $("rivers").innerHTML = head + `<tbody>${top.map(tr).join("")}</tbody>`;
+  $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
+  const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && local(r));
+  $("sumRiv").innerHTML = `🌊 <b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
+  $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
 }
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
@@ -909,19 +926,26 @@ async function drawWatch(){
     return {c, w, rain, wettest, q, watch};
   }).filter(Boolean).sort((a, b) => b.q - a.q || b.w.api - a.w.api);
   const d = fc.days;
-  $("watch").innerHTML = `<thead><tr><th>Catchment</th><th>Ground</th><th class="n">Rain mm</th><th class="n">Run-off mm</th><th>Watch</th></tr></thead><tbody>` +
-    rows.map(r => `<tr data-id="${r.c.id}" class="${$("catchSel").value === r.c.id ? "sel" : ""}"><td>${r.c.name.replace(/ \(incl.*\)/, "")}</td>
+  const busy = rows.filter(r => r.watch.c !== "w1"), showAll = drawWatch.all;
+  const shown = showAll ? rows : [...busy, ...rows.filter(r => r.watch.c === "w1").sort((a, b) => b.rain - a.rain).slice(0, 3)];
+  $("sumWatch").innerHTML = `🌧 <b>Catchment watch:</b> ${busy.length ? busy.map(r => `${r.c.name.replace(/ \(.*\)/, "")} <span class="wtag ${r.watch.c}">${r.watch.t}</span>`).join(", ") : "all Low for the next 3 days"}`;
+  $("watchAll").hidden = shown.length === rows.length && !showAll;
+  $("watchAll").textContent = showAll ? "Show fewer" : `Show all ${rows.length} catchments`;
+  $("watchAll").onclick = () => { drawWatch.all = !showAll; drawWatch(); };
+  $("watch").innerHTML = `<thead><tr><th>Catchment</th><th>Ground</th><th class="n">Rain</th><th class="n">Run-off</th><th>Watch</th></tr></thead><tbody>` +
+    shown.map(r => `<tr data-id="${r.c.id}" class="${$("catchSel").value === r.c.id ? "sel" : ""}"><td>${r.c.name.replace(/ \(.*\)/, "").replace(/^Condamine River above /, "Condamine abv ").replace(/ Creek$/, " Ck")}</td>
       <td><span class="gtag" style="background:${r.w.cls.col}">${r.w.cls.t}</span></td>
       <td class="n">${fmt(r.rain)}${r.wettest > r.rain * 1.6 && r.wettest > 15 ? `<small> (up to ${fmt(r.wettest)})</small>` : ""}</td>
       <td class="n">${fmt(r.q)}</td><td><span class="wtag ${r.watch.c}">${r.watch.t}</span></td></tr>`).join("") + `</tbody>`;
-  $("watchNote").textContent = `Rain: the average of GFS, ECMWF and ECMWF AI over each catchment, 10am ${part(addDays(d[0], -1), {weekday: "short", day: "numeric"})} to 10am ${part(d[d.length - 1], {weekday: "short", day: "numeric", month: "short"})} ("up to" = the wettest model). `
+  $("watchNote").textContent = `Rain and run-off in mm. Rain: the average of GFS, ECMWF and ECMWF AI over each catchment, 10am ${part(addDays(d[0], -1), {weekday: "short", day: "numeric"})} to 10am ${part(d[d.length - 1], {weekday: "short", day: "numeric", month: "short"})} ("up to" = the wettest model). `
     + `Run-off: roughly how much of it would run off the land (mm over the whole catchment), given how wet the ground is now. `
     + `A rough guide from a standard run-off method, not yet checked against real creek flows, and not a flood warning: for floods, follow the Bureau of Meteorology's flood warnings. Tap a catchment to show it on the map.`;
   try {   // a current Bureau flood warning for this river system, from data/flood_warn.json (checked by the radar job)
     const fw = await getJSON("data/flood_warn.json");
     drawRivers(fw);
-    $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn"><summary>⚠️ <b>${w.title}</b>${w.issued ? ` · ${w.issued}` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
-      || `<p class="fnone">No Bureau of Meteorology flood warning for the Condamine system right now.</p>`;
+    const head = t => (t.match(/^[A-Z][A-Z ,'-]{12,}$/m) || [""])[0];   // the warning's headline, e.g. MINOR FLOODING OCCURRING AT TUMMAVILLE
+    $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn fsec"><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
+      || `<p class="fnone">✅ No Bureau of Meteorology flood warning for the Condamine system right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
   $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
     $("catchSel").value = tr.dataset.id; $("catchSel").onchange(); drawWatch(); $("map").scrollIntoView({behavior: "smooth", block: "center"}); };
