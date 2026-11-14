@@ -218,6 +218,51 @@ def in_polygon(lat, lon, ring):
     return inside
 
 
+FC_FILES = {"gfs": "forecast_gfs.json", "ecmwf": "forecast.json", "aifs": "forecast_aifs.json"}
+
+
+def catch_forecast(catchments, ndays=3):
+    """Each catchment's forecast rain for the next few 10am-to-10am days: the average over the catchment (points 0.05
+    degrees apart inside it, read off each model's 0.25 degree map) for each model, and the average of the models."""
+    now = dt.datetime.now(QLD)
+    first_end = (now.date() if now.hour < 10 else now.date() + dt.timedelta(days=1)).isoformat()
+    want = [(dt.date.fromisoformat(first_end) + dt.timedelta(days=i)).isoformat() for i in range(ndays)]
+    pts = {}
+    for c in catchments:
+        xs, ys = [p[0] for p in c["outline"]], [p[1] for p in c["outline"]]
+        LON, LAT = np.meshgrid(np.arange(min(xs), max(xs), 0.05) + 0.025, np.arange(min(ys), max(ys), 0.05) + 0.025)
+        m = in_polygon(LAT, LON, c["outline"])
+        pts[c["id"]] = (LAT[m], LON[m]) if m.any() else (np.array([np.mean(ys)]), np.array([np.mean(xs)]))
+    per = {c["id"]: {} for c in catchments}
+    runs = {}
+    for name, fn in FC_FILES.items():
+        try:
+            f = json.load(open(os.path.join(DATA, fn)))
+        except (OSError, ValueError):
+            continue
+        lats, lons = np.array(f["lats"]), np.array(f["lons"])
+        nr, nc = len(lats), len(lons)
+        if not all(d in f["days"] for d in want):
+            continue
+        runs[name] = f.get("run")
+        for cid, (la, lo) in pts.items():
+            fy = (lats[0] - la) / (lats[0] - lats[1]); fx = (lo - lons[0]) / (lons[1] - lons[0])
+            r0 = np.clip(np.floor(fy).astype(int), 0, nr - 2); c0 = np.clip(np.floor(fx).astype(int), 0, nc - 2)
+            dy, dx = fy - r0, fx - c0
+            vals = []
+            for d in want:
+                g = np.array(f["mm10"][f["days"].index(d)], np.float32).reshape(nr, nc) / 10
+                v = (g[r0, c0] * (1 - dy) * (1 - dx) + g[r0, c0 + 1] * (1 - dy) * dx + g[r0 + 1, c0] * dy * (1 - dx) + g[r0 + 1, c0 + 1] * dy * dx)
+                vals.append(round(float(np.mean(v)), 1))
+            per[cid][name] = vals
+    out = {"days": want, "runs": runs, "catchments": {}}
+    for cid, models in per.items():
+        if models:
+            avg = [round(float(np.mean([m[i] for m in models.values()])), 1) for i in range(len(want))]
+            out["catchments"][cid] = {"avg": avg, **models}
+    return out
+
+
 def catch_wet():
     """Each catchment's average rain for each of the last 30 rain days (radar map where there is one, else SILO's), and
     the running total since 9am today: data/catch_wet.json, for the Rainfall tab's ground wetness."""
@@ -271,7 +316,7 @@ def catch_wet():
             today = {"date": m["date"], "as_of": m.get("as_of"), **{"mm": averages(m, g)}}
     except (OSError, ValueError, KeyError):
         pass
-    out = {"to": days[-1], "days": days, "mm": series, "today": today}
+    out = {"to": days[-1], "days": days, "mm": series, "today": today, "fc": catch_forecast(catchments)}
     text = json.dumps(out, separators=(",", ":"))
     if os.path.exists(CATCH_OUT) and open(CATCH_OUT).read() == text:
         return

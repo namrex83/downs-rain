@@ -160,6 +160,11 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .rmore > .field{order:5}
 .catchinfo{border-left:4px solid #e00000}
 .catchinfo .ground{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);line-height:1.45}
+.watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem}
+#watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
+#watch small{color:var(--ink-3)}
+.wtag{font-weight:700;border-radius:6px;padding:1px 7px;font-size:.82em;white-space:nowrap}
+.wtag.w1{background:#e5efe7;color:#256b3a} .wtag.w2{background:#fde68a;color:#7a4b00} .wtag.w3{background:#dc2626;color:#fff}
 .gtag{color:#fff;font-weight:700;border-radius:6px;padding:1px 7px;font-size:.85em}
 .gnote2{display:block;color:var(--ink-3);font-size:.8em}   /* the picker and More options share a row, the folded options come after */
 @media (min-width:1000px){ #dayField,#weekField{flex:1 1 270px} }
@@ -488,6 +493,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
 
+  <section class="panel rainOnly" id="watchPanel" hidden>
+    <h3 class="watchh">Catchment watch <span>next 3 days</span></h3>
+    <div class="tablewrap"><table id="watch"></table></div>
+    <p class="note" id="watchNote"></p>
+  </section>
   <section class="panel rainOnly">
     <div class="tablewrap"><table id="gauges"></table></div>
     <p class="note" id="notes"></p>
@@ -755,7 +765,7 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); drawCatch(); fitMap(); }
+async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); drawCatch(); drawWatch(); fitMap(); }
 
 // Catchments (assets/catchments.json, traced from terrain data): the chosen one's outline on the map, and the average
 // rain over it for the view shown, with the volume that is (1 mm over 1 km² = 1 ML). The choice is remembered.
@@ -820,17 +830,58 @@ function drawCatch(){
 // roughly how much rain in a day before run-off starts, with a curve number for clay cropping/grazing country (82 on
 // average ground). A rough guide, not calibrated against real stream flows.
 let WET = undefined;
+// Ground wetness of a catchment now: a running rain index fading 10% a day, its class, and the run-off method's
+// storage (S) and initial loss (Ia) for that class (curve number 82 on average clay country).
+const CLS = [{t: "Dry", k: 1, col: "#a16207"}, {t: "Moist", k: 2, col: "#0e7490"}, {t: "Wet", k: 3, col: "#1d4ed8"}];
+const clsOf = api => api > 50 ? CLS[2] : api >= 25 ? CLS[1] : CLS[0];
+function runoffParams(cls){
+  const CN2 = 82, cn = cls.k === 1 ? 4.2 * CN2 / (10 - 0.058 * CN2) : cls.k === 3 ? 23 * CN2 / (10 + 0.13 * CN2) : CN2;
+  const S = 25400 / cn - 254; return {S, Ia: 0.2 * S, run: P => P > 0.2 * S ? (P - 0.2 * S) ** 2 / (P - 0.2 * S + S) : 0};
+}
+function wetNow(id){
+  const ser = WET && WET.mm[id]; if (!ser) return null;
+  const todayMm = (WET.today && WET.today.mm && WET.today.mm[id]) || 0;
+  const api = ser.reduce((a, v) => a * 0.9 + (v || 0), 0) * 0.9 + todayMm;
+  return {ser, todayMm, api, cls: clsOf(api)};
+}
+// Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
+// days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
+// over the catchment: under 3 mm low, 3-10 mm a possible creek rise, over 10 mm a likely rise. Tapping a row picks it.
+async function drawWatch(){
+  if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
+  await loadCatch();
+  const fc = WET && WET.fc;
+  if (!fc || !CATCH || !CATCH.length) { $("watchPanel").hidden = true; return; }
+  const rows = CATCH.map(c => {
+    const w = wetNow(c.id), f = fc.catchments[c.id];
+    if (!w || !f) return null;
+    let api = w.api, q = 0;
+    for (const p of f.avg){ q += runoffParams(clsOf(api)).run(p); api = api * 0.9 + p; }
+    const rain = f.avg.reduce((a, b) => a + b, 0), wettest = Math.max(...["gfs", "ecmwf", "aifs"].filter(m => f[m]).map(m => f[m].reduce((a, b) => a + b, 0)));
+    const watch = q >= 10 ? {t: "Likely rise", c: "w3"} : q >= 3 ? {t: "Possible rise", c: "w2"} : {t: "Low", c: "w1"};
+    return {c, w, rain, wettest, q, watch};
+  }).filter(Boolean).sort((a, b) => b.q - a.q || b.w.api - a.w.api);
+  const d = fc.days;
+  $("watch").innerHTML = `<thead><tr><th>Catchment</th><th>Ground</th><th class="n">Rain mm</th><th class="n">Run-off mm</th><th>Watch</th></tr></thead><tbody>` +
+    rows.map(r => `<tr data-id="${r.c.id}" class="${$("catchSel").value === r.c.id ? "sel" : ""}"><td>${r.c.name.replace(/ \(incl.*\)/, "")}</td>
+      <td><span class="gtag" style="background:${r.w.cls.col}">${r.w.cls.t}</span></td>
+      <td class="n">${fmt(r.rain)}${r.wettest > r.rain * 1.6 && r.wettest > 15 ? `<small> (up to ${fmt(r.wettest)})</small>` : ""}</td>
+      <td class="n">${fmt(r.q)}</td><td><span class="wtag ${r.watch.c}">${r.watch.t}</span></td></tr>`).join("") + `</tbody>`;
+  $("watchNote").textContent = `Rain: the average of GFS, ECMWF and ECMWF AI over each catchment, 10am ${part(addDays(d[0], -1), {weekday: "short", day: "numeric"})} to 10am ${part(d[d.length - 1], {weekday: "short", day: "numeric", month: "short"})} ("up to" = the wettest model). `
+    + `Run-off: roughly how much of it would run off the land (mm over the whole catchment), given how wet the ground is now. `
+    + `A rough guide from a standard run-off method, not yet checked against real creek flows, and not a flood warning: for floods, follow the Bureau of Meteorology's flood warnings. Tap a catchment to show it on the map.`;
+  $("watchPanel").hidden = false;
+  $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
+    $("catchSel").value = tr.dataset.id; $("catchSel").onchange(); drawWatch(); $("map").scrollIntoView({behavior: "smooth", block: "center"}); };
+}
 async function groundWet(c){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
-  const ser = WET && WET.mm[c.id];
-  if (!ser || $("catchSel").value !== c.id) return;
+  const w = wetNow(c.id);
+  if (!w || $("catchSel").value !== c.id) return;
+  const {ser, todayMm, api, cls} = w;
   const sum = n => ser.slice(-n).reduce((a, v) => a + (v || 0), 0);
-  const todayMm = (WET.today && WET.today.mm && WET.today.mm[c.id]) || 0;
   const d5 = sum(5) + todayMm, d14 = sum(14) + todayMm, d30 = sum(30) + todayMm;
-  const api = ser.reduce((a, v) => a * 0.9 + (v || 0), 0) * 0.9 + todayMm;
-  const cls = api > 50 ? {t: "Wet", k: 3, col: "#1d4ed8"} : api >= 25 ? {t: "Moist", k: 2, col: "#0e7490"} : {t: "Dry", k: 1, col: "#a16207"};
-  const CN2 = 82, cn = cls.k === 1 ? 4.2 * CN2 / (10 - 0.058 * CN2) : cls.k === 3 ? 23 * CN2 / (10 + 0.13 * CN2) : CN2;
-  const S = 25400 / cn - 254, Ia = 0.2 * S, run = P => P > Ia ? (P - Ia) ** 2 / (P - Ia + S) : 0;
+  const {Ia, run} = runoffParams(cls);
   $("catchInfo").insertAdjacentHTML("beforeend", `<div class="ground"><b>Ground:</b> <span class="gtag" style="background:${cls.col}">${cls.t}</span> (wetness index ${Math.round(api)})
     · rain in the last 5 days <b>${fmt(d5)} mm</b> · 14 days ${fmt(d14)} mm · 30 days ${fmt(d30)} mm${todayMm ? ` (incl. ${fmt(todayMm)} mm since 9am)` : ""}.<br>
     Run-off starts after roughly <b>${Math.round(Ia)} mm</b> of rain in a day; 25 mm would run off about ${fmt(run(25))} mm, 50 mm about ${fmt(run(50))} mm.
