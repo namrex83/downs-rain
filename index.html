@@ -181,6 +181,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
+.tubelab span{display:none;font:700 italic .7rem var(--body);white-space:nowrap;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff;transform:translate(-50%,-140%);display:none} .tubezoom .tubelab span{display:inline-block}
 .clabel{background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:10px;padding:1px 6px;font:700 .8rem var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.68rem;margin-left:1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
@@ -851,17 +852,70 @@ map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outl
 // Rough gauge positions and the creek and river lines from OpenStreetMap (data/river_map.json, made by river-map.yml)
 let RMAP = undefined, streamLayer = null, riverDots = null;
 const GCOL = {g0: "#3aa655", g1: "#f0a020", g2: "#e00000", g3: "#a00000", g4: "#7a2db0"};
+// The creeks drawn like a train-line map: each one cut down to its main bends (a couple of km), the corners
+// rounded, in its own colour on a white casing, the Condamine as the thick main line; the gauges sit on them
+// like stations. Worked out once.
+const TUBE_COL = ["#9b0056", "#b36305", "#00a4a7", "#6950a1", "#7d8a95", "#e586a8", "#003688", "#5fb39c", "#827a04", "#a35c9e", "#4d6b8a", "#c27c2c"];
+function tubeLines(){
+  if (RMAP._tube) return RMAP._tube;
+  const kx = Math.cos(27 * Math.PI / 180);   // a degree of longitude is shorter here
+  const segD = (p, a, b) => {   // distance from p to the segment a-b, and the nearest point on it
+    const ax = a[1] * kx, ay = a[0], bx = b[1] * kx, by = b[0], px = p[1] * kx, py = p[0], dx = bx - ax, dy = by - ay;
+    const t = dx || dy ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))) : 0;
+    return [Math.hypot(px - ax - t * dx, py - ay - t * dy), [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]];
+  };
+  const simp = (pts, tol) => {   // Douglas-Peucker
+    if (pts.length < 3) return pts;
+    let far = 0, at = 0;
+    for (let i = 1; i < pts.length - 1; i++){ const d = segD(pts[i], pts[0], pts[pts.length - 1])[0]; if (d > far) { far = d; at = i; } }
+    return far < tol ? [pts[0], pts[pts.length - 1]] : [...simp(pts.slice(0, at + 1), tol).slice(0, -1), ...simp(pts.slice(at), tol)];
+  };
+  const round = pts => {   // Chaikin: cut each corner
+    if (pts.length < 3) return pts;
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++){ const a = pts[i], b = pts[i + 1];
+      if (i > 0) out.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25]);
+      if (i < pts.length - 2) out.push([a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); }
+    out.push(pts[pts.length - 1]); return out;
+  };
+  let k = 0;
+  const tube = RMAP.streams.map(st => ({name: st.name, main: st.main,
+    col: st.name === "Condamine River" ? "#0019a8" : st.name === "North Branch" ? "#00a0e2" : TUBE_COL[k++ % TUBE_COL.length],
+    lines: st.lines.map(ln => round(round(simp(ln, st.main ? .02 : .015)))).filter(l => l.length > 1)}));
+  // each gauge onto its own creek's line (by the name before "at"), if that's within about 5 km
+  const snap = {};
+  for (const [name, ll] of Object.entries(RMAP.gauges)){
+    const way = /^Condamine River/i.test(name) ? "Condamine River" : name.split(" at ")[0];
+    const st = tube.find(t => t.name.toLowerCase() === way.toLowerCase());
+    let best = [Infinity, ll];
+    if (st) for (const ln of st.lines) for (let i = 0; i < ln.length - 1; i++){ const r = segD(ll, ln[i], ln[i + 1]); if (r[0] < best[0]) best = r; }
+    snap[name] = best[0] < .05 ? best[1] : ll;
+  }
+  RMAP._snap = snap;
+  return RMAP._tube = tube;
+}
 function drawStreams(){
   if (streamLayer) { map.removeLayer(streamLayer); streamLayer = null; }
   if (!RMAP || tab !== "catch") return;
-  streamLayer = L.layerGroup(RMAP.streams.flatMap(st => st.lines.map(ln =>
-    L.polyline(ln, {pane: "catchPane", color: "#1e6fd9", weight: st.main ? 3.5 : 2, opacity: st.main ? .9 : .75, interactive: false})))).addTo(map);
+  const tube = tubeLines(), opt = {pane: "catchPane", interactive: false, lineCap: "round", lineJoin: "round"};
+  const w = st => st.main ? 6 : 3.5;
+  streamLayer = L.layerGroup([
+    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: .9}))),   // casing under all of them
+    ...tube.sort((a, b) => a.main - b.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: st.col, weight: w(st), opacity: 1}))),
+    // each creek's name along its longest piece, once zoomed in a little
+    ...tube.map(st => { const ln = st.lines.reduce((a, b) => b.length > a.length ? b : a, []); if (ln.length < 2) return null;
+      return L.marker(ln[Math.floor(ln.length / 2)], {pane: "labelPane", interactive: false, keyboard: false,
+        icon: L.divIcon({className: "tubelab", html: `<span style="color:${st.col}">${st.name.replace(/ Creek$/, " Ck").replace(" River", " R.")}</span>`, iconSize: null})}); }).filter(Boolean)
+  ]).addTo(map);
+  tubeLabels();
 }
+function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= 9); }
+map.on("zoomend", tubeLabels);
 function drawGaugeDots(list){   // list: [{name, lvl, text}]
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (!RMAP || tab !== "catch" || !list) return;
   riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
-    L.circleMarker(RMAP.gauges[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .45 : 1, opacity: x.other ? .5 : 1})
+    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .45 : 1, opacity: x.other ? .5 : 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
