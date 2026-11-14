@@ -182,7 +182,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
 .tubelab span{display:none;font:700 italic .7rem var(--body);white-space:nowrap;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff;transform:translate(-50%,-140%);display:none} .tubezoom .tubelab span{display:inline-block}
-.clabelpin{overflow:visible} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
+.clabelpin{overflow:visible} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
@@ -881,7 +881,7 @@ function tubeLines(){
   let k = 0;
   const tube = RMAP.streams.map(st => ({name: st.name, main: st.main,
     col: st.name === "Condamine River" ? "#0019a8" : st.name === "North Branch" ? "#00a0e2" : TUBE_COL[k++ % TUBE_COL.length],
-    lines: st.lines.map(ln => round(round(simp(ln, st.main ? .02 : .015)))).filter(l => l.length > 1)}));
+    lines: st.lines.map(ln => round(round(round(simp(ln, st.main ? .02 : .015))))).filter(l => l.length > 1)}));
   // each gauge onto its own creek's line (by the name before "at"), if that's within about 5 km
   const snap = {};
   for (const [name, ll] of Object.entries(RMAP.gauges)){
@@ -959,7 +959,7 @@ function showAvMax(){   // the picked catchment's Av and Max for the period on t
   const id = $("catchSel").value, v = AVMAX[id], c = CATCH && CATCH.find(x => x.id === id);
   const per = {day: "Latest day", fortnight: "Last 14 days", season: "Season"}[cView] || "Last 7 days";
   cMapBox.hidden = !(tab === "catch" && v && c);
-  if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "")} · ${per}</span><span class="nums">Av: <b>${fmt(v.av)}</b> · Max: <b>${v.mx != null ? fmt(v.mx) : "–"}</b> mm</span>`;
+  if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "").replace(/^Condamine River,? /, "Condamine ")} · ${per}</span><span class="nums">Av: <b>${fmt(v.av)}</b> · Max: <b>${v.mx != null ? fmt(v.mx) : "–"}</b> mm</span>`;
 }
 function drawCatchLabels(selId){
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
@@ -1001,6 +1001,36 @@ async function startCatchTab(first){
   else if (catchAll) map.fitBounds(L.featureGroup(catchAll.getLayers()).getBounds(), {padding: [10, 10]});
   drawWatch();
 }
+// An outline drawn with its corners rounded (the traced outline steps along the terrain model's squares). Chaikin
+// corner-cutting is local, so neighbouring catchments' shared edges still line up. For drawing only: the rain and
+// wetness figures use the outline as traced.
+function smoothRing(c){
+  if (c._smooth) return c._smooth;
+  let r = c.outline.map(([lo, la]) => [la, lo]);
+  if (r.length > 1 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]) r = r.slice(0, -1);
+  // first drop the small zig-zags (points within about 600 m of the line through their neighbours, Douglas-Peucker
+  // on the ring split at its two farthest-apart points), then round the corners
+  const kx = Math.cos(27 * Math.PI / 180), dseg = (p, a, b) => {
+    const ax = a[1] * kx, bx = b[1] * kx, px = p[1] * kx, dx = bx - ax, dy = b[0] - a[0];
+    const t = dx || dy ? Math.max(0, Math.min(1, ((px - ax) * dx + (p[0] - a[0]) * dy) / (dx * dx + dy * dy))) : 0;
+    return Math.hypot(px - ax - t * dx, p[0] - a[0] - t * dy);
+  };
+  const dp = (pts, tol) => { if (pts.length < 3) return pts; let far = 0, at = 0;
+    for (let i = 1; i < pts.length - 1; i++){ const d = dseg(pts[i], pts[0], pts[pts.length - 1]); if (d > far) { far = d; at = i; } }
+    return far < tol ? [pts[0], pts[pts.length - 1]] : [...dp(pts.slice(0, at + 1), tol).slice(0, -1), ...dp(pts.slice(at), tol)]; };
+  if (r.length > 8){
+    let j = 0, f = 0; r.forEach((p, i) => { const d = Math.hypot((p[1] - r[0][1]) * kx, p[0] - r[0][0]); if (d > f) { f = d; j = i; } });
+    const a = dp(r.slice(0, j + 1), .006), b = dp([...r.slice(j), r[0]], .006);
+    r = [...a.slice(0, -1), ...b.slice(0, -1)];
+  }
+  for (let k = 0; k < 3; k++){
+    const out = [];
+    for (let i = 0; i < r.length; i++){ const a = r[i], b = r[(i + 1) % r.length];
+      out.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); }
+    r = out;
+  }
+  return (c._smooth = r);
+}
 function drawCatchTab(){
   clearCatchTab();
   $("catchInfo").hidden = true; AVMAX = {};
@@ -1008,12 +1038,12 @@ function drawCatchTab(){
   const selId = $("catchSel").value;
   drawStreams();
   catchAll = L.layerGroup([...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
-    L.polygon(c.outline.map(([lo, la]) => [la, lo]), {pane: "catchPane", color: "#0b3d6e", weight: 1.6, opacity: .9, fillColor: "#3b82f6", fillOpacity: .04})
+    L.polygon(smoothRing(c), {pane: "catchPane", color: "#0b3d6e", weight: 1.6, opacity: .9, fillColor: "#3b82f6", fillOpacity: .04})
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
   if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (the last 7 days when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
-  const ring = c.outline.map(([lo, la]) => [la, lo]);
+  const ring = smoothRing(c);
   catchLayer = L.layerGroup([
     L.polygon(ring, {pane: "catchPane", color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
     L.polygon(ring, {pane: "catchPane", color: "#e00000", weight: 4, fill: false, interactive: false})]).addTo(map);
