@@ -158,7 +158,10 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .morefield{flex:0 0 auto;justify-content:flex-end;order:4}
 #weekField{order:3}
 .rmore > .field{order:5}
-.catchinfo{border-left:4px solid #e00000}   /* the picker and More options share a row, the folded options come after */
+.catchinfo{border-left:4px solid #e00000}
+.catchinfo .ground{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);line-height:1.45}
+.gtag{color:#fff;font-weight:700;border-radius:6px;padding:1px 7px;font-size:.85em}
+.gnote2{display:block;color:var(--ink-3);font-size:.8em}   /* the picker and More options share a row, the folded options come after */
 @media (min-width:1000px){ #dayField,#weekField{flex:1 1 270px} }
 .morebtn{font:600 .85rem var(--body);color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;white-space:nowrap}
 #dayField,#weekField{flex:1 1 170px;min-width:0}
@@ -803,6 +806,30 @@ function drawCatch(){
   const when = view === "week" ? "over the 7 days" : view === "fortnight" ? "over the 14 days" : view === "season" ? "this season" : $("day").value === "today" ? "since 9am" : "that day";
   $("catchInfo").innerHTML = `<b>${c.name} catchment</b> ${when}: average <b>${fmt(avg)} mm</b> over ${c.area_km2.toLocaleString()} km², about <b>${ml.toLocaleString()} ML</b> of rain${n < cells.length * 0.9 ? " (part of it is outside the radar's reach)" : ""}.`;
   $("catchInfo").hidden = false;
+  groundWet(c);
+}
+// How wet the ground is in the chosen catchment now, from data/catch_wet.json (its average rain each day for the last 30
+// days, made by the jobs). Wetness from a running rain index that fades 10% a day (clay soils hold water for a couple of
+// weeks): under 25 dry, 25-50 moist, over 50 wet, used as the standard run-off method's antecedent moisture class; then
+// roughly how much rain in a day before run-off starts, with a curve number for clay cropping/grazing country (82 on
+// average ground). A rough guide, not calibrated against real stream flows.
+let WET = undefined;
+async function groundWet(c){
+  if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
+  const ser = WET && WET.mm[c.id];
+  if (!ser || $("catchSel").value !== c.id) return;
+  const sum = n => ser.slice(-n).reduce((a, v) => a + (v || 0), 0);
+  const todayMm = (WET.today && WET.today.mm && WET.today.mm[c.id]) || 0;
+  const d5 = sum(5) + todayMm, d14 = sum(14) + todayMm, d30 = sum(30) + todayMm;
+  const api = ser.reduce((a, v) => a * 0.9 + (v || 0), 0) * 0.9 + todayMm;
+  const cls = api > 50 ? {t: "Wet", k: 3, col: "#1d4ed8"} : api >= 25 ? {t: "Moist", k: 2, col: "#0e7490"} : {t: "Dry", k: 1, col: "#a16207"};
+  const CN2 = 82, cn = cls.k === 1 ? 4.2 * CN2 / (10 - 0.058 * CN2) : cls.k === 3 ? 23 * CN2 / (10 + 0.13 * CN2) : CN2;
+  const S = 25400 / cn - 254, Ia = 0.2 * S, run = P => P > Ia ? (P - Ia) ** 2 / (P - Ia + S) : 0;
+  $("catchInfo").insertAdjacentHTML("beforeend", `<div class="ground"><b>Ground:</b> <span class="gtag" style="background:${cls.col}">${cls.t}</span> (wetness index ${Math.round(api)})
+    · rain in the last 5 days <b>${fmt(d5)} mm</b> · 14 days ${fmt(d14)} mm · 30 days ${fmt(d30)} mm${todayMm ? ` (incl. ${fmt(todayMm)} mm since 9am)` : ""}.<br>
+    Run-off starts after roughly <b>${Math.round(Ia)} mm</b> of rain in a day; 25 mm would run off about ${fmt(run(25))} mm, 50 mm about ${fmt(run(50))} mm.
+    <span class="gnote2">Rough guide (standard run-off method for clay soils, not checked against real stream flows).</span></div>`);
+  fitMap();
 }
 
 // Hail: spots where the radar's echo reached the top of its scale (about 63 dBZ and up): in one scan of the day,

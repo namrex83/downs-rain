@@ -201,7 +201,91 @@ def span_total(start, out_path, label):
           f"{len(out['missing'])} missing; wettest {np.nanmax(total):.0f} mm")
 
 
+CATCH_IN = os.path.join("assets", "catchments.json")
+CATCH_OUT = os.path.join(DATA, "catch_wet.json")
+
+
+def in_polygon(lat, lon, ring):
+    """Which (lat, lon) points (arrays) fall inside a ring of [lon, lat] points (ray casting)."""
+    inside = np.zeros(lat.shape, bool)
+    xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+    for i in range(len(ring)):
+        x1, y1, x2, y2 = xs[i - 1], ys[i - 1], xs[i], ys[i]
+        if y1 == y2:
+            continue
+        cross = ((y1 > lat) != (y2 > lat)) & (lon < (x2 - x1) * (lat - y1) / (y2 - y1) + x1)
+        inside ^= cross
+    return inside
+
+
+def catch_wet():
+    """Each catchment's average rain for each of the last 30 rain days (radar map where there is one, else SILO's), and
+    the running total since 9am today: data/catch_wet.json, for the Rainfall tab's ground wetness."""
+    try:
+        catchments = json.load(open(CATCH_IN))["catchments"]
+    except (OSError, ValueError, KeyError):
+        return
+    radar = set(radar_days())
+    try:
+        silo = set(json.load(open(os.path.join(SILO_DIR, "index.json")))["days"])
+    except (OSError, ValueError, KeyError):
+        silo = set()
+    have = sorted(radar | silo)
+    if not have:
+        return
+    last = dt.date.fromisoformat(have[-1])
+    days = days_between(last - dt.timedelta(days=29), last)
+    masks, series = {}, {c["id"]: [] for c in catchments}
+    def grid_of(path):
+        m = json.load(open(path))
+        return m, np.array(m["grid"], np.float32).reshape(m["grid_h"], m["grid_w"])
+    def averages(m, g):
+        key = (m["grid_w"], m["grid_h"], tuple(m["bounds"]))
+        if key not in masks:
+            s_, w_, n_, e_ = m["bounds"]; H, W = g.shape
+            merc = lambda a: np.log(np.tan(np.pi / 4 + np.radians(a) / 2))
+            ys = merc(n_) - (np.arange(H) + .5) / H * (merc(n_) - merc(s_))
+            lats = np.degrees(2 * np.arctan(np.exp(ys)) - np.pi / 2)
+            lons = w_ + (np.arange(W) + .5) / W * (e_ - w_)
+            LON, LAT = np.meshgrid(lons, lats)
+            masks[key] = {c["id"]: in_polygon(LAT, LON, c["outline"]) for c in catchments}
+        out = {}
+        for cid, mk in masks[key].items():
+            v = g[mk]; v = v[v >= 0]
+            out[cid] = round(float(v.mean()) / 10, 1) if v.size > 0.5 * mk.sum() else None
+        return out
+    for d in days:
+        p = os.path.join(DATA, f"{d}.json") if d in radar else os.path.join(SILO_DIR, f"{d}.json") if d in silo else None
+        avg = {}
+        if p:
+            try:
+                avg = averages(*grid_of(p))
+            except (OSError, ValueError, KeyError):
+                avg = {}
+        for c in catchments:
+            series[c["id"]].append(avg.get(c["id"]))
+    today = {}
+    try:
+        m, g = grid_of(os.path.join(DATA, "today.json"))
+        if m.get("date") and m["date"] > days[-1]:
+            today = {"date": m["date"], "as_of": m.get("as_of"), **{"mm": averages(m, g)}}
+    except (OSError, ValueError, KeyError):
+        pass
+    out = {"to": days[-1], "days": days, "mm": series, "today": today}
+    text = json.dumps(out, separators=(",", ":"))
+    if os.path.exists(CATCH_OUT) and open(CATCH_OUT).read() == text:
+        return
+    with open(CATCH_OUT, "w") as f:
+        f.write(text)
+    print(f"Wrote {CATCH_OUT}: {len(catchments)} catchments, {days[0]} to {days[-1]}"
+          + "; last 5 days " + ", ".join(f"{c['id']} {sum(x or 0 for x in series[c['id']][-5:]):.0f} mm" for c in catchments))
+
+
 if __name__ == "__main__":
     if "season" not in sys.argv[1:]:
         fill_from_silo()
     season()
+    try:
+        catch_wet()
+    except Exception as e:
+        print(f"Catchment wetness skipped: {e}")
