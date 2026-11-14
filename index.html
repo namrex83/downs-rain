@@ -1928,11 +1928,16 @@ const OM_CACHE = {};
 // 10am-to-10am days, which can't show the time of day.
 const H_IDS = {gfs: "gfs_seamless", ecmwf: "ecmwf_ifs025", aifs: "ecmwf_aifs025_single"};
 const H_CACHE = {};
+// fetch that gives up after 12 seconds, so a slow Open-Meteo can't leave the chart empty
+function fetchSoon(url, ms = 12000){
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  return fetch(url, {signal: c.signal}).finally(() => clearTimeout(t));
+}
 async function omHourly(lat, lon){
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
   if (H_CACHE[key]) return H_CACHE[key];
   const ask = async ids => {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
+    const r = await fetchSoon(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
       + `&models=${ids.join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`);
     return r.ok ? r.json() : null;
   };
@@ -1952,7 +1957,7 @@ async function omHourly(lat, lon){
   for (const m of Object.keys(OM_MODELS)) add(m, j.hourly[`precipitation_${m}`]);
   if (!series.bom_access_global) {
     try {
-      const r2 = await fetch(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation&forecast_days=10&past_days=1&timezone=GMT&timeformat=unixtime`);
+      const r2 = await fetchSoon(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation&forecast_days=10&past_days=1&timezone=GMT&timeformat=unixtime`);
       if (r2.ok) { const j2 = await r2.json(); const tt = j2.hourly.time, v = j2.hourly.precipitation, have = tt.map((x, i) => v[i] == null ? -1 : i).filter(i => i >= 0);
         if (have.length) series.bom_access_global = tt.slice(have[0], have[have.length - 1] + 1).map((x, k) => [x, v[have[0] + k] || 0]); }
     } catch(e){}
@@ -1964,13 +1969,13 @@ async function omDays(lat, lon){
   if (OM_CACHE[key]) return OM_CACHE[key];
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
     + `&models=${Object.keys(OM_MODELS).join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`;
-  const r = await fetch(url); if (!r.ok) throw new Error(r.status);
+  const r = await fetchSoon(url); if (!r.ok) throw new Error(r.status);
   const j = await r.json(), out = {};
   for (const m of Object.keys(OM_MODELS)){ const d = omParse(j.hourly.time, j.hourly[`precipitation_${m}`]); if (d.length) out[m] = d; }
   // the Bureau's ACCESS-G sometimes comes back empty in the combined request: ask Open-Meteo's own BOM address for it
   if (!out.bom_access_global) {
     try {
-      const r2 = await fetch(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
+      const r2 = await fetchSoon(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
         + `&forecast_days=10&past_days=1&timezone=GMT&timeformat=unixtime`);
       if (r2.ok) { const j2 = await r2.json(), d = omParse(j2.hourly.time, j2.hourly.precipitation); if (d.length) out.bom_access_global = d; }
     } catch(e){}
@@ -2014,6 +2019,15 @@ async function fChart(){
     if (Object.keys(H.series).length) { FC = {hourly: anchorToMaps(H.series, at), pinned, bom: bomNear(at)}; fChartDraw(); return; }
   } catch(e){}
   if (!still()) return;
+  return fChartDaily(at, pinned, still);
+}
+function hourlyGaveUp(){   // the hourly chart had nothing reaching the end of the days picked: the daily chart instead
+  const pinned = FC.pinned, at = pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]);
+  FC = null; fChartDaily(at, pinned, () => tapAt === pinned && tab === "fc");
+}
+// the day-by-day chart from the site's own model maps (and Open-Meteo's daily totals): used when the hourly
+// forecasts can't be had, or none of them reaches the end of the days picked
+async function fChartDaily(at, pinned, still){
   for (const m of Object.keys(F_FILE)) if (!(m in F_ALL)) { try { F_ALL[m] = await getJSON(F_FILE[m]); } catch(e){ F_ALL[m] = null; } }
   if (!still()) return;
   const nowQ = new Date(Date.now() + 36e5 * 10), today = nowQ.toISOString().slice(0, 10);
@@ -2108,7 +2122,7 @@ function fChartDrawHourly(){
   }
   const short = models.filter(m => vals[m] && !reaches(m));
   const shown = models.filter(m => vals[m] && reaches(m));
-  if (!shown.length) { $("fChart").hidden = true; return; }
+  if (!shown.length) return false;   // none reaches the end: the caller draws the daily chart instead
   const valAt = (m, t) => { const p = vals[m].find(x => x[0] === t); return p ? p[1] : null; };
   const times = [...new Set(shown.flatMap(m => vals[m].map(p => p[0])))].sort((a, b) => a - b);
   // the median only uses models that run to the end of the chosen days: a model that stops early (UKMO and ICON
@@ -2194,7 +2208,7 @@ function fChartDrawHourly(){
 }
 function fChartDraw(){
   if (!FC) return;
-  if (FC.hourly) return fChartDrawHourly();
+  if (FC.hourly) { if (fChartDrawHourly() === false) hourlyGaveUp(); return; }
   const {lines, omNote, pinned} = FC, cum = fcMode === "cum";
   // the chart covers the same days as the map: 3, 7, 9 or 15 days (Daily shows them all)
   const days = [...new Set(lines.flatMap(l => l.pts.map(p => p[0])))].sort().slice(0, fSumN || undefined);
