@@ -958,13 +958,12 @@ function showAvMax(){   // the picked catchment's Av and Max for the period on t
   const id = $("catchSel").value, v = AVMAX[id], c = CATCH && CATCH.find(x => x.id === id);
   const per = CMETA ? {day: "Latest day", week: "Last 7 days", fortnight: "Last 14 days", season: "Season"}[cView] : "Last 7 days";
   cMapBox.hidden = !(tab === "catch" && v && c);
-  if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "")} · ${per}</span><span class="nums">Av <b>${fmt(v.av)}</b> · Max <b>${v.mx != null ? fmt(v.mx) : "–"}</b> mm</span>`;
+  if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "")} · ${per}</span><span class="nums">Av: <b>${fmt(v.av)}</b> · Max: <b>${v.mx != null ? fmt(v.mx) : "–"}</b> mm</span>`;
 }
 function drawCatchLabels(selId){
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
   if (!CATCH) return;
   catchLabels = L.layerGroup(CATCH.filter(c => selId ? c.id === selId : c.id !== "condamine_all").map(c => {
-    const boxed = !!selId;   // a picked catchment: just its own
     let av = null, mx = null;
     if (CMETA && CMETA.grid) {
       const v = catchMask(c, CMETA).map(i => CMETA.grid[i]).filter(x => x >= 0);
@@ -975,11 +974,10 @@ function drawCatchLabels(selId){
     }
     if (av == null) return null;
     AVMAX[c.id] = {av, mx};
-    if (boxed) return null;   // shown in the box at the top of the map instead
     if (!c._spot) c._spot = labelSpot(c);
     return L.marker(c._spot, {pane: "labelPane", interactive: false, keyboard: false,
       icon: L.divIcon({className: "clabelpin", iconSize: [0, 0],
-        html: `<div class="clabel${c.id === selId ? " sel" : ""}"><small>Av</small> ${fmt(av)}<small>mm</small>${mx != null ? `<br><small>Max</small> ${fmt(mx)}<small>mm</small>` : ""}</div>`})});
+        html: `<div class="clabel${c.id === selId ? " sel" : ""}"><small>Av:</small> ${fmt(av)}<small>mm</small>${mx != null ? `<br><small>Max:</small> ${fmt(mx)}<small>mm</small>` : ""}</div>`})});
   }).filter(Boolean)).addTo(map);
   showAvMax();
 }
