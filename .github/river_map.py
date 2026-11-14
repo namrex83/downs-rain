@@ -145,6 +145,9 @@ streams = []
 for name, g in geo.items():
     g = g.simplify(0.0015, preserve_topology=False)
     parts = list(g.geoms) if hasattr(g, "geoms") else [g]
+    if name not in ("Condamine River", "North Branch"):   # common names (Sandy, Spring Creek): only the pieces by its gauges
+        mine = [Point(out[m][1], out[m][0]) for m in names if parsed[m][0] == name and m in out]
+        parts = [q for q in parts if any(q.distance(pt) < 0.1 for pt in mine)]
     streams.append({"name": name, "main": name in ("Condamine River", "North Branch"),
                     "lines": [[[round(y, 4), round(x, 4)] for x, y in p.coords] for p in parts if p.length > 0.005]})
 json.dump({"source": "OpenStreetMap contributors (ODbL); positions are approximate",
