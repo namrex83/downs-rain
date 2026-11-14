@@ -94,6 +94,8 @@ jobs:
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
           GAUGE_HOLD_KM = 3.0        # the map is pulled to each gauge's reading within about this distance
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
+          FAR_RADAR_MM = 15.0        # a gauge is also ignored if the radar shows at least this over it
+          FAR_RATIO = 0.1            # and the gauge read under a tenth of that
           DEAD_RING_KM = 5.0         # ...and at least half of it nearly everywhere within this distance
           
           # BOM automatic weather stations (inside the Toowoomba radar's range): (product, station number)
@@ -792,10 +794,16 @@ jobs:
                   # probably blocked or broken, so leave it out
                   ring = max(1, int(round(DEAD_RING_KM / k)))
                   around = radar[max(0, int(r) - ring):int(r) + ring + 1, max(0, int(c) - ring):int(c) + ring + 1]
-                  if (g["mm"] < 1.0 and g["radar_mm"] >= DEAD_RADAR_MM
+                  if (g["mm"] <= 1.0 and g["radar_mm"] >= DEAD_RADAR_MM
                           and float(np.percentile(around, 10)) >= DEAD_RADAR_MM / 2):
                       g["ignored"] = "read dry under widespread rain"
                       log(f"  ignoring {g['name']}: gauge {g['mm']} mm, radar {g['radar_mm']} mm all around")
+                      continue
+                  # a gauge reading under a tenth of solid radar rain over it (e.g. Brisbane 1 mm under 21 mm)
+                  # is far more likely stuck, blocked or late than right: leave it out too
+                  if g["radar_mm"] >= FAR_RADAR_MM and g["mm"] < g["radar_mm"] * FAR_RATIO:
+                      g["ignored"] = "far below the radar"
+                      log(f"  ignoring {g['name']}: gauge {g['mm']} mm, radar {g['radar_mm']} mm (under {FAR_RATIO:.0%})")
                       continue
                   g["_px"] = (c, r)
                   used.append(g)

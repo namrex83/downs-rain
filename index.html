@@ -1376,7 +1376,7 @@ function drawGauges(){
     if (x.lat == null) continue;
     const has = x.mm != null && !x.ignored;
     const mk = L.circleMarker([x.lat, x.lon], {radius: 4.5, color: "#0b3d6e", weight: 1.5, fillColor: has ? "#1d6fb8" : "#fff", fillOpacity: 1})
-      .bindPopup(`<b>${x.name}</b><br>${has ? `Gauge ${fmt(x.mm)} mm${x.corrected_mm != null ? ` · map ${fmt(x.corrected_mm)} mm` : ""}` : x.ignored ? "Left out: read dry under widespread rain" : "No reading for this day"}${x.approx_km ? `<br><span style="color:#7f90a3">Position within about ${x.approx_km} km</span>` : ""}`);
+      .bindPopup(`<b>${x.name}</b><br>${has ? `Gauge ${fmt(x.mm)} mm${x.corrected_mm != null ? ` · map ${fmt(x.corrected_mm)} mm` : ""}` : x.ignored ? `Left out: ${x.ignored}` : "No reading for this day"}${x.approx_km ? `<br><span style="color:#7f90a3">Position within about ${x.approx_km} km</span>` : ""}`);
     if (has && labels) mk.bindTooltip(String(fmt(x.mm)), {permanent: true, direction: "right", className: "glabel", offset: [5, 0]});
     mk.addTo(gaugeLayer);
   }
