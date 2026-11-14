@@ -181,6 +181,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem} #watchPanel .watchh{margin-top:14px}
+.gdot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
 #watch small{color:var(--ink-3)}
 .wtag{font-weight:700;border-radius:6px;padding:1px 7px;font-size:.82em;white-space:nowrap}
@@ -520,6 +521,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel catchOnly" id="watchPanel" hidden>
     <details class="fsec" id="secRiv" open><summary id="sumRiv">🌊 River heights</summary>
       <div class="tablewrap"><table id="rivers" class="slim"></table></div>
+      <p class="note gkey" id="riverKey"></p>
       <p class="note" id="riverWhen"></p>
       <div id="riversAll"></div>
     </details>
@@ -971,9 +973,10 @@ function drawRivers(fw){
   const g = (r, i) => i >= 0 && i < r.length ? r[i] : "";
   const iD = col(/datum/i), seen = new Set();
   const rows = all.filter(r => g(r, iH) !== "" && !seen.has(g(r, iName)) && seen.add(g(r, iName)));   // one row per gauge
-  if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
+  if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const flood = r => /minor|moderate|major/i.test(g(r, iC)), rising = r => /rising/i.test(g(r, iT));
-  const tr = r => `<tr><td>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
+  const lvl = r => /major/i.test(g(r, iC)) ? "g4" : /moderate/i.test(g(r, iC)) ? "g3" : flood(r) ? "g2" : rising(r) ? "g1" : "g0";
+  const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
   const top = sel ? rows : rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
   const rest = rows.filter(r => !top.includes(r));
@@ -983,6 +986,7 @@ function drawRivers(fw){
   const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
   $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
   $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
+  $("riverKey").innerHTML = `<i class="gdot g4"></i>major <i class="gdot g3"></i>moderate <i class="gdot g2"></i>minor flood <i class="gdot g1"></i>rising, below flood <i class="gdot g0"></i>steady or falling`;
 }
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
