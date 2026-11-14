@@ -924,12 +924,13 @@ async function catchRain(){
   if (tab !== "catch" || !idx) return;
   [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
   legend();
-  if (cView === "none") { if (overlay) map.removeLayer(overlay); CMETA = null; drawCatchLabels($("catchSel").value); return; }
+  // with the map off, the last 7 days are still read (for the Av and Max), just not drawn
   const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
-  view = cView;
+  view = cView === "none" ? "week" : cView;
   if (cView === "day") $("day").value = idx.days[idx.days.length - 1];
-  if (cView === "week") $("weekSel").value = "latest";
+  if (view === "week") $("weekSel").value = "latest";
   try { await draw(); CMETA = meta; } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
+  if (cView === "none" && overlay) map.removeLayer(overlay);
   drawCatchLabels($("catchSel").value);
   gaugeLayer.clearLayers();
   if (tab !== "catch" && overlay) map.removeLayer(overlay);
@@ -956,7 +957,7 @@ let CMETA = null, AVMAX = {};
 const cMapBox = document.createElement("div"); cMapBox.className = "cmapbox"; cMapBox.hidden = true; map.getContainer().appendChild(cMapBox);
 function showAvMax(){   // the picked catchment's Av and Max for the period on the map, in a box at the top of the map
   const id = $("catchSel").value, v = AVMAX[id], c = CATCH && CATCH.find(x => x.id === id);
-  const per = CMETA ? {day: "Latest day", week: "Last 7 days", fortnight: "Last 14 days", season: "Season"}[cView] : "Last 7 days";
+  const per = {day: "Latest day", fortnight: "Last 14 days", season: "Season"}[cView] || "Last 7 days";
   cMapBox.hidden = !(tab === "catch" && v && c);
   if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "")} · ${per}</span><span class="nums">Av: <b>${fmt(v.av)}</b> · Max: <b>${v.mx != null ? fmt(v.mx) : "–"}</b> mm</span>`;
 }
@@ -1011,7 +1012,7 @@ function drawCatchTab(){
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
-  if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (7-day average when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
+  if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (the last 7 days when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
   const ring = c.outline.map(([lo, la]) => [la, lo]);
   catchLayer = L.layerGroup([
     L.polygon(ring, {pane: "catchPane", color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
