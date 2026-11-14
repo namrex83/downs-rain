@@ -855,7 +855,7 @@ const GCOL = {g0: "#3aa655", g1: "#f0a020", g2: "#e00000", g3: "#a00000", g4: "#
 // The creeks drawn like a train-line map: each one cut down to its main bends (a couple of km), the corners
 // rounded, in its own colour on a white casing, the Condamine as the thick main line; the gauges sit on them
 // like stations. Worked out once.
-const TUBE_COL = ["#9b0056", "#b36305", "#00a4a7", "#6950a1", "#7d8a95", "#e586a8", "#003688", "#5fb39c", "#827a04", "#a35c9e", "#4d6b8a", "#c27c2c"];
+const TUBE_COL = ["#9b0056", "#8a4a00", "#007f86", "#5b3fa0", "#4f5d6b", "#c2185b", "#003688", "#1b7a5a", "#6b6400", "#7b2d78", "#2f4f6f", "#a3530f"];   // deep colours that show on the rain map
 function tubeLines(){
   if (RMAP._tube) return RMAP._tube;
   const kx = Math.cos(27 * Math.PI / 180);   // a degree of longitude is shorter here
@@ -900,7 +900,8 @@ function drawStreams(){
   const tube = tubeLines(), opt = {pane: "catchPane", interactive: false, lineCap: "round", lineJoin: "round"};
   const w = st => st.main ? 6 : 3.5;
   streamLayer = L.layerGroup([
-    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: .9}))),   // casing under all of them
+    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#10202e", weight: w(st) + 5, opacity: .55}))),   // a dark edge,
+    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: 1}))),   // then a white casing under all of them
     ...tube.sort((a, b) => a.main - b.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: st.col, weight: w(st), opacity: 1}))),
     // each creek's name along its longest piece, once zoomed in a little
     ...tube.map(st => { const ln = st.lines.reduce((a, b) => b.length > a.length ? b : a, []); if (ln.length < 2) return null;
@@ -1047,9 +1048,11 @@ function drawCatchTab(){
   if (!CATCH || tab !== "catch") return;
   const selId = $("catchSel").value;
   drawStreams();
-  catchAll = L.layerGroup([...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
-    L.polygon(smoothRing(c), {pane: "catchPane", color: "#0b3d6e", weight: 1.6, opacity: .9, fillColor: "#3b82f6", fillOpacity: .04})
-      .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
+  catchAll = L.layerGroup([
+    ...CATCH.map(c => L.polygon(smoothRing(c), {pane: "catchPane", color: "#fff", weight: 5, opacity: .85, fill: false, interactive: false})),   // a white edge under each outline
+    ...[...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
+    L.polygon(smoothRing(c), {pane: "catchPane", color: "#10202e", weight: 2.2, opacity: .95, fillColor: "#3b82f6", fillOpacity: .04})
+      .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))]).addTo(map);
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
   if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (the last 7 days when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
