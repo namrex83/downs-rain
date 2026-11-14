@@ -402,6 +402,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     </div>
   </div>
 
+  <div class="controls catchOnly" id="cControls" hidden>
+    <div class="field"><span class="eyebrow">Rain on the map</span>
+      <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="true">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="false">Off</button></div></div>
+  </div>
   <div class="controls stormOnly" hidden>
     <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
       <option value="mix" selected>Combined storm risk</option>
@@ -507,7 +511,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="tap windOld" id="wTap" hidden>Tap the map to read the wind at any spot.</div>
   <div class="windOld" id="wLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px" id="wLegendTitle">Wind speed (km/h) · arrows show direction</div><div class="note" style="margin:0 0 4px;font-size:.74rem">On today, white boxes are <b>actual</b> BOM station winds (km/h, arrow = direction) at their latest reading; tap one for details.</div><div class="legend" id="wLegend"></div></div>
   <div class="tap fcOnly" id="fTap" hidden>Tap the map to read the forecast rain at any spot.</div>
-  <div id="legendBox" class="rainOnly fcOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
+  <div id="legendBox" class="rainOnly fcOnly catchOnly"><div class="eyebrow" style="margin-bottom:5px">Rainfall (mm)</div><div class="legend" id="legend"></div><div class="hailkey" id="hailKey"></div></div>
 
   <div class="tap stormOnly" id="sTap" hidden>Tap the map to read the storm ingredients at any spot.</div>
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
@@ -517,12 +521,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="tap catchinfo" id="catchInfo" hidden></div>
     <h3 class="watchh">Floods</h3>
     <div id="floodWarn"></div>
-    <details class="fsec" id="secRiv"><summary id="sumRiv">🌊 River heights</summary>
+    <details class="fsec" id="secRiv" open><summary id="sumRiv">🌊 River heights</summary>
       <div class="tablewrap"><table id="rivers" class="slim"></table></div>
       <p class="note" id="riverWhen"></p>
       <div id="riversAll"></div>
     </details>
-    <details class="fsec" id="secWatch"><summary id="sumWatch">🌧 Catchment watch</summary>
+    <details class="fsec" id="secWatch" open><summary id="sumWatch">🌧 Catchment watch</summary>
       <div class="tablewrap"><table id="watch" class="slim"></table></div>
       <button type="button" class="linkbtn" id="watchAll" hidden></button>
       <details class="fhow"><summary>ⓘ How this works</summary><p class="note" id="watchNote"></p></details>
@@ -740,7 +744,7 @@ async function getJSON(u){ const r = await fetch(u + bust()); if(!r.ok) throw ne
 
 // the season total runs to hundreds of mm, so it gets its own steps on the same colours
 const SEASON_BREAKS = [5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 600, 800];
-const rainBreaks = () => tab === "rain" && view === "season" ? SEASON_BREAKS : idx.breaks;
+const rainBreaks = () => (tab === "rain" ? view : tab === "catch" ? cView : "") === "season" ? SEASON_BREAKS : idx.breaks;
 function legend(){
   const br = rainBreaks();
   $("legend").innerHTML = idx.ramp.map((c,i) => `<div><i style="background:${c}"></i><span>${br[i]}${i===idx.ramp.length-1?"+":""}</span></div>`).join("");
@@ -834,7 +838,23 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null;
+let catchAll = null, cView = "week";
+map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
+// The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
+// days, the season), drawn under the outlines without changing what the Rainfall tab shows.
+async function catchRain(){
+  if (tab !== "catch" || !idx) return;
+  [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
+  legend();
+  if (cView === "none") { if (overlay) map.removeLayer(overlay); return; }
+  const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
+  view = cView;
+  if (cView === "day") $("day").value = idx.days[idx.days.length - 1];
+  if (cView === "week") $("weekSel").value = "latest";
+  try { await draw(); } finally { view = keepView; $("day").value = keepDay; $("weekSel").value = keepWeek; }
+  gaugeLayer.clearLayers();
+  if (tab !== "catch" && overlay) map.removeLayer(overlay);
+}
 function clearCatchTab(){
   if (catchAll) { map.removeLayer(catchAll); catchAll = null; }
   if (catchLayer) { map.removeLayer(catchLayer); catchLayer = null; }
@@ -843,7 +863,7 @@ async function startCatchTab(first){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
   await loadCatch();
   if (tab !== "catch") return;
-  drawCatchTab();
+  drawCatchTab(); catchRain();
   if (first && catchAll) map.fitBounds(L.featureGroup(catchAll.getLayers()).getBounds(), {padding: [10, 10]});
   drawWatch();
 }
@@ -853,14 +873,14 @@ function drawCatchTab(){
   if (!CATCH || tab !== "catch") return;
   const selId = $("catchSel").value;
   catchAll = L.layerGroup([...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
-    L.polygon(c.outline.map(([lo, la]) => [la, lo]), {color: "#0b3d6e", weight: 1.6, opacity: .8, fillColor: "#3b82f6", fillOpacity: .08})
+    L.polygon(c.outline.map(([lo, la]) => [la, lo]), {pane: "catchPane", color: "#0b3d6e", weight: 1.6, opacity: .9, fillColor: "#3b82f6", fillOpacity: .04})
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))).addTo(map);
   const c = CATCH.find(x => x.id === selId);
   if (!c) { $("catchInfo").innerHTML = "Tap a catchment on the map, or pick one above, for its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
   const ring = c.outline.map(([lo, la]) => [la, lo]);
   catchLayer = L.layerGroup([
-    L.polygon(ring, {color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
-    L.polygon(ring, {color: "#e00000", weight: 4, fillColor: "#e00000", fillOpacity: .07, interactive: false})]).addTo(map);
+    L.polygon(ring, {pane: "catchPane", color: "#fff", weight: 7, opacity: .85, fill: false, interactive: false}),
+    L.polygon(ring, {pane: "catchPane", color: "#e00000", weight: 4, fill: false, interactive: false})]).addTo(map);
   catchLayer.getBounds = () => L.latLngBounds(ring);
   const w = wetNow(c.id);
   if (!w) { $("catchInfo").innerHTML = `<b>${c.name}</b> (${c.area_km2.toLocaleString()} km²): rain figures appear after the next radar update.`; $("catchInfo").hidden = false; return; }
@@ -945,7 +965,7 @@ async function drawWatch(){
     return {c, w, rain, wettest, q, watch};
   }).filter(Boolean).sort((a, b) => b.q - a.q || b.w.api - a.w.api);
   const d = fc.days;
-  const busy = rows.filter(r => r.watch.c !== "w1"), showAll = drawWatch.all;
+  const busy = rows.filter(r => r.watch.c !== "w1"), showAll = drawWatch.all !== false;   // all catchments unless "Show fewer"
   const shown = showAll ? rows : [...busy, ...rows.filter(r => r.watch.c === "w1").sort((a, b) => b.rain - a.rain).slice(0, 3)];
   $("sumWatch").innerHTML = `🌧 <b>Catchment watch:</b> ${busy.length ? busy.map(r => `${r.c.name.replace(/ \(.*\)/, "")} <span class="wtag ${r.watch.c}">${r.watch.t}</span>`).join(", ") : "all Low for the next 3 days"}`;
   $("watchAll").hidden = shown.length === rows.length && !showAll;
@@ -963,7 +983,7 @@ async function drawWatch(){
     const fw = await getJSON("data/flood_warn.json");
     drawRivers(fw);
     const head = t => (t.match(/^[A-Z][A-Z ,'-]{12,}$/m) || [""])[0];   // the warning's headline, e.g. MINOR FLOODING OCCURRING AT TUMMAVILLE
-    $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn fsec"><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
+    $("floodWarn").innerHTML = (fw.warnings || []).map(w => `<details class="fwarn fsec" open><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
       || `<p class="fnone">✅ No Bureau of Meteorology flood warning for the Condamine system right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
   $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
@@ -3095,6 +3115,7 @@ function setTab(t, first){
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tCatch").onclick = () => tab !== "catch" && setTab("catch");
+$("cView").onclick = e => { const b = e.target.closest("button"); if (!b) return; cView = b.dataset.v; catchRain(); };
 $("tStorm").onclick = () => tab !== "storms" && setTab("storms");
 $("tFc").onclick = () => tab !== "fc" && setTab("fc");
 $("tWind").onclick = () => tab !== "wind" && setTab("wind");
