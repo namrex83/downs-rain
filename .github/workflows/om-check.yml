@@ -1,0 +1,19 @@
+name: om-check
+on: {push: {branches: [om-check]}}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          B="https://api.open-meteo.com/v1/forecast?latitude=-27.560&longitude=151.950&hourly=precipitation&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime"
+          for m in "gfs_seamless,ecmwf_ifs025,ecmwf_aifs025_single,bom_access_global,ukmo_seamless,icon_seamless,jma_seamless" "gfs_seamless,ecmwf_ifs025,bom_access_global,ukmo_seamless,icon_seamless,jma_seamless" gfs_seamless ecmwf_ifs025 ecmwf_aifs025_single bom_access_global ukmo_seamless icon_seamless jma_seamless; do
+            echo "== $m"; curl -sS -m 30 -w "\nHTTP %{http_code} %{time_total}s\n" "$B&models=$m" | python3 -c "
+          import sys,json; t=sys.stdin.read(); body,_,st=t.rpartition('HTTP'); print('HTTP',st.strip())
+          try:
+            j=json.loads(body); h=j.get('hourly',{}); 
+            if 'reason' in j: print('reason', j['reason'])
+            for k,v in h.items():
+              if k=='time': continue
+              n=[i for i,x in enumerate(v) if x is not None]; print(k, 'values', len(n), 'hours', (n[-1]-n[0]+1) if n else 0, 'sum', round(sum(x for x in v if x),1))
+          except Exception as e: print('bad', e, body[:200])"
+          done
