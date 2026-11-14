@@ -624,6 +624,40 @@ jobs:
               return out
           
           
+          FLOOD_WORDS = ("condamine", "myall", "charleys", "charley's", "hodgson", "oakey creek", "jandowae", "jimbour", "wilkie", "jingi", "jinghi")
+          
+          
+          def write_flood_warnings(src):
+              """Current Bureau flood warnings (the IDQ2xxxx text products on the BOM FTP site) that mention this river
+              system: data/flood_warn.json, for the Rainfall tab's catchment watch. Also logs the river-height
+              bulletins on offer (IDQ6xxxx), to choose gauges from later."""
+              ftp = src._conn()
+              ftp.cwd("/anon/gen/fwo")
+              names = [n.split("/")[-1] for n in ftp.nlst()]
+              warn = []
+              for n in sorted(x for x in names if x.startswith("IDQ2") and x.endswith(".txt")):
+                  try:
+                      text = src.get("/anon/gen/fwo", n).decode("latin-1")
+                  except Exception:
+                      continue
+                  low = text.lower()
+                  if not any(w in low for w in FLOOD_WORDS) or "flood" not in low:
+                      continue
+                  lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+                  title = next((ln for ln in lines if "flood" in ln.lower() and ("warning" in ln.lower() or "watch" in ln.lower())), lines[0] if lines else n)
+                  issued = next((ln for ln in lines if ln.lower().startswith("issued at")), "")
+                  warn.append({"id": n[:-4], "title": title[:160], "issued": issued[:120], "text": text[:6000]})
+              rivers = sorted(x for x in names if x.startswith("IDQ6"))
+              log(f"  flood warnings for this river system: {[w['id'] + ' ' + w['title'] for w in warn] or 'none'}; "
+                  f"{len(rivers)} IDQ6 files, e.g. {rivers[:40]}")
+              out = {"checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "warnings": warn}
+              p = os.path.join(DATA, "flood_warn.json")
+              old = json.load(open(p)) if os.path.exists(p) else {}
+              if old.get("warnings") != warn or not old:
+                  with open(p, "w") as f:
+                      json.dump(out, f, separators=(",", ":"))
+          
+          
           def write_known_gauges():
               """data/gauge_known.json: the (matching) names of the local gauges that have a position, private or from
               the page, so the page's form knows when a gauge is new and asks where it is. Names only, never positions."""
@@ -1195,6 +1229,10 @@ jobs:
                       write_known_gauges()
                   except Exception as e:
                       log(f"  known gauge list skipped: {e}")
+                  try:
+                      write_flood_warnings(src)
+                  except Exception as e:
+                      log(f"  flood warnings skipped: {e}")
                   try:
                       write_obs(positions)
                   except Exception as e:
