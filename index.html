@@ -177,7 +177,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .fhow summary{cursor:pointer;color:var(--accent);font-size:.8rem;margin-top:4px}
 .watchsub{margin:12px 0 4px;font:700 .9rem var(--body)} .watchsub span{font-weight:500;color:var(--ink-3);font-size:.8rem}
-#watchPanel .catchfield select{width:100%}
+#cControls .catchfield{flex:1 1 220px;min-width:0} #cControls .catchfield select{width:100%}
 #watchPanel td.fl{font-weight:700;color:#b91c1c}
 #riversAll summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin:6px 0}
 .watchh{margin:0 0 6px;font:700 1rem var(--body)} .watchh span{font-weight:500;color:var(--ink-3);font-size:.85rem}
@@ -405,6 +405,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="controls catchOnly" id="cControls" hidden>
     <div class="field"><span class="eyebrow">Rain on the map</span>
       <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="true">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="false">Off</button></div></div>
+    <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="controls stormOnly" hidden>
     <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
@@ -517,7 +518,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div id="sLegendBox" class="stormOnly" hidden><div class="eyebrow" style="margin-bottom:5px" id="sLegendTitle"></div><div class="slegend" id="sLegend"></div></div>
 
   <section class="panel catchOnly" id="watchPanel" hidden>
-    <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
     <div class="tap catchinfo" id="catchInfo" hidden></div>
     <h3 class="watchh">Floods</h3>
     <div id="floodWarn"></div>
@@ -1428,18 +1428,22 @@ addEventListener("keydown", e => { if (e.key === "Escape" && $("map").classList.
 // day) moves onto the bottom of the map, with an "Options" button to fold it away; it moves back on leaving.
 let fsPanel = null, fsHome = null, fsOpen = true;
 function fsSync(){
-  const want = $("map").classList.contains("full") && tab === "rain", rc = $("rControls");
+  // the controls of the tab shown (Rainfall or Catchments) move onto the full screen map
+  const want = $("map").classList.contains("full") && (tab === "rain" || tab === "catch");
+  if (fsPanel && (!want || fsPanel.dataset.tab !== tab)) {
+    const el = fsPanel.querySelector(".controls");
+    fsHome.parentNode.insertBefore(el, fsHome); fsHome.remove(); fsHome = null;
+    fsPanel.remove(); fsPanel = null;
+  }
+  const rc = tab === "catch" ? $("cControls") : $("rControls");
   if (want && !fsPanel){
-    fsHome = document.createComment("rControls home"); rc.parentNode.insertBefore(fsHome, rc);
-    fsPanel = L.DomUtil.create("div", "fspanel", map.getContainer());
+    fsHome = document.createComment("controls home"); rc.parentNode.insertBefore(fsHome, rc);
+    fsPanel = L.DomUtil.create("div", "fspanel", map.getContainer()); fsPanel.dataset.tab = tab;
     fsOpen = false;   // each time full screen opens, the map starts clear: just the Options button
     fsPanel.innerHTML = '<button type="button" class="fstoggle"></button>';
     fsPanel.appendChild(rc);
     L.DomEvent.disableClickPropagation(fsPanel); L.DomEvent.disableScrollPropagation(fsPanel);
     fsPanel.querySelector(".fstoggle").onclick = () => { fsOpen = !fsOpen; fsSync(); };
-  } else if (!want && fsPanel){
-    fsHome.parentNode.insertBefore(rc, fsHome); fsHome.remove(); fsHome = null;
-    fsPanel.remove(); fsPanel = null;
   }
   if (fsPanel){
     fsPanel.classList.toggle("shut", !fsOpen);
