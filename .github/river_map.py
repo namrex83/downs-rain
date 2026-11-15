@@ -9,7 +9,7 @@ import requests
 from shapely.geometry import LineString, MultiLineString, Point
 from shapely.ops import linemerge, nearest_points
 
-BOX = (-28.6, 150.3, -25.9, 153.6)   # S, W, N, E: the Condamine down to Chinchilla, and the south-east coast to Gympie
+BOX = (-29.6, 149.4, -24.95, 153.6)   # S, W, N, E: the radar rain map's area
 UA = {"User-Agent": "weather-desk-river-map/1.0"}
 SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 SHORT = {r"\bRd\b": "Road", r"\bSt\b": "Street", r"\bCk\b": "Creek", r"\bMt\b": "Mount"}
@@ -79,8 +79,11 @@ names = list(dict.fromkeys(r[iN] for r in rv.get("rows", []) if r and r[iN] and 
 RANGES = [(r"^Condamine River at The Head", r"^Condamine River at Chinchilla Weir TW"),
           (r"^Stanley River at Peachester", r"^Brisbane River at Mt Crosby$"), (r"^Bremer River at Adams Bridge", r"^Bremer River at Karalee"),
           (r"^Burnett Creek at Maroon Dam Inflow", r"^Logan River at Waterford$"), (r"^Albert River at Darlington School", r"^Albert River at Beenleigh"),
-          (r"^Obi Obi Creek at Gardners Falls", r"^Mary River at Gympie$")]
-NAMED = r"^(North|South) Pine River|^Sideling Creek|^Caboolture River|^(Lagoon|King John) Creek at Caboolture|^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek"
+          (r"^Obi Obi Creek at Gardners Falls", r"^Mary River at Home Park")]
+NAMED = (r"^(North|South) Pine River|^Sideling Creek|^Caboolture River|^(Lagoon|King John) Creek at Caboolture|^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek"
+         r"|^Dogwood Creek|^Tinana Creek|^Burrum River at (Lenthalls Dam|Howard)|^Barambah Creek|^Stuart River|^Boyne River at (Carters|Boondooma|Cooranga|Derra|Mclaughlins)"
+         r"|^Little Nerang Creek|^Nerang River at (Numinbah|Hinze|Clearview|Carrara)|^Canungra Creek|^Coomera River at (Canungra Army|Clagiraba|Oxenford)"
+         r"|^Macintyre Brook|^Severn River at (Ballandean|Farnbro)|^Quart Pot Creek|^Weir River")
 keep = set(n for n in names if re.search(NAMED, n))
 for a, b in RANGES:
     i = next((k for k, n in enumerate(names) if re.search(a, n)), None)
@@ -200,7 +203,7 @@ for name, g in geo.items():
     if name not in ("Condamine River", "North Branch"):   # common names (Sandy, Spring Creek): only the pieces by its gauges
         mine = [Point(out[m][1], out[m][0]) for m in names if parsed[m][0] == name and m in out]
         parts = [q for q in parts if any(q.distance(pt) < 0.1 for pt in mine)]
-    streams.append({"name": name, "main": name in ("Condamine River", "North Branch", "Brisbane River", "Logan River", "Mary River"),
+    streams.append({"name": name, "main": name in ("Condamine River", "North Branch", "Brisbane River", "Logan River", "Mary River", "Weir River"),
                     "lines": [[[round(y, 4), round(x, 4)] for x, y in p.coords] for p in parts if p.length > 0.005]})
 json.dump({"source": "OpenStreetMap contributors (ODbL); positions are approximate",
            "gauges": out, "missing": missing, "streams": streams},

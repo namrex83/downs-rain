@@ -816,8 +816,7 @@ async function loadCatch(){
   if (CATCH) return;
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
   const opt = c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`;
-  $("catchSel").innerHTML = `<option value="">None</option><optgroup label="Condamine (Darling Downs)">${CATCH.filter(c => !SEQ_IDS.has(c.id)).map(opt).join("")}</optgroup>`
-    + `<optgroup label="South-east coast">${CATCH.filter(c => SEQ_IDS.has(c.id)).map(opt).join("")}</optgroup>`;
+  $("catchSel").innerHTML = `<option value="">None</option>` + REGIONS.map(([lab, f]) => `<optgroup label="${lab}">${CATCH.filter(f).map(opt).join("")}</optgroup>`).join("");
   if (CATCH.some(c => c.id === "condamine_all")) $("catchSel").value = "condamine_all";   // opens on the whole river
   if (FW) markCatchOptions(FW);
 }
@@ -981,8 +980,9 @@ function drawCatchLabels(selId){
     let av = null, mx = null;
     if (CMETA && CMETA.grid) {
       const v = catchMask(c, CMETA).map(i => CMETA.grid[i]).filter(x => x >= 0);
-      // Max: the third-highest square, so one stray radar spike can't set it but a real storm core (always several squares) does
-      if (v.length) { av = v.reduce((a, b) => a + b, 0) / v.length / 10; mx = v.sort((a, b) => b - a)[Math.min(2, v.length - 1)] / 10; }
+      // Max: the highest square once the top 1% (and at least the top two) are set aside, so a stray radar spike or a small
+      // cluster of clutter can't set it, while a real storm core (many squares) still does
+      if (v.length) { av = v.reduce((a, b) => a + b, 0) / v.length / 10; v.sort((a, b) => b - a); mx = v[Math.min(v.length - 1, Math.max(2, Math.floor(v.length * .01)))] / 10; }
     } else {
       const w = wetNow(c.id); if (w) av = w.ser.slice(-7).reduce((a, v) => a + (v || 0), 0) + w.todayMm;
     }
@@ -1131,10 +1131,18 @@ const GAUGE_RANGE = {
   bremer: [/^Bremer River at Adams Bridge/i, /^Bremer River at Karalee/i],
   logan: [/^Burnett Creek at Maroon Dam Inflow/i, /^Logan River at Waterford$/i],
   albert: [/^Albert River at Darlington School/i, /^Albert River at Beenleigh/i, /^Canungra Creek/i],   // Canungra Creek runs to the Coomera
-  mary: [/^Obi Obi Creek at Gardners Falls/i, /^Mary River at Gympie$/i]};
+  mary: [/^Obi Obi Creek at Gardners Falls/i, /^Mary River at Gympie$/i],
+  mary_mbo: [/^Obi Obi Creek at Gardners Falls/i, /^Mary River at Home Park/i]};
 Object.assign(GAUGE_NAMES, {pine: /^(North|South) Pine River|^Sideling Creek/i, caboolture: /^Caboolture River|^(Lagoon|King John) Creek at Caboolture/i,
-  maroochy: /^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek/i});
-const SEQ_IDS = new Set(["brisbane_wiv", "stanley", "lockyer", "brisbane_crosby", "bremer", "logan", "albert", "pine", "caboolture", "mary", "maroochy"]);
+  maroochy: /^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek/i,
+  dogwood: /^Dogwood Creek/i, tinana: /^Tinana Creek/i, burrum: /^Burrum River at (Lenthalls Dam|Howard)/i, barambah: /^Barambah Creek/i,
+  boyne: /^Stuart River|^Boyne River at (Carters|Boondooma|Cooranga|Derra|Mclaughlins)/i,   // not the Gladstone Boyne (Awoonga)
+  nerang: /^Little Nerang Creek|^Nerang River at (Numinbah|Hinze|Clearview|Carrara)/i, coomera: /^Canungra Creek|^Coomera River at (Canungra Army|Clagiraba|Oxenford)/i,
+  macbrook: /^Macintyre Brook/i, severn: /^Severn River at (Ballandean|Farnbro)|^Quart Pot Creek/i, weir: /^Weir River/i});
+const SEQ_IDS = new Set(["brisbane_wiv", "stanley", "lockyer", "brisbane_crosby", "bremer", "logan", "albert", "pine", "caboolture", "mary", "maroochy", "nerang", "coomera"]);
+const REGIONS = [["Condamine (Darling Downs)", c => !SEQ_IDS.has(c.id) && !WIDE_IDS.has(c.id) && !BORDER_IDS.has(c.id)], ["South-east coast", c => SEQ_IDS.has(c.id)],
+  ["Wide Bay and South Burnett", c => WIDE_IDS.has(c.id)], ["Border Rivers", c => BORDER_IDS.has(c.id)]];
+const WIDE_IDS = new Set(["mary_mbo", "tinana", "burrum", "barambah", "boyne"]), BORDER_IDS = new Set(["macbrook", "severn", "weir"]);
 function inCatch(cid, rows, iName){
   if (GAUGE_NAMES[cid]) return rows.filter(r => GAUGE_NAMES[cid].test(r[iName]));
   const gr = GAUGE_RANGE[cid];
