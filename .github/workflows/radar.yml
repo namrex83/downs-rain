@@ -696,8 +696,16 @@ jobs:
                   os.makedirs(STATE, exist_ok=True)
                   json.dump(ids, open(cache, "w"))
                   log(f"  river height tables for the Condamine: {ids} (of {len(cand)} looked at)")
-              headers, rows = [], []
+              headers, rows, plots = [], [], {}
               cell = lambda c: " ".join(H.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+
+              def plot_url(href):   # the gauge's "Plot" link on the Bureau's website, made absolute
+                  if href.startswith("http"):
+                      return href.replace("http://", "https://")
+                  if href.startswith("/"):
+                      return "https://www.bom.gov.au" + href
+                  m = re.match(r"(ID[A-Z]\d+)\.", href)
+                  return f"https://www.bom.gov.au/fwo/{m.group(1)}/{href}" if m else None
               for n in ids:
                   try:
                       t = src.get("/anon/gen/fwo", n).decode("latin-1", "replace")
@@ -713,9 +721,12 @@ jobs:
                           r = [cell(x) for x in tds]
                           if r and r[0]:
                               rows.append(r)
+                              href = next((h for h in re.findall(r'href="([^"]+)"', tr, re.I) if ".plt." in h), None)
+                              if href and r[0] not in plots and plot_url(href):
+                                  plots[r[0]] = plot_url(H.unescape(href))
               if rows:
-                  log(f"  river heights: {len(rows)} rows; headers {headers}; e.g. {rows[:3]}")
-              return {"products": ids, "headers": headers, "rows": rows}
+                  log(f"  river heights: {len(rows)} rows; headers {headers}; e.g. {rows[:3]}; plot links {len(plots)}, e.g. {list(plots.items())[:2]}")
+              return {"products": ids, "headers": headers, "rows": rows, "plots": plots}
           
           
           def write_flood_warnings(src):

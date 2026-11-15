@@ -185,6 +185,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .creekbtn a{width:auto!important;padding:0 9px;font:600 .78rem/30px var(--body);white-space:nowrap;display:flex;align-items:center;gap:6px;color:var(--ink)}
 .creekbtn .ck{display:inline-block;width:18px;height:6px;border-radius:3px;background:linear-gradient(90deg,#9b0056 0 33%,#007f86 33% 66%,#8a4a00 66%)}
 .creekbtn a.off{color:var(--ink-3)} .creekbtn a.off .ck{opacity:.3}
+.bomplot{color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,.25);text-underline-offset:2px} .bomplot span{font-size:.75em;color:var(--accent)}
 .clabelpin{overflow:visible} .rchip{display:inline-block;min-width:1.6em;text-align:center;border-radius:5px;padding:0 4px;margin:1px 0;background:#f4f6f8;border:1px solid rgba(0,0,0,.18)} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.85em;height:.85em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g0{visibility:hidden} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
@@ -970,7 +971,8 @@ function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the p
   const keep = x => x.lvl >= "g2" ? x.inArea !== false : !x.other && (x.lvl === "g1" || close);
   riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name] && keep(x)).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
     L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
-      .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
+      .bindTooltip(x.text, {direction: "top", offset: [0, -6]})
+      .bindPopup(`<b>${x.text}</b>${x.plot ? `<br><a href="${x.plot}" target="_blank" rel="noopener">River height graph (BOM) ↗</a>` : ""}`, {offset: [0, -4]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
 // days, the season), drawn under the outlines without changing what the Rainfall tab shows.
@@ -1252,6 +1254,7 @@ function markCatchOptions(fw){   // 🔴 in the list for catchments with a gauge
 }
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
+  const plotOf = n => (rv.plots || {})[n];   // the gauge's river height graph on the Bureau's site
   const sel = $("catchSel").value, iName0 = Math.max(0, hd.findIndex(h => /station/i.test(h)));
   const gr = gaugeRows(fw), areaNames = new Set(regionCatch().flatMap(c => inCatch(c.id, gr, iName0).map(r => r[iName0])));
   const all = sel ? inCatch(sel, gr, iName0) : allRows.filter(r => areaNames.has(r[iName0]));
@@ -1264,9 +1267,11 @@ function drawRivers(fw){
   const lvl = r => /major/i.test(g(r, iC)) ? "g4" : /moderate/i.test(g(r, iC)) ? "g3" : flood(r) ? "g2" : rising(r) ? "g1" : "g0";
   const seenAll = new Set(), every = allRows.filter(r => g(r, iH) !== "" && !seenAll.has(g(r, iName)) && seenAll.add(g(r, iName)));
   drawGaugeDots(every.map(r =>   // every gauge, those in flood big; outside a picked catchment faded
- ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, other: sel && !rows.includes(r), inArea: areaNames.has(g(r, iName))})));
+ ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, plot: plotOf(g(r, iName)), other: sel && !rows.includes(r), inArea: areaNames.has(g(r, iName))})));
   if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
-  const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
+  const nameCell = r => { const u = plotOf(g(r, iName)), t = shortGauge(g(r, iName));
+    return u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${t} <span aria-hidden="true">↗</span></a>` : t; };
+  const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${nameCell(r)}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
   const top = sel ? rows : rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
   const rest = rows.filter(r => !top.includes(r));
