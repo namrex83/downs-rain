@@ -666,9 +666,13 @@ jobs:
           FLOOD_WORDS = ("condamine", "myall", "charleys", "charley's", "hodgson", "oakey creek", "jandowae", "jimbour", "wilkie", "jingi", "jinghi",
                          # the south-east coast's rivers
                          "brisbane river", "stanley river", "lockyer", "bremer", "warrill", "logan river", "albert river",
-                         "pine river", "caboolture", "mary river", "maroochy")
+                         "pine river", "caboolture", "mary river", "maroochy",
+                         # the rest of the radar map's area: Fraser Coast, South Burnett, Gold Coast, Border Rivers
+                         "tinana", "burrum", "barambah", "boyne river", "stuart river", "nerang", "coomera",
+                         "macintyre brook", "severn river", "weir river", "dogwood")
           SEQ_RIVERS = ("Brisbane River", "Lockyer Creek", "Bremer River", "Logan River", "Albert River", "Pine River", "Caboolture River",
-                        "Mary River", "Maroochy River", "Stanley River")
+                        "Mary River", "Maroochy River", "Stanley River", "Tinana Creek", "Burrum River", "Barambah Creek", "Boyne River",
+                        "Stuart River", "Nerang River", "Coomera River", "Macintyre Brook", "Severn River", "Weir River")
           
           
           def river_heights(src, names):
@@ -676,7 +680,7 @@ jobs:
               products those are is found once by looking through them and remembered in state/river_ids.json. Returns
               {"headers": [...], "rows": [[cell, ...], ...], "products": [...]} with the table rows as text."""
               import html as H
-              cache = os.path.join(STATE, "river_ids2.json")   # (2: the south-east coast's tables added)
+              cache = os.path.join(STATE, "river_ids3.json")   # (3: the rest of the radar map's area added)
               ids = json.load(open(cache)) if os.path.exists(cache) else None
               cand = sorted(x for x in names if x.startswith("IDQ6") and x.endswith(".html"))
               if ids is None:
