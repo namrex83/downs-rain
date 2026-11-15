@@ -861,7 +861,7 @@ const GCOL = {g0: "#3aa655", g1: "#f0a020", g2: "#e00000", g3: "#a00000", g4: "#
 // The creeks drawn like a train-line map: each one cut down to its main bends (a couple of km), the corners
 // rounded, in its own colour on a white casing, the Condamine as the thick main line; the gauges sit on them
 // like stations. Worked out once.
-const TUBE_COL = ["#9b0056", "#8a4a00", "#007f86", "#5b3fa0", "#4f5d6b", "#c2185b", "#003688", "#1b7a5a", "#6b6400", "#7b2d78", "#2f4f6f", "#a3530f"];   // deep colours that show on the rain map
+const TUBE_COL = ["#e377a8", "#3fb5c0", "#c8955a", "#9d8be0", "#8aa0b4", "#d98a9c", "#5cc0a8", "#b77fc0", "#d1b45a", "#7a9cc6", "#e09a7a", "#6fa8a0"];   // lighter colours, so the creeks sit back from the main rivers
 function tubeLines(){
   if (RMAP._tube) return RMAP._tube;
   const kx = Math.cos(27 * Math.PI / 180);   // a degree of longitude is shorter here
@@ -898,14 +898,32 @@ function tubeLines(){
     snap[name] = best[0] < .05 ? best[1] : ll;
   }
   RMAP._snap = snap;
+  // each creek's ends joined onto the river (or bigger creek) it runs into, if that's within about 3 km: smoothing the
+  // lines can leave a creek stopping short of its river, or running over it. The join is a short straight piece from the
+  // creek's last bend to the nearest point on the other line.
+  const bigger = st => tube.filter(o => o !== st && (o.main || (!st.main && o.lines.flat().length > st.lines.flat().length)));
+  for (const st of tube){
+    if (st.main) continue;
+    const others = bigger(st);
+    const near = p => { let best = [Infinity, null];
+      for (const o of others) for (const ol of o.lines) for (let i = 0; i < ol.length - 1; i++){ const r = segD(p, ol[i], ol[i + 1]); if (r[0] < best[0]) best = r; }
+      return best; };
+    for (const ln of st.lines){
+      // the end nearer the bigger line is the creek's mouth: joined from up to about 6 km; the other end only if it's
+      // right beside one (under 1.5 km), so a creek's head isn't pulled across to a neighbour
+      const a = near(ln[0]), b = near(ln[ln.length - 1]), mouthFirst = a[0] <= b[0];
+      const join = (r, first, lim) => { if (r[1] && r[0] < lim) { if (first) ln.unshift(r[1]); else ln.push(r[1]); } };
+      join(mouthFirst ? a : b, mouthFirst, .06);
+      join(mouthFirst ? b : a, !mouthFirst, .015);
+    }
+  }
   return RMAP._tube = tube;
 }
 // What the map shows, so it stays readable: the main rivers always; a creek only inside the picked catchment, and in a
 // big catchment only once zoomed in a little; gauge dots for the picked catchment that are rising or in flood (all of
 // them once zoomed in close), and any gauge in flood in the area shown.
 const CREEKS_ZOOM = 9, ALLDOTS_ZOOM = 10;
-let creeksOn = true;
-try { creeksOn = localStorage.getItem("creeks") !== "off"; } catch(e){}
+let creeksOn = false;   // the creeks start off each time; the button turns them on
 // the Creeks button on the map (Catchments tab): the coloured creek lines on or off; the main rivers always show
 const Creeks = L.Control.extend({ options: {position: "topright"}, onAdd(){
   const box = L.DomUtil.create("div", "leaflet-bar creekbtn"), a = L.DomUtil.create("a", "", box);
@@ -913,7 +931,7 @@ const Creeks = L.Control.extend({ options: {position: "topright"}, onAdd(){
   const show = () => { a.innerHTML = `<span class="ck" aria-hidden="true"></span>Creeks ${creeksOn ? "on" : "off"}`; a.classList.toggle("off", !creeksOn); a.title = creeksOn ? "Hide the creek lines" : "Show the creek lines"; };
   show(); L.DomEvent.disableClickPropagation(box);
   L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); creeksOn = !creeksOn; show();
-    try { localStorage.setItem("creeks", creeksOn ? "on" : "off"); } catch(_){} drawStreams(); });
+    drawStreams(); });
   return box;
 }});
 const creekCtl = new Creeks();
@@ -929,9 +947,9 @@ function drawStreams(){
   const creeks = creeksOn && (c || regionCatch().length);
   const within = ln => c ? inCatchLine(c, ln) : regionCatch().some(r => !TOTALS.has(r.id) && inCatchLine(r, ln));
   const show = tube.map(st => ({...st, lines: st.main ? st.lines : creeks ? st.lines.filter(within) : []})).filter(st => st.lines.length);
-  const w = st => st.main ? 6 : 3.5;
+  const w = st => st.main ? 6 : 3;
   streamLayer = L.layerGroup([
-    ...show.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#10202e", weight: w(st) + 5, opacity: .55}))),   // a dark edge,
+    ...show.filter(st => st.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#10202e", weight: w(st) + 5, opacity: .55}))),   // a dark edge on the main rivers,
     ...show.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: 1}))),   // then a white casing under all of them
     ...show.sort((a, b) => a.main - b.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: st.col, weight: w(st), opacity: 1}))),
     // each creek's name along its longest piece, once zoomed in a little
