@@ -17,13 +17,49 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Restore the quiet-spell note
+        uses: actions/cache/restore@v5
+        with:
+          path: quiet
+          key: radar-quiet-${{ github.run_id }}
+          restore-keys: radar-quiet-
+
+      # In a dry spell (no rain for 2 hours) a full run every 30 minutes is plenty: the runs in between stop here,
+      # after a few seconds. Always a full run when started by hand, and from 8:50 to 10:00am Qld, when the day
+      # is finished and the new one starts.
+      - name: Quiet check
+        id: gate
+        run: |
+          python3 - <<'EOF_GATE'
+          import json, os, time
+          go = "true"
+          try:
+              q = json.load(open("quiet/quiet.json"))
+              now = time.time()
+              qld = time.gmtime(now + 10 * 3600)
+              morning = (qld.tm_hour == 8 and qld.tm_min >= 50) or qld.tm_hour == 9
+              dry = now - q.get("last_rain", 0) > 2 * 3600
+              recent = now - q.get("last_run", 0) < 30 * 60 - 90
+              if dry and recent and not morning and os.environ.get("EVENT") == "schedule":
+                  go = "false"
+                  print(f"Quiet: no rain for {(now - q.get('last_rain', 0)) / 3600:.1f} h, last full run {(now - q['last_run']) / 60:.0f} min ago, so this run stops here")
+          except (OSError, ValueError, KeyError):
+              pass
+          open(os.environ["GITHUB_OUTPUT"], "a").write(f"go={go}\n")
+          EOF_GATE
+        env:
+          EVENT: ${{ github.event_name }}
+
       - uses: actions/checkout@v5
+        if: steps.gate.outputs.go == 'true'
 
       - uses: actions/setup-python@v6
+        if: steps.gate.outputs.go == 'true'
         with:
           python-version: "3.12"
 
       - name: Unpack program files
+        if: steps.gate.outputs.go == 'true'
         run: |
           cat > radar.py <<'EOF_RADAR_PY'
           """
@@ -48,6 +84,7 @@ jobs:
           import os
           import re
           import sys
+          import time
           import zipfile
           
           import numpy as np
@@ -626,7 +663,12 @@ jobs:
               return out
           
           
-          FLOOD_WORDS = ("condamine", "myall", "charleys", "charley's", "hodgson", "oakey creek", "jandowae", "jimbour", "wilkie", "jingi", "jinghi")
+          FLOOD_WORDS = ("condamine", "myall", "charleys", "charley's", "hodgson", "oakey creek", "jandowae", "jimbour", "wilkie", "jingi", "jinghi",
+                         # the south-east coast's rivers
+                         "brisbane river", "stanley river", "lockyer", "bremer", "warrill", "logan river", "albert river",
+                         "pine river", "caboolture", "mary river", "maroochy")
+          SEQ_RIVERS = ("Brisbane River", "Lockyer Creek", "Bremer River", "Logan River", "Albert River", "Pine River", "Caboolture River",
+                        "Mary River", "Maroochy River", "Stanley River")
           
           
           def river_heights(src, names):
@@ -634,7 +676,7 @@ jobs:
               products those are is found once by looking through them and remembered in state/river_ids.json. Returns
               {"headers": [...], "rows": [[cell, ...], ...], "products": [...]} with the table rows as text."""
               import html as H
-              cache = os.path.join(STATE, "river_ids.json")
+              cache = os.path.join(STATE, "river_ids2.json")   # (2: the south-east coast's tables added)
               ids = json.load(open(cache)) if os.path.exists(cache) else None
               cand = sorted(x for x in names if x.startswith("IDQ6") and x.endswith(".html"))
               if ids is None:
@@ -644,8 +686,9 @@ jobs:
                           t = src.get("/anon/gen/fwo", n).decode("latin-1", "replace")
                       except Exception:
                           continue
-                      if "river height" in t.lower() and ("Condamine" in t or "Myall Creek" in t):
-                          ids.append(n)
+                      if "river height" in t.lower() and ("Condamine" in t or "Myall Creek" in t or any(r in t for r in SEQ_RIVERS)):
+                          ids.append((0 if "Condamine" in t else 1, n))
+                  ids = [n for _, n in sorted(ids)]   # the Condamine's table first: the page reads its gauges in table order
                   os.makedirs(STATE, exist_ok=True)
                   json.dump(ids, open(cache, "w"))
                   log(f"  river height tables for the Condamine: {ids} (of {len(cand)} looked at)")
@@ -1294,8 +1337,13 @@ jobs:
                       w = st["windows"][cur]
                       written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
-                          write_today(cur, merged_radar(cur, w),
+                          merged = merged_radar(cur, w)
+                          write_today(cur, merged,
                                       {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")}, positions)
+                          try:
+                              note_rain(cur, merged)
+                          except Exception as e:
+                              log(f"  rain check skipped: {e}")
                           try:
                               write_hail(cur, "today", w["n"])
                           except Exception as e:
@@ -1305,6 +1353,44 @@ jobs:
               finally:
                   src.close()
                   save_state(st)
+                  quiet_note(last_run=time.time())
+          
+          
+          # ---------------------------------------------------------------- quiet spells
+          # When it hasn't rained for a while the job needn't do the whole run every 10 minutes: the workflow's first
+          # step reads state/quiet.json and, if nothing has fallen for QUIET_AFTER_H hours and the last full run was
+          # under 30 minutes ago, stops there (no download, no processing, no publish). Rain is "falling" when at least
+          # 20 grid squares gained 0.5 mm or more in the running total since the last full run.
+          def quiet_note(**kw):
+              # kept twice: quiet/ (its own small cache, read by the first step before anything is downloaded) and
+              # state/ (in case checking out the code cleared quiet/)
+              paths = [os.path.join(ROOT, "quiet", "quiet.json"), os.path.join(STATE, "quiet.json")]
+              q = {}
+              for p in paths:
+                  try:
+                      q = json.load(open(p))
+                      break
+                  except (OSError, ValueError):
+                      pass
+              q.update(kw)
+              for p in paths:
+                  os.makedirs(os.path.dirname(p), exist_ok=True)
+                  json.dump(q, open(p, "w"))
+          
+          
+          def note_rain(day, arr):
+              pp = os.path.join(STATE, "quiet_prev.npz")
+              arr = np.asarray(arr, np.float32)
+              try:
+                  z = np.load(pp)
+                  prev = z["a"].astype(np.float32) if str(z["day"]) == day and z["a"].shape == arr.shape else np.zeros_like(arr)
+              except (OSError, ValueError, KeyError):
+                  prev = np.zeros_like(arr)
+              wet = int(np.count_nonzero(arr - prev >= 0.5)) >= 20
+              np.savez_compressed(pp, a=arr.astype(np.float16), day=day)
+              if wet:
+                  quiet_note(last_rain=time.time())
+              log(f"  rain falling: {'yes' if wet else 'no'}")
           
           
           if __name__ == "__main__":
@@ -1312,14 +1398,17 @@ jobs:
           EOF_RADAR_PY
 
       - name: Install
+        if: steps.gate.outputs.go == 'true'
         run: pip install numpy pillow requests
 
       - name: Get the published site
+        if: steps.gate.outputs.go == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash .github/pages.sh get
 
       - name: Restore working state
+        if: steps.gate.outputs.go == 'true'
         uses: actions/cache/restore@v5
         with:
           path: state
@@ -1327,22 +1416,32 @@ jobs:
           restore-keys: radar-state-v2-
 
       - name: Process radar
+        if: steps.gate.outputs.go == 'true'
         env:
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
           PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}   # more, in the same form (gauges added later)
         run: python radar.py
 
       - name: Season total
+        if: steps.gate.outputs.go == 'true'
         run: python silo.py season || echo "Season total skipped"
 
       - name: Save working state
-        if: always()
+        if: always() && steps.gate.outputs.go == 'true'
         uses: actions/cache/save@v5
         with:
           path: state
           key: radar-state-v2-${{ github.run_id }}
 
+      - name: Save the quiet-spell note
+        if: always() && steps.gate.outputs.go == 'true' && hashFiles('quiet/quiet.json') != ''
+        uses: actions/cache/save@v5
+        with:
+          path: quiet
+          key: radar-quiet-${{ github.run_id }}
+
       - name: Publish new maps
+        if: steps.gate.outputs.go == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash .github/pages.sh put "Rainfall maps $(date -u +%Y-%m-%dT%H:%MZ)"
