@@ -15,18 +15,26 @@ SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.sys
 SHORT = {r"\bRd\b": "Road", r"\bSt\b": "Street", r"\bCk\b": "Creek", r"\bMt\b": "Mount"}
 
 
+FAILED = []
+
+
 def overpass(q):
-    for attempt in range(4):
+    """One query, tried on each server up to three times; a query that still fails is skipped (and counted), so
+    one bad batch doesn't lose the whole map."""
+    for attempt in range(3):
         for url in SERVERS:
             try:
                 r = requests.post(url, data={"data": q}, headers=UA, timeout=180)
                 if r.ok:
+                    time.sleep(2)   # gently: the servers are shared
                     return r.json()["elements"]
-                print(f"  {url}: {r.status_code}")
+                print(f"  {url}: {r.status_code}", flush=True)
             except Exception as e:
-                print(f"  {url}: {e}")
-        time.sleep(20 * (attempt + 1))
-    sys.exit("Overpass not reachable")
+                print(f"  {url}: {e}", flush=True)
+        time.sleep(15 * (attempt + 1))
+    FAILED.append(q[:120])
+    print("  a query failed on every server; skipped", flush=True)
+    return []
 
 
 def esc(s):
@@ -83,6 +91,7 @@ lines = []
 for part in chunked(ways_q):
     wre = "|".join(esc(w) for w in part)
     lines += overpass(f'[out:json][timeout:170];way["waterway"~"^(river|stream|canal)$"]["name"~"^({wre})$"]{bb};out geom;')
+    print(f"  waterways {len(lines)} so far", flush=True)
 print(f"{len(lines)} waterway pieces")
 geo = {}
 for el in lines:
@@ -92,9 +101,19 @@ for el in lines:
 geo = {k: linemerge(MultiLineString(v)) for k, v in geo.items()}
 
 feats = []
-for part in chunked(places):
+# only the kinds of thing a gauge is named after: towns and localities, weirs, dams and bridges, and roads for the
+# names that are roads (asking for any feature by name is far too slow around Brisbane)
+roads = [p for p in places if re.search(r"\b(Road|Street|Lane|Drive|Avenue|Crossing|Highway)$", p)]
+for part in chunked([p for p in places if p not in roads]):
     pre = "|".join(esc(p) for p in part)
-    feats += overpass(f'[out:json][timeout:170];nwr["name"~"^({pre})$"]{bb};out center tags;')
+    feats += overpass(f'[out:json][timeout:170];(node["place"]["name"~"^({pre})$"]{bb};nwr["waterway"~"^(weir|dam)$"]["name"~"^({pre})$"]{bb};'
+                      f'nwr["bridge"]["name"~"^({pre})$"]{bb};nwr["man_made"="bridge"]["name"~"^({pre})$"]{bb};nwr["landuse"="reservoir"]["name"~"^({pre})$"]{bb};'
+                      f'nwr["natural"="water"]["name"~"^({pre})$"]{bb};);out center tags;')
+    print(f"  places {len(feats)} so far", flush=True)
+for part in chunked(roads):
+    pre = "|".join(esc(p) for p in part)
+    feats += overpass(f'[out:json][timeout:170];way["highway"]["name"~"^({pre})$"]{bb};out center tags;')
+    print(f"  roads: {len(feats)} so far", flush=True)
 print(f"{len(feats)} named features")
 spots = {}
 for el in feats:
@@ -149,7 +168,7 @@ for n in list(missing):
         out[m] = [round(pt.y, 4), round(pt.x, 4)]
         missing.remove(m)
         print(f"  {m}: between {up} and {down}")
-print(f"placed {len(out)}, not found {len(missing)}: {missing}")
+print(f"placed {len(out)}, not found {len(missing)}: {missing}; queries skipped: {len(FAILED)}")
 
 streams = []
 for name, g in geo.items():

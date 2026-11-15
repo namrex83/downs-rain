@@ -35,7 +35,7 @@ jobs:
         run: bash .github/pages.sh get
 
       - name: Place the gauges
-        run: python .github/river_map.py
+        run: python -u .github/river_map.py
 
       - name: Publish
         env:
