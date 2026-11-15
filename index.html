@@ -962,7 +962,10 @@ function drawStreams(){
 }
 function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
 let DOTLIST = null;
-map.on("zoomend", () => { tubeLabels(); if (tab === "catch") { drawStreams(); drawGaugeDots(DOTLIST); } });
+// the other catchments' outlines: hidden until zoomed in a little, then faint (they can be tapped either way)
+const OUTLINE_ZOOM = 9;
+function outlineZoom(){ if (catchAll) catchAll.eachLayer(l => l.setStyle && l.setStyle({opacity: map.getZoom() >= OUTLINE_ZOOM ? .35 : 0})); }
+map.on("zoomend", () => { tubeLabels(); if (tab === "catch") { drawStreams(); drawGaugeDots(DOTLIST); outlineZoom(); } });
 function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the picked catchment), inArea (in the area shown)}]
   DOTLIST = list;
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
@@ -1121,10 +1124,10 @@ function drawCatchTab(){
   const selId = $("catchSel").value;
   drawStreams();
   catchAll = L.layerGroup([
-    ...regionCatch().map(c => L.polygon(smoothRing(c), {pane: "catchPane", color: "#fff", weight: 4, opacity: .6, fill: false, interactive: false})),   // a white edge under each outline
     ...regionCatch().sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
-    L.polygon(smoothRing(c), {pane: "catchPane", color: "#10202e", weight: 1.6, opacity: .55, fillColor: "#3b82f6", fillOpacity: .03})
+    L.polygon(smoothRing(c), {pane: "catchPane", color: "#10202e", weight: 1, opacity: 0, fillColor: "#3b82f6", fillOpacity: .03})
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))]).addTo(map);
+  outlineZoom();
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
   if (!c) { $("catchInfo").innerHTML = "The numbers on the map are each catchment's average (Av) and highest (Max) rain for the period picked above (the last 7 days when the map is off). Tap a catchment, or pick one above, for more on its rain and how wet the ground is."; $("catchInfo").hidden = false; return; }
