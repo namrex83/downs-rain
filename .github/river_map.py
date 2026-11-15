@@ -73,8 +73,16 @@ places = sorted({p for _, ps in parsed.values() for p in ps if len(p) > 2})
 
 S, W, N, E = BOX
 bb = f"({S},{W},{N},{E})"
-wre = "|".join(esc(w) for w in ways) + "|Condamine River North Branch|North Branch Condamine River"
-lines = overpass(f'[out:json][timeout:170];way["waterway"~"^(river|stream|canal)$"]["name"~"^({wre})$",i]{bb};out geom;')
+def chunked(items, n=40):   # several small queries: one big case-blind one is too slow for the servers
+    for i in range(0, len(items), n):
+        yield items[i:i + n]
+
+
+ways_q = ways + ["Condamine River North Branch", "North Branch Condamine River"]
+lines = []
+for part in chunked(ways_q):
+    wre = "|".join(esc(w) for w in part)
+    lines += overpass(f'[out:json][timeout:170];way["waterway"~"^(river|stream|canal)$"]["name"~"^({wre})$"]{bb};out geom;')
 print(f"{len(lines)} waterway pieces")
 geo = {}
 for el in lines:
@@ -83,8 +91,10 @@ for el in lines:
     geo.setdefault(key, []).append(LineString([(p["lon"], p["lat"]) for p in el["geometry"]]))
 geo = {k: linemerge(MultiLineString(v)) for k, v in geo.items()}
 
-pre = "|".join(esc(p) for p in places)
-feats = overpass(f'[out:json][timeout:170];nwr["name"~"^({pre})$",i]{bb};out center tags;')
+feats = []
+for part in chunked(places):
+    pre = "|".join(esc(p) for p in part)
+    feats += overpass(f'[out:json][timeout:170];nwr["name"~"^({pre})$"]{bb};out center tags;')
 print(f"{len(feats)} named features")
 spots = {}
 for el in feats:
