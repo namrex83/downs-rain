@@ -410,6 +410,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field"><span class="eyebrow">Rain on the map</span>
       <div class="seg" id="cView"><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
     <div class="field rangefield copfield"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
+    <div class="field"><span class="eyebrow">Area</span>
+      <div class="seg" id="cRegion"><button data-r="dd" aria-pressed="true">Downs</button><button data-r="seq" aria-pressed="false">SE coast</button><button data-r="wide" aria-pressed="false">Wide Bay</button><button data-r="border" aria-pressed="false">Border</button></div></div>
     <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="controls stormOnly" hidden>
@@ -816,8 +818,8 @@ async function loadCatch(){
   if (CATCH) return;
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
   const opt = c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`;
-  $("catchSel").innerHTML = `<option value="">None</option>` + REGIONS.map(([lab, f]) => `<optgroup label="${lab}">${CATCH.filter(f).map(opt).join("")}</optgroup>`).join("");
-  if (CATCH.some(c => c.id === "condamine_all")) $("catchSel").value = "condamine_all";   // opens on the whole river
+  fillCatchSel();
+  if (CATCH.some(c => c.id === "condamine_all")) $("catchSel").value = "condamine_all";   // opens on the Downs, on the whole river
   if (FW) markCatchOptions(FW);
 }
 function inRing(x, y, ring){
@@ -895,29 +897,42 @@ function tubeLines(){
   RMAP._snap = snap;
   return RMAP._tube = tube;
 }
+// What the map shows, so it stays readable: the main rivers always; a creek only inside the picked catchment, and in a
+// big catchment only once zoomed in a little; gauge dots for the picked catchment that are rising or in flood (all of
+// them once zoomed in close), and any gauge in flood in the area shown.
+const CREEKS_ZOOM = 9, ALLDOTS_ZOOM = 10;
+const inCatchLine = (c, ln) => { const key = c.id; ln._in = ln._in || {};   // does this piece of line run through catchment c?
+  if (!(key in ln._in)) ln._in[key] = ln.some((p, i) => i % 3 === 0 && inRing(p[1], p[0], c.outline)); return ln._in[key]; };
 function drawStreams(){
   if (streamLayer) { map.removeLayer(streamLayer); streamLayer = null; }
   if (!RMAP || tab !== "catch") return;
   const tube = tubeLines(), opt = {pane: "catchPane", interactive: false, lineCap: "round", lineJoin: "round"};
+  const c = CATCH && CATCH.find(x => x.id === $("catchSel").value), z = map.getZoom();
+  const creeks = c && (z >= CREEKS_ZOOM || c.area_km2 < 4000);
+  const show = tube.map(st => ({...st, lines: st.main ? st.lines : creeks ? st.lines.filter(ln => inCatchLine(c, ln)) : []})).filter(st => st.lines.length);
   const w = st => st.main ? 6 : 3.5;
   streamLayer = L.layerGroup([
-    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#10202e", weight: w(st) + 5, opacity: .55}))),   // a dark edge,
-    ...tube.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: 1}))),   // then a white casing under all of them
-    ...tube.sort((a, b) => a.main - b.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: st.col, weight: w(st), opacity: 1}))),
+    ...show.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#10202e", weight: w(st) + 5, opacity: .55}))),   // a dark edge,
+    ...show.flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: "#fff", weight: w(st) + 3, opacity: 1}))),   // then a white casing under all of them
+    ...show.sort((a, b) => a.main - b.main).flatMap(st => st.lines.map(ln => L.polyline(ln, {...opt, color: st.col, weight: w(st), opacity: 1}))),
     // each creek's name along its longest piece, once zoomed in a little
-    ...tube.map(st => { const ln = st.lines.reduce((a, b) => b.length > a.length ? b : a, []); if (ln.length < 2) return null;
+    ...show.map(st => { const ln = st.lines.reduce((a, b) => b.length > a.length ? b : a, []); if (ln.length < 2) return null;
       return L.marker(ln[Math.floor(ln.length / 2)], {pane: "labelPane", interactive: false, keyboard: false,
         icon: L.divIcon({className: "tubelab", html: `<span style="color:${st.col}">${st.name.replace(/ Creek$/, " Ck").replace(" River", " R.")}</span>`, iconSize: null})}); }).filter(Boolean)
   ]).addTo(map);
   tubeLabels();
 }
-function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= 9); }
-map.on("zoomend", tubeLabels);
-function drawGaugeDots(list){   // list: [{name, lvl, text}]
+function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
+let DOTLIST = null;
+map.on("zoomend", () => { tubeLabels(); if (tab === "catch") { drawStreams(); drawGaugeDots(DOTLIST); } });
+function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the picked catchment), inArea (in the area shown)}]
+  DOTLIST = list;
   if (riverDots) { map.removeLayer(riverDots); riverDots = null; }
   if (!RMAP || tab !== "catch" || !list) return;
-  riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name]).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
-    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 5, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .45 : 1, opacity: x.other ? .5 : 1})
+  const close = map.getZoom() >= ALLDOTS_ZOOM;
+  const keep = x => x.lvl >= "g2" ? x.inArea !== false : !x.other && (x.lvl === "g1" || close);
+  riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name] && keep(x)).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
+    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]}))).addTo(map);
 }
 // The Catchments tab's rain map: the Rainfall tab's own map for the chosen span (latest finished day, last 7 or 14
@@ -976,7 +991,7 @@ function showAvMax(){   // the picked catchment's Av and Max for the period on t
 function drawCatchLabels(selId){
   if (catchLabels) { map.removeLayer(catchLabels); catchLabels = null; }
   if (!CATCH) return;
-  catchLabels = L.layerGroup(CATCH.filter(c => selId ? c.id === selId : c.id !== "condamine_all").map(c => {
+  catchLabels = L.layerGroup((selId ? CATCH.filter(c => c.id === selId) : regionCatch().filter(c => !TOTALS.has(c.id))).map(c => {
     let av = null, mx = null;
     if (CMETA && CMETA.grid) {
       const v = catchMask(c, CMETA).map(i => CMETA.grid[i]).filter(x => x >= 0);
@@ -1051,9 +1066,9 @@ function drawCatchTab(){
   const selId = $("catchSel").value;
   drawStreams();
   catchAll = L.layerGroup([
-    ...CATCH.map(c => L.polygon(smoothRing(c), {pane: "catchPane", color: "#fff", weight: 5, opacity: .85, fill: false, interactive: false})),   // a white edge under each outline
-    ...[...CATCH].sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
-    L.polygon(smoothRing(c), {pane: "catchPane", color: "#10202e", weight: 2.2, opacity: .95, fillColor: "#3b82f6", fillOpacity: .04})
+    ...regionCatch().map(c => L.polygon(smoothRing(c), {pane: "catchPane", color: "#fff", weight: 4, opacity: .6, fill: false, interactive: false})),   // a white edge under each outline
+    ...regionCatch().sort((a, b) => b.area_km2 - a.area_km2).map(c =>   // big ones underneath, so the small ones can be tapped
+    L.polygon(smoothRing(c), {pane: "catchPane", color: "#10202e", weight: 1.6, opacity: .55, fillColor: "#3b82f6", fillOpacity: .03})
       .bindTooltip(c.name, {sticky: true}).on("click", () => { $("catchSel").value = c.id; pickCatch(false); }))]).addTo(map);
   drawCatchLabels(selId);
   const c = CATCH.find(x => x.id === selId);
@@ -1143,6 +1158,21 @@ const SEQ_IDS = new Set(["brisbane_wiv", "stanley", "lockyer", "brisbane_crosby"
 const REGIONS = [["Condamine (Darling Downs)", c => !SEQ_IDS.has(c.id) && !WIDE_IDS.has(c.id) && !BORDER_IDS.has(c.id)], ["South-east coast", c => SEQ_IDS.has(c.id)],
   ["Wide Bay and South Burnett", c => WIDE_IDS.has(c.id)], ["Border Rivers", c => BORDER_IDS.has(c.id)]];
 const WIDE_IDS = new Set(["mary_mbo", "tinana", "burrum", "barambah", "boyne"]), BORDER_IDS = new Set(["macbrook", "severn", "weir"]);
+// the area picked above the list (Downs, SE coast, Wide Bay, Border): its catchments are the only ones listed and drawn;
+// picking an area picks its biggest catchment
+const REGION_KEYS = ["dd", "seq", "wide", "border"], REGION_START = {dd: "condamine_all", seq: "brisbane_crosby", wide: "mary_mbo", border: "weir"};
+const TOTALS = new Set(["condamine_all", "brisbane_crosby", "brisbane_wiv", "mary_mbo"]);   // catchments that hold others (no label of their own in the overview)
+let cRegion = "dd";
+const regionCatch = () => CATCH ? CATCH.filter(REGIONS[REGION_KEYS.indexOf(cRegion)][1]) : [];
+function fillCatchSel(){
+  const keep = $("catchSel").value;
+  $("catchSel").innerHTML = `<option value="">None (the whole area)</option>` + regionCatch().map(c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`).join("");
+  if ([...$("catchSel").options].some(o => o.value === keep)) $("catchSel").value = keep;
+  [...$("cRegion").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.r === cRegion));
+  if (FW) markCatchOptions(FW);
+}
+$("cRegion").onclick = e => { const b = e.target.closest("button"); if (!b || !CATCH) return;
+  cRegion = b.dataset.r; fillCatchSel(); $("catchSel").value = REGION_START[cRegion]; pickCatch(true); };
 function inCatch(cid, rows, iName){
   if (GAUGE_NAMES[cid]) return rows.filter(r => GAUGE_NAMES[cid].test(r[iName]));
   const gr = GAUGE_RANGE[cid];
@@ -1171,7 +1201,8 @@ function markCatchOptions(fw){   // 🔴 in the list for catchments with a gauge
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
   const sel = $("catchSel").value, iName0 = Math.max(0, hd.findIndex(h => /station/i.test(h)));
-  const all = sel ? inCatch(sel, gaugeRows(fw), iName0) : allRows;
+  const gr = gaugeRows(fw), areaNames = new Set(regionCatch().flatMap(c => inCatch(c.id, gr, iName0).map(r => r[iName0])));
+  const all = sel ? inCatch(sel, gr, iName0) : allRows.filter(r => areaNames.has(r[iName0]));
   const col = re => hd.findIndex(h => re.test(h));
   const iName = Math.max(0, col(/station/i)), iTime = col(/time/i), iH = col(/height/i), iT = col(/tend/i), iC = col(/class/i);
   const g = (r, i) => i >= 0 && i < r.length ? r[i] : "";
@@ -1181,7 +1212,7 @@ function drawRivers(fw){
   const lvl = r => /major/i.test(g(r, iC)) ? "g4" : /moderate/i.test(g(r, iC)) ? "g3" : flood(r) ? "g2" : rising(r) ? "g1" : "g0";
   const seenAll = new Set(), every = allRows.filter(r => g(r, iH) !== "" && !seenAll.has(g(r, iName)) && seenAll.add(g(r, iName)));
   drawGaugeDots(every.map(r =>   // every gauge, those in flood big; outside a picked catchment faded
- ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, other: sel && !rows.includes(r)})));
+ ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, other: sel && !rows.includes(r), inArea: areaNames.has(g(r, iName))})));
   if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${shortGauge(g(r, iName))}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
@@ -1203,7 +1234,7 @@ async function drawWatch(){
   await loadCatch();
   const fc = WET && WET.fc;
   if (!fc || !CATCH || !CATCH.length) { $("watch").innerHTML = ""; $("watchNote").textContent = "The catchment watch appears after the next radar update."; return; }
-  const rows = CATCH.map(c => {
+  const rows = regionCatch().map(c => {
     const w = wetNow(c.id), f = fc.catchments[c.id];
     if (!w || !f) return null;
     let api = w.api, q = 0;
