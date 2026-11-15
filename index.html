@@ -755,7 +755,23 @@ const runningEnd = () => { const t = new Date(Date.now() + 10 * 3600e3); if (t.g
 async function getJSON(u){ const r = await fetch(u + bust()); if(!r.ok) throw new Error(r.status); return r.json(); }
 
 // the season total runs to hundreds of mm, so it gets its own steps on the same colours
-const SEASON_BREAKS = [5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 600, 800];
+let SEASON_BREAKS = [5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 600, 800];
+// The season's colour steps fitted to the season so far: each colour covers about the same share of the map, so where
+// most places have had (say) 100-200 mm, those amounts spread over most of the colours instead of two or three.
+// Rounded to tidy numbers (to 5 mm under 100, 10 mm above, 25 mm above 300).
+function fitSeasonBreaks(grid){
+  const v = grid.filter(x => x >= 10).map(x => x / 10).sort((a, b) => a - b);   // squares with at least 1 mm
+  if (v.length < 100) return;
+  const n = SEASON_BREAKS.length, tidy = x => x < 20 ? Math.max(1, Math.round(x)) : x < 100 ? Math.round(x / 5) * 5 : x < 300 ? Math.round(x / 10) * 10 : Math.round(x / 25) * 25;
+  const out = [];
+  for (let i = 0; i < n; i++){
+    // the first step stays at 5 mm (so light totals still show); the rest from 3% to 97% of the squares
+    let b = i === 0 ? 5 : tidy(v[Math.min(v.length - 1, Math.floor(v.length * (.03 + (i - 1) / (n - 2) * .94)))]);
+    if (out.length && b <= out[out.length - 1]) b = out[out.length - 1] + (out[out.length - 1] < 100 ? 5 : 10);
+    out.push(b);
+  }
+  SEASON_BREAKS = out;
+}
 const rainBreaks = () => (tab === "rain" ? view : tab === "catch" ? cView : "") === "season" ? SEASON_BREAKS : idx.breaks;
 function legend(){
   const br = rainBreaks();
@@ -1408,6 +1424,7 @@ async function draw(){
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : season ? "That total isn't available yet." : "That day's map isn't available yet."}</span>`; return; }
+  if (season && meta && meta.grid) { fitSeasonBreaks(meta.grid); legend(); }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
   $("mRaw").disabled = (today && !prov) || silo || season; $("mCorr").disabled = (today && !prov) || silo || season;
   const img = past || silo || season ? gridImage(mode === "raw" && !silo && !season ? meta.grid_raw : meta.grid, meta.grid_w, meta.grid_h)
