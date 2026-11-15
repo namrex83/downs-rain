@@ -11,7 +11,7 @@ from shapely.ops import linemerge, nearest_points
 
 BOX = (-28.6, 150.3, -25.9, 153.6)   # S, W, N, E: the Condamine down to Chinchilla, and the south-east coast to Gympie
 UA = {"User-Agent": "weather-desk-river-map/1.0"}
-SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
+SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 SHORT = {r"\bRd\b": "Road", r"\bSt\b": "Street", r"\bCk\b": "Creek", r"\bMt\b": "Mount"}
 
 
@@ -21,10 +21,10 @@ FAILED = []
 def overpass(q):
     """One query, tried on each server up to three times; a query that still fails is skipped (and counted), so
     one bad batch doesn't lose the whole map."""
-    for attempt in range(3):
+    for attempt in range(2):
         for url in SERVERS:
             try:
-                r = requests.post(url, data={"data": q}, headers=UA, timeout=180)
+                r = requests.post(url, data={"data": q}, headers=UA, timeout=100)
                 if r.ok:
                     time.sleep(2)   # gently: the servers are shared
                     return r.json()["elements"]
@@ -74,10 +74,34 @@ rv = flood.get("rivers") or {}
 hd = rv.get("headers") or []
 iN = max(0, next((i for i, h in enumerate(hd) if re.search("station", h, re.I)), 0))
 names = list(dict.fromkeys(r[iN] for r in rv.get("rows", []) if r and r[iN] and len(r[iN]) < 80))   # in the Bureau's order, down each river
-print(f"{len(names)} gauges")
+# only the gauges in the page's catchments: the Condamine's table down to Chinchilla Weir, and the coast's rivers
+# (the same runs of the tables as the page's GAUGE_RANGE, and its name rules)
+RANGES = [(r"^Condamine River at The Head", r"^Condamine River at Chinchilla Weir TW"),
+          (r"^Stanley River at Peachester", r"^Brisbane River at Mt Crosby$"), (r"^Bremer River at Adams Bridge", r"^Bremer River at Karalee"),
+          (r"^Burnett Creek at Maroon Dam Inflow", r"^Logan River at Waterford$"), (r"^Albert River at Darlington School", r"^Albert River at Beenleigh"),
+          (r"^Obi Obi Creek at Gardners Falls", r"^Mary River at Gympie$")]
+NAMED = r"^(North|South) Pine River|^Sideling Creek|^Caboolture River|^(Lagoon|King John) Creek at Caboolture|^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek"
+keep = set(n for n in names if re.search(NAMED, n))
+for a, b in RANGES:
+    i = next((k for k, n in enumerate(names) if re.search(a, n)), None)
+    j = next((k for k, n in enumerate(names) if re.search(b, n)), None)
+    if i is not None and j is not None and j >= i:
+        keep.update(names[i:j + 1])
+names = [n for n in names if n in keep]
+print(f"{len(names)} gauges in the page's catchments")
 parsed = {n: split(n) for n in names}
-ways = sorted({w for w, _ in parsed.values() if w} | {"Condamine River"})
-places = sorted({p for _, ps in parsed.values() for p in ps if len(p) > 2})
+
+# what an earlier run already found is kept: only new gauges, and creeks not drawn yet, are looked up
+try:
+    old = json.load(open("data/river_map.json"))
+except (OSError, ValueError):
+    old = {}
+old_g = {n: v for n, v in (old.get("gauges") or {}).items() if n in parsed}
+old_s = {st["name"]: st for st in (old.get("streams") or [])}
+todo = [n for n in names if n not in old_g]
+print(f"{len(old_g)} already placed, {len(todo)} to look up")
+ways = sorted({parsed[n][0] for n in todo if parsed[n][0]} | ({"Condamine River"} - set(old_s)))
+places = sorted({p for n in todo for p in parsed[n][1] if len(p) > 2})
 
 S, W, N, E = BOX
 bb = f"({S},{W},{N},{E})"
@@ -86,7 +110,7 @@ def chunked(items, n=40):   # several small queries: one big case-blind one is t
         yield items[i:i + n]
 
 
-ways_q = ways + ["Condamine River North Branch", "North Branch Condamine River"]
+ways_q = ways + ([] if "North Branch" in old_s else ["Condamine River North Branch", "North Branch Condamine River"])
 lines = []
 for part in chunked(ways_q):
     wre = "|".join(esc(w) for w in part)
@@ -104,15 +128,13 @@ feats = []
 # only the kinds of thing a gauge is named after: towns and localities, weirs, dams and bridges, and roads for the
 # names that are roads (asking for any feature by name is far too slow around Brisbane)
 roads = [p for p in places if re.search(r"\b(Road|Street|Lane|Drive|Avenue|Crossing|Highway)$", p)]
-for part in chunked([p for p in places if p not in roads]):
+for part in chunked([p for p in places if p not in roads], 60):
     pre = "|".join(esc(p) for p in part)
-    feats += overpass(f'[out:json][timeout:170];(node["place"]["name"~"^({pre})$"]{bb};nwr["waterway"~"^(weir|dam)$"]["name"~"^({pre})$"]{bb};'
-                      f'nwr["bridge"]["name"~"^({pre})$"]{bb};nwr["man_made"="bridge"]["name"~"^({pre})$"]{bb};nwr["landuse"="reservoir"]["name"~"^({pre})$"]{bb};'
-                      f'nwr["natural"="water"]["name"~"^({pre})$"]{bb};);out center tags;')
+    feats += overpass(f'[out:json][timeout:90];(node["place"]["name"~"^({pre})$"]{bb};nwr["waterway"~"^(weir|dam)$"]["name"~"^({pre})$"]{bb};);out center tags;')
     print(f"  places {len(feats)} so far", flush=True)
-for part in chunked(roads):
+for part in chunked(roads, 60):
     pre = "|".join(esc(p) for p in part)
-    feats += overpass(f'[out:json][timeout:170];way["highway"]["name"~"^({pre})$"]{bb};out center tags;')
+    feats += overpass(f'[out:json][timeout:90];way["highway"]["name"~"^({pre})$"]{bb};out center tags;')
     print(f"  roads: {len(feats)} so far", flush=True)
 print(f"{len(feats)} named features")
 spots = {}
@@ -122,8 +144,9 @@ for el in feats:
         spots.setdefault(el["tags"]["name"].lower(), []).append(Point(c["lon"], c["lat"]))
 
 km = lambda a, b: math.hypot((a.x - b.x) * 99.0, (a.y - b.y) * 110.6)
-out, missing = {}, []
-for n, (way, ps) in parsed.items():
+out, missing = dict(old_g), []
+for n in todo:
+    way, ps = parsed[n]
     line = geo.get(way) if way else None
     if way and line is None and way.lower().startswith("condamine river"):
         line = geo.get("Condamine River")
@@ -170,7 +193,7 @@ for n in list(missing):
         print(f"  {m}: between {up} and {down}")
 print(f"placed {len(out)}, not found {len(missing)}: {missing}; queries skipped: {len(FAILED)}")
 
-streams = []
+streams = [st for name, st in old_s.items() if name not in geo]   # creeks drawn before
 for name, g in geo.items():
     g = g.simplify(0.0015, preserve_topology=False)
     parts = list(g.geoms) if hasattr(g, "geoms") else [g]
