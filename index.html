@@ -408,7 +408,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <div class="controls catchOnly" id="cControls" hidden>
     <div class="field"><span class="eyebrow">Rain on the map</span>
-      <div class="seg" id="cView"><button data-v="today" aria-pressed="false">To 9am</button><button data-v="day" aria-pressed="false">Latest day</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
+      <div class="seg" id="cView"><button data-v="today" aria-pressed="false">To 9am</button><button data-v="two" aria-pressed="false">2 days</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
     <div class="field rangefield copfield"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
     <div class="field"><span class="eyebrow">Area</span>
       <div class="seg" id="cRegion"><button data-r="dd" aria-pressed="true">Downs</button><button data-r="seq" aria-pressed="false">SE coast</button><button data-r="wide" aria-pressed="false">Wide Bay</button><button data-r="border" aria-pressed="false">Border</button></div></div>
@@ -941,6 +941,19 @@ async function catchRain(){
   if (tab !== "catch" || !idx) return;
   [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
   legend();
+  if (cView === "two") {   // the day finished at the last 9am plus the one running now: a storm across 9am in one total
+    CMETA = null;
+    try {
+      const last = idx.days[idx.days.length - 1], [a, b] = await Promise.all([getJSON("data/today.json"), dayJSON(last)]);
+      const grid = a.grid && a.grid.length === b.grid.length ? b.grid.map((v, k) => v < 0 || a.grid[k] < 0 ? -1 : v + a.grid[k]) : b.grid;
+      CMETA = {bounds: b.bounds, grid_w: b.grid_w, grid_h: b.grid_h, grid, from: last};
+      if (overlay) map.removeLayer(overlay);
+      const [s_, w_, n_, e_] = b.bounds;
+      if (tab === "catch") overlay = L.imageOverlay(gridImage(grid, b.grid_w, b.grid_h), [[s_, w_], [n_, e_]], {opacity: rainOpacity, interactive: false}).addTo(map);
+    } catch(e){ if (overlay) map.removeLayer(overlay); }
+    drawCatchLabels($("catchSel").value); gaugeLayer.clearLayers();
+    return;
+  }
   // with the map off, the last 7 days are still read (for the Av and Max), just not drawn
   const keepView = view, keepDay = $("day").value, keepWeek = $("weekSel").value;
   view = cView === "none" ? "week" : cView === "today" ? "day" : cView;
@@ -985,7 +998,7 @@ function rainChip(mm){
 const cMapBox = document.createElement("div"); cMapBox.className = "cmapbox"; cMapBox.hidden = true; map.getContainer().appendChild(cMapBox);
 function showAvMax(){   // the picked catchment's Av and Max for the period on the map, in a box at the top of the map
   const id = $("catchSel").value, v = AVMAX[id], c = CATCH && CATCH.find(x => x.id === id);
-  const per = cView === "today" ? `So far to 9am ${part(runningEnd(), {weekday: "short"})}` : {day: "Latest day", fortnight: "Last 14 days", season: "Season"}[cView] || "Last 7 days";
+  const per = cView === "today" ? `So far to 9am ${part(runningEnd(), {weekday: "short"})}` : cView === "two" && CMETA && CMETA.from ? `From 9am ${part(addDays(CMETA.from, -1), {weekday: "short"})} to now` : {day: "Latest day", fortnight: "Last 14 days", season: "Season"}[cView] || "Last 7 days";
   cMapBox.hidden = !(tab === "catch" && v && c);
   if (!cMapBox.hidden) cMapBox.innerHTML = `<span class="cn">${c.name.replace(/ \(.*\)$/, "").replace(/^Condamine River,? /, "Condamine ")} · ${per}</span><span class="nums">Av: ${rainChip(v.av)} · Max: ${rainChip(v.mx)} mm</span>`;
 }
