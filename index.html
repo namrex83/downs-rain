@@ -815,7 +815,9 @@ const areaTxt = c => c.area_km2 < 20 ? `${Math.round(c.area_km2 * 100).toLocaleS
 async function loadCatch(){
   if (CATCH) return;
   try { CATCH = (await getJSON("assets/catchments.json")).catchments; } catch(e){ CATCH = []; }
-  $("catchSel").innerHTML = `<option value="">None</option>` + CATCH.map(c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`).join("");
+  const opt = c => `<option value="${c.id}">${c.name} (${areaTxt(c)})</option>`;
+  $("catchSel").innerHTML = `<option value="">None</option><optgroup label="Condamine (Darling Downs)">${CATCH.filter(c => !SEQ_IDS.has(c.id)).map(opt).join("")}</optgroup>`
+    + `<optgroup label="South-east coast">${CATCH.filter(c => SEQ_IDS.has(c.id)).map(opt).join("")}</optgroup>`;
   if (CATCH.some(c => c.id === "condamine_all")) $("catchSel").value = "condamine_all";   // opens on the whole river
   if (FW) markCatchOptions(FW);
 }
@@ -880,7 +882,7 @@ function tubeLines(){
   };
   let k = 0;
   const tube = RMAP.streams.map(st => ({name: st.name, main: st.main,
-    col: st.name === "Condamine River" ? "#0019a8" : st.name === "North Branch" ? "#00a0e2" : TUBE_COL[k++ % TUBE_COL.length],
+    col: st.name === "North Branch" ? "#00a0e2" : st.main ? "#0019a8" : TUBE_COL[k++ % TUBE_COL.length],   // the main rivers (Condamine, Brisbane, Logan, Mary) thick dark blue
     lines: st.lines.map(ln => round(round(round(simp(ln, st.main ? .02 : .015))))).filter(l => l.length > 1)}));
   // each gauge onto its own creek's line (by the name before "at"), if that's within about 5 km
   const snap = {};
@@ -1119,8 +1121,25 @@ function gaugeRows(fw){   // [{name, row}] one per gauge with a height, in the B
   const iName = Math.max(0, hd.findIndex(h => /station/i.test(h))), iH = hd.findIndex(h => /height/i.test(h));
   return (rv.rows || []).filter(r => r[iH] !== "" && r[iH] != null && !seen.has(r[iName]) && seen.add(r[iName]));
 }
+// South-east coast: a run of the Bureau's table, from one gauge to another (each table lists its rivers' gauges in order
+// down each river and its creeks), less any that drain elsewhere
+const GAUGE_RANGE = {
+  stanley: [/^Stanley River at Peachester/i, /^Stanley River at Somerset Dam/i],
+  brisbane_wiv: [/^Stanley River at Peachester/i, /^Brisbane River at Wivenhoe Dam TW/i],
+  lockyer: [/^Murphys Creek at Spring Bluff/i, /^Lockyer Creek at O'Reilly's Weir/i],
+  brisbane_crosby: [/^Stanley River at Peachester/i, /^Brisbane River at Mt Crosby$/i],
+  bremer: [/^Bremer River at Adams Bridge/i, /^Bremer River at Karalee/i],
+  logan: [/^Burnett Creek at Maroon Dam Inflow/i, /^Logan River at Waterford$/i],
+  albert: [/^Albert River at Darlington School/i, /^Albert River at Beenleigh/i, /^Canungra Creek/i],   // Canungra Creek runs to the Coomera
+  mary: [/^Obi Obi Creek at Gardners Falls/i, /^Mary River at Gympie$/i]};
+Object.assign(GAUGE_NAMES, {pine: /^(North|South) Pine River|^Sideling Creek/i, caboolture: /^Caboolture River|^(Lagoon|King John) Creek at Caboolture/i,
+  maroochy: /^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek/i});
+const SEQ_IDS = new Set(["brisbane_wiv", "stanley", "lockyer", "brisbane_crosby", "bremer", "logan", "albert", "pine", "caboolture", "mary", "maroochy"]);
 function inCatch(cid, rows, iName){
   if (GAUGE_NAMES[cid]) return rows.filter(r => GAUGE_NAMES[cid].test(r[iName]));
+  const gr = GAUGE_RANGE[cid];
+  if (gr) { const a = rows.findIndex(r => gr[0].test(r[iName])), b = rows.findIndex(r => gr[1].test(r[iName]));
+    return a < 0 || b < a ? [] : rows.slice(a, b + 1).filter(r => !(gr[2] && gr[2].test(r[iName]))); }
   const st = STRETCH[cid]; if (!st) return [];
   const at = re => re ? rows.findIndex(r => re.test(r[iName])) : -1, a = at(st[0]), b = at(st[1]);
   if (b < 0) return [];

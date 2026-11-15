@@ -9,7 +9,7 @@ import requests
 from shapely.geometry import LineString, MultiLineString, Point
 from shapely.ops import linemerge, nearest_points
 
-BOX = (-28.6, 150.3, -26.3, 152.5)   # S, W, N, E: the Condamine down to Chinchilla
+BOX = (-28.6, 150.3, -25.9, 153.6)   # S, W, N, E: the Condamine down to Chinchilla, and the south-east coast to Gympie
 UA = {"User-Agent": "weather-desk-river-map/1.0"}
 SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 SHORT = {r"\bRd\b": "Road", r"\bSt\b": "Street", r"\bCk\b": "Creek", r"\bMt\b": "Mount"}
@@ -148,7 +148,7 @@ for name, g in geo.items():
     if name not in ("Condamine River", "North Branch"):   # common names (Sandy, Spring Creek): only the pieces by its gauges
         mine = [Point(out[m][1], out[m][0]) for m in names if parsed[m][0] == name and m in out]
         parts = [q for q in parts if any(q.distance(pt) < 0.1 for pt in mine)]
-    streams.append({"name": name, "main": name in ("Condamine River", "North Branch"),
+    streams.append({"name": name, "main": name in ("Condamine River", "North Branch", "Brisbane River", "Logan River", "Mary River"),
                     "lines": [[[round(y, 4), round(x, 4)] for x, y in p.coords] for p in parts if p.length > 0.005]})
 json.dump({"source": "OpenStreetMap contributors (ODbL); positions are approximate",
            "gauges": out, "missing": missing, "streams": streams},
