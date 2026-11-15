@@ -970,7 +970,7 @@ function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the p
   const close = map.getZoom() >= ALLDOTS_ZOOM;
   const keep = x => x.lvl >= "g2" ? x.inArea !== false : !x.other && (x.lvl === "g1" || close);
   riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name] && keep(x)).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
-    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
+    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", bubblingMouseEvents: false, radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]})
       .bindPopup(`<b>${x.text}</b>${x.plot ? `<br><a href="${x.plot}" target="_blank" rel="noopener">River height graph (BOM) ↗</a>` : ""}`, {offset: [0, -4]}))).addTo(map);
 }
