@@ -1534,7 +1534,8 @@ $("addRead").onclick = async () => {
   const qh = new Date(Date.now() + 36e5 * 10).getUTCHours();
   // the rain days to choose from, each spelled out (9am one day to 9am the next); it starts on the one ending 9am today
   const today = qh < 9 ? runningEnd() : addDays(runningEnd(), -1);
-  const opts = [[addDays(today, 1), "since 9am today (so far)"], [today, "to 9am today"], [addDays(today, -1), "to 9am yesterday"]];
+  // ("since 9am today" only once it's past 9am: before then that rain day hasn't started)
+  const opts = [...(qh >= 9 ? [[addDays(today, 1), "since 9am today (so far)"]] : []), [today, "to 9am today"], [addDays(today, -1), "to 9am yesterday"]];
   for (let k = 2; k <= 6; k++) opts.push([addDays(today, -k), `to 9am ${part(addDays(today, -k), {weekday: "long"})}`]);
   $("readDay").innerHTML = opts.map(([d, txt]) => `<option value="${d}">${rainDay(d)} · rain ${txt}</option>`).join("");
   $("readDay").value = today;
