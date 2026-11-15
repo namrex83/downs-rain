@@ -7,7 +7,7 @@ place can't be found, the gauge is left off the map. Run by hand (river-map.yml)
 import json, math, re, sys, time
 import requests
 from shapely.geometry import LineString, MultiLineString, Point
-from shapely.ops import linemerge, nearest_points
+from shapely.ops import linemerge, nearest_points, unary_union
 
 BOX = (-29.6, 149.4, -24.95, 153.6)   # S, W, N, E: the radar rain map's area
 UA = {"User-Agent": "weather-desk-river-map/1.0"}
@@ -83,7 +83,7 @@ RANGES = [(r"^Condamine River at The Head", r"^Condamine River at Chinchilla Wei
 NAMED = (r"^(North|South) Pine River|^Sideling Creek|^Caboolture River|^(Lagoon|King John) Creek at Caboolture|^((North|South) )?Maroochy River|^(Petrie|Paynter|Eudlo) Creek"
          r"|^Dogwood Creek|^Tinana Creek|^Burrum River at (Lenthalls Dam|Howard)|^Barambah Creek|^Stuart River|^Boyne River at (Carters|Boondooma|Cooranga|Derra|Mclaughlins)"
          r"|^Little Nerang Creek|^Nerang River at (Numinbah|Hinze|Clearview|Carrara)|^Canungra Creek|^Coomera River at (Canungra Army|Clagiraba|Oxenford)"
-         r"|^Macintyre Brook|^Severn River at (Ballandean|Farnbro)|^Quart Pot Creek|^Weir River")
+         r"|^Macintyre Brook|^Severn River at (Ballandean|Farnbro)|^Quart Pot Creek|^Weir River|^Kings Creek|^Dalrymple Creek|^Sandy Creek at Leslie Dam|^Swan Creek at (Swanfels|Yangan)")
 keep = set(n for n in names if re.search(NAMED, n))
 for a, b in RANGES:
     i = next((k for k, n in enumerate(names) if re.search(a, n)), None)
@@ -194,6 +194,35 @@ for n in list(missing):
         out[m] = [round(pt.y, 4), round(pt.x, 4)]
         missing.remove(m)
         print(f"  {m}: between {up} and {down}")
+# still no spot, but its creek is drawn: put it on the creek anyway - below the gauge upstream of it (towards the
+# creek's mouth, the end nearer a main river), above the one downstream of it, or halfway along if it's the only one
+mains = unary_union([g for k, g in geo.items() if k in ("Condamine River", "North Branch", "Brisbane River", "Logan River", "Mary River", "Weir River")] or
+                    [LineString([(p[1], p[0]) for p in ln]) for st in old_s.values() if st.get("main") for ln in st["lines"] if len(ln) > 1])
+for n in list(missing):
+    way = parsed[n][0]
+    line = geo.get(way) if way else None
+    if line is None:
+        continue
+    pieces = sorted(list(line.geoms) if hasattr(line, "geoms") else [line], key=lambda g: -g.length)
+    same = [m for m in names if parsed[m][0] == way]
+    k = same.index(n)
+    up = next((same[j] for j in range(k - 1, -1, -1) if same[j] in out), None)
+    down = next((same[j] for j in range(k + 1, len(same)) if same[j] in out), None)
+    ref = Point(out[up][1], out[up][0]) if up else Point(out[down][1], out[down][0]) if down else None
+    piece = min(pieces, key=lambda g: g.distance(ref)) if ref else pieces[0]
+    ends = [Point(piece.coords[0]), Point(piece.coords[-1])]
+    mouth = min(ends, key=lambda e: e.distance(mains)) if not mains.is_empty else ends[1]
+    head = ends[0] if mouth is ends[1] else ends[1]
+    dm, dh = piece.project(mouth), piece.project(head)
+    if ref:
+        dr = piece.project(ref)
+        at = dr + (dm - dr) * 0.6 if up else dr + (dh - dr) * 0.5
+    else:   # none of this creek's gauges placed: spread out in the table's order (downstream), head to mouth
+        at = dh + (dm - dh) * (k + 1) / (len(same) + 1)
+    pt = piece.interpolate(at)
+    out[n] = [round(pt.y, 4), round(pt.x, 4)]
+    missing.remove(n)
+    print(f"  {n}: on {way}, {'below ' + up if up else 'above ' + down if down else 'spread along it'} (rough)")
 print(f"placed {len(out)}, not found {len(missing)}: {missing}; queries skipped: {len(FAILED)}")
 
 streams = [st for name, st in old_s.items() if name not in geo]   # creeks drawn before
