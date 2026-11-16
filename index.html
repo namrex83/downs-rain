@@ -328,6 +328,9 @@ body.mapfull{overflow:hidden}
 .northarrow{position:absolute;top:12px;left:50%;margin-left:-17px;width:34px;height:34px;z-index:1000;border-radius:50%;background:rgba(28,38,33,.85);
   box-shadow:0 1px 4px rgba(0,0,0,.4);pointer-events:none;transition:transform .5s}
 .northarrow svg{width:100%;height:100%}
+.car{width:34px;height:34px;margin:-17px 0 0 -17px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.car svg{width:100%;height:100%;fill:#2a7de1;stroke:#fff;stroke-width:1.8;stroke-linejoin:round}
+body.following .pin{display:none} body.following .pinlabel.leaflet-tooltip-top{margin-top:-24px}   /* the car is the pin while following (its reading box stays) */
 .locate a.on{background:#2a7de1!important} .locate a.on svg{stroke:#fff} .locate a.on svg circle:last-child{fill:#fff;stroke:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
@@ -2129,21 +2132,43 @@ function setFollow(on, btn){
   following = on;
   if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (full screen: follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
   if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; }
-  if (!on) { lastHeadPos = null; setHeading(0); return; }
+  document.body.classList.toggle("following", on);
+  if (!on) { lastHeadPos = null; headSm = null; fCur = null; fAnim = null; fLastFixT = 0; if (carMk) { map.removeLayer(carMk); carMk = null; } setHeading(0); return; }
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return setFollow(false); }
   lastFollowRead = null;
+  if (map.getZoom() < 9.5) map.setZoom(10, {animate: false});   // about 40 km across: a driving scale (+ and − still work)
   if (followBtn) followBtn.classList.add("busy");
   followId = navigator.geolocation.watchPosition(onFollow, err => {
       if (err.code !== 1) return;   // no fix for a while (standing still, a cutting or a patch with poor signal): keep waiting
       if (followBtn) followBtn.classList.remove("busy"); locateErr(err); setFollow(false); },
     {enableHighAccuracy: true, maximumAge: 5000});
 }
+// Smooth following: each GPS fix starts a glide (about a second) from where the car is drawn to the new fix, the map
+// turning with it the short way round; the heading is smoothed and small wobbles ignored; the view sits ahead of the
+// car so more of the road ahead is on screen.
+let carMk = null, fCur = null, fAnim = null, headSm = null, fLastFixT = 0;
+const CAR_ICON = L.divIcon({className: "", iconSize: [0, 0], html: '<div class="car"><svg viewBox="0 0 24 24"><path d="M12 2.5l7.2 17.5-7.2-4.2-7.2 4.2z"/></svg></div>'});
+const angDiff = (a, b) => ((b - a + 540) % 360) - 180;
+function followFrame(){
+  if (!fAnim || !following) { fAnim = null; return; }
+  const k = Math.min(1, (performance.now() - fAnim.t0) / fAnim.dur), e = k < 1 ? k * (2 - k) : 1, F = fAnim.from, T = fAnim.to;
+  fCur = {lat: F.lat + (T.lat - F.lat) * e, lng: F.lng + (T.lng - F.lng) * e, brg: (F.brg + angDiff(F.brg, T.brg) * e + 360) % 360};
+  const car = L.latLng(fCur.lat, fCur.lng);
+  if (carMk) carMk.setLatLng(car); else carMk = L.marker(car, {icon: CAR_ICON, interactive: false, keyboard: false, zIndexOffset: 2000}).addTo(map);
+  if (pin) pin.setLatLng(car);
+  // the view centre: ahead of the car by about a fifth of the map's height
+  const z = map.getZoom(), mpp = 40075016.7 * Math.cos(fCur.lat * Math.PI / 180) / (256 * Math.pow(2, z)), d = map.getSize().y * 0.2 * mpp;
+  const r = fCur.brg * Math.PI / 180, cLat = fCur.lat + d * Math.cos(r) / 111320, cLng = fCur.lng + d * Math.sin(r) / (111320 * Math.cos(fCur.lat * Math.PI / 180));
+  map.setView([cLat, cLng], z, {animate: false});
+  if (map.setBearing && Math.abs(angDiff(fAnim.shown ?? 999, fCur.brg)) > 0.3) { map.setBearing(-fCur.brg); fAnim.shown = fCur.brg;
+    northArrow.hidden = !headSm && headSm !== 0 ? true : false; northArrow.style.transform = `rotate(${-fCur.brg}deg)`; }
+  if (k < 1) requestAnimationFrame(followFrame); else fAnim = null;
+}
 function onFollow(pos){
   if (followBtn) followBtn.classList.remove("busy");
-  const ll = L.latLng(pos.coords.latitude, pos.coords.longitude), acc = pos.coords.accuracy;
-  if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
-  else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
-  // heading up: the phone's own heading when moving, else the bearing from the last spot 25 m+ back
+  const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+  if (accCircle) { map.removeLayer(accCircle); accCircle = null; }   // the car shows where you are
+  // heading: the phone's own when moving, else the bearing from the last spot 25 m+ back; smoothed, wobbles under 8° ignored
   let hd = pos.coords.heading;
   if (!(hd >= 0) || !(pos.coords.speed > 1)) {
     hd = null;
@@ -2154,14 +2179,21 @@ function onFollow(pos){
     }
   }
   if (!lastHeadPos || lastHeadPos.distanceTo(ll) >= 25) lastHeadPos = ll;
-  if (hd != null) setHeading(Math.round(hd));
-  map.panTo(ll, {animate: true, duration: 0.6});
+  if (hd != null) {
+    if (headSm == null) headSm = hd;
+    else { const dd = angDiff(headSm, hd); if (Math.abs(dd) > 8) headSm = (headSm + dd * 0.6 + 360) % 360; }
+  }
+  const now = performance.now(), gap = fLastFixT ? now - fLastFixT : 1000; fLastFixT = now;
+  const to = {lat: ll.lat, lng: ll.lng, brg: headSm ?? (fCur ? fCur.brg : 0)};
+  const from = fCur && fCur.lat != null && L.latLng(fCur.lat, fCur.lng).distanceTo(ll) < 3000 ? {...fCur} : to;   // a big jump (first fix, back from hidden): straight there
+  const running = !!fAnim;
+  fAnim = {from, to, t0: now, dur: Math.max(300, Math.min(1500, gap)), shown: fAnim ? fAnim.shown : undefined};
+  if (!running) requestAnimationFrame(followFrame);
   tapAt = ll;
-  if (pin) pin.setLatLng(ll);
   // read the maps again every 500 m or 90 seconds (the forecast chart asks a server, so not on every move)
-  const now = Date.now(), moved = lastFollowRead ? lastFollowRead.ll.distanceTo(ll) : Infinity;
-  if (!lastFollowRead || moved > 500 || now - lastFollowRead.t > 90000) {
-    lastFollowRead = {ll, t: now};
+  const t = Date.now(), moved = lastFollowRead ? lastFollowRead.ll.distanceTo(ll) : Infinity;
+  if (!lastFollowRead || moved > 500 || t - lastFollowRead.t > 90000) {
+    lastFollowRead = {ll, t};
     const farther = !MYLL || L.latLng(MYLL).distanceTo(ll) > 10000;
     MYLL = [ll.lat, ll.lng]; if (farther) stormFlags();   // the severe-storm dot is for within 100 km of you
     readAnyTap();
