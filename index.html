@@ -328,9 +328,14 @@ body.mapfull{overflow:hidden}
 .northarrow{position:absolute;top:12px;left:50%;margin-left:-17px;width:34px;height:34px;z-index:1000;border-radius:50%;background:rgba(28,38,33,.85);
   box-shadow:0 1px 4px rgba(0,0,0,.4);pointer-events:none;transition:transform .5s}
 .northarrow svg{width:100%;height:100%}
-.car{width:34px;height:34px;margin:-17px 0 0 -17px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-.car svg{width:100%;height:100%;fill:#2a7de1;stroke:#fff;stroke-width:1.8;stroke-linejoin:round}
-body.following .pin{display:none} body.following .pinlabel.leaflet-tooltip-top{margin-top:-24px}   /* the car is the pin while following (its reading box stays) */
+.car{width:22px;height:37px;margin:-18px 0 0 -11px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.car svg{width:100%;height:100%}
+.car .cb{fill:#2a7de1;stroke:#fff;stroke-width:1.3} .car .cw{fill:#0d2a4a} .car .cr{fill:#3d8fe8;stroke:#1d5fb0;stroke-width:.6}
+.car .ct{fill:#1c2621} .car .cl{fill:#fff6b0}
+/* while following: the car is the pin, and its reading a very small label under it */
+body.following .pin{display:none}
+body.following .pinlabel.leaflet-tooltip-top{margin-top:44px;padding:0 4px;font-size:.62rem;border-width:1px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+body.following .pinlabel.leaflet-tooltip-top::before{display:none}   /* the car is the pin while following (its reading box stays) */
 .locate a.on{background:#2a7de1!important} .locate a.on svg{stroke:#fff} .locate a.on svg circle:last-child{fill:#fff;stroke:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
@@ -2147,7 +2152,14 @@ function setFollow(on, btn){
 // turning with it the short way round; the heading is smoothed and small wobbles ignored; the view sits ahead of the
 // car so more of the road ahead is on screen.
 let carMk = null, fCur = null, fAnim = null, headSm = null, fLastFixT = 0;
-const CAR_ICON = L.divIcon({className: "", iconSize: [0, 0], html: '<div class="car"><svg viewBox="0 0 24 24"><path d="M12 2.5l7.2 17.5-7.2-4.2-7.2 4.2z"/></svg></div>'});
+const CAR_ICON = L.divIcon({className: "", iconSize: [0, 0], html: '<div class="car"><svg viewBox="0 0 20 34">'
+  + '<rect x="2.5" y="1.5" width="15" height="31" rx="5" class="cb"/>'            // body (top view, nose up)
+  + '<path d="M5 10.5 Q10 7.5 15 10.5 L14 14 Q10 12.5 6 14Z" class="cw"/>'       // windscreen
+  + '<path d="M6 25 Q10 26.5 14 25 L14.6 28 Q10 29.5 5.4 28Z" class="cw"/>'      // back window
+  + '<rect x="5.6" y="15" width="8.8" height="9" rx="1.6" class="cr"/>'          // roof
+  + '<rect x="0.6" y="7" width="2.4" height="4.5" rx="1" class="ct"/><rect x="17" y="7" width="2.4" height="4.5" rx="1" class="ct"/>'
+  + '<rect x="0.6" y="22" width="2.4" height="4.5" rx="1" class="ct"/><rect x="17" y="22" width="2.4" height="4.5" rx="1" class="ct"/>'
+  + '<circle cx="5.8" cy="3.4" r="1.2" class="cl"/><circle cx="14.2" cy="3.4" r="1.2" class="cl"/></svg></div>'});
 const angDiff = (a, b) => ((b - a + 540) % 360) - 180;
 function followFrame(){
   if (!fAnim || !following) { fAnim = null; return; }
