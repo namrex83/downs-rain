@@ -394,7 +394,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="controls rainOnly" id="rControls">
     <div class="field addfield"><button class="addread" id="addRead" type="button"><span aria-hidden="true">🌧</span> Add your rain gauge reading</button></div>
     <div class="field"><span class="eyebrow">View</span>
-      <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
+      <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vThree" aria-pressed="false">Last 3 days</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field" id="weekField"><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
     <div class="field morefield"><button type="button" class="morebtn" id="rMoreBtn" aria-expanded="false">More options ▾</button></div>
@@ -1450,7 +1450,7 @@ async function drawHail(){
   if (hailLayer) { map.removeLayer(hailLayer); hailLayer = null; }
   hail = null; $("hailKey").innerHTML = "";
   if (view === "season" || view === "fortnight" || !meta) return;
-  const days = view === "week" ? (meta.days || []).filter(d => !isSilo(d)) : isSilo($("day").value) ? [] : [$("day").value];
+  const days = view === "week" || view === "three" ? [...(meta.days || []).filter(d => !isSilo(d)), ...(meta.today ? ["today"] : [])] : isSilo($("day").value) ? [] : [$("day").value];
   const hs = (await Promise.all(days.map(hailJSON))).filter(Boolean);
   if (!hs.length || tab !== "rain") return;
   const W = hs[0].grid_w, H = hs[0].grid_h, cells = new Uint8Array(W * H);
@@ -1458,7 +1458,7 @@ async function drawHail(){
     for (let k = 0; k < W * H; k++){ const v = h.cells.charCodeAt(k) - 48; if (v > cells[k]) cells[k] = v; }
   if (!cells.some(v => v)) return;
   hail = {cells, W, H, bounds: hs[0].bounds};
-  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">radar echo at the top of its scale${view === "week" ? " over the 7 days" : ""}: possible = one scan, likely = two or more${hailOn ? "" : " · turned off above"}</span>`;
+  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">radar echo at the top of its scale${view === "week" ? " over the 7 days" : view === "three" ? " over the 3 days" : ""}${meta.today ? " and today so far" : ""}: possible = one scan, likely = two or more${hailOn ? "" : " · turned off above"}</span>`;
   if (!hailOn) return;
   const f = 4, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
   const ctx = cv.getContext("2d"), stripes = hailPattern(ctx, "rgba(214,0,214,.95)");
@@ -1478,20 +1478,22 @@ function hailAt(lat, lon){
   return hail.cells[Math.floor(fy * hail.H) * hail.W + Math.floor(fx * hail.W)];
 }
 async function draw(){
-  const week = view === "week", fort = view === "fortnight", season = view === "season" || fort;   // fort: the last 14 days, built like the season
+  const three = view === "three", week = view === "week" || three, fort = view === "fortnight", season = view === "season" || fort;   // fort: the last 14 days, built like the season; three: the last 3 days, built like the week
+  const N = three ? 3 : 7, latestWeek = three || !$("weekSel").value || $("weekSel").value === "latest";
   const ad = allDays(), latestEnd = ad[ad.length - 1];
   // an earlier week, or the latest one when SILO can fill a day the radar missed: added up here
-  const past = week && (($("weekSel").value && $("weekSel").value !== "latest") || [...Array(7)].some((_, i) => isSilo(addDays(latestEnd, -i))));
+  const past = three || (week && (!latestWeek || [...Array(7)].some((_, i) => isSilo(addDays(latestEnd, -i)))));
   const day = week ? "week" : fort ? "fortnight" : season ? "season" : $("day").value, silo = !week && !season && isSilo(day);
-  $("dayField").hidden = week || season; $("weekField").hidden = !week;
+  $("dayField").hidden = week || season; $("weekField").hidden = !week || three;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
-  try { meta = past ? await buildWeek($("weekSel").value === "latest" || !$("weekSel").value ? latestEnd : $("weekSel").value)
-               : await getJSON(silo ? `data/silo/${day}.json` : `data/${day}.json`); }
+  try { meta = past ? await buildWeek(latestWeek ? latestEnd : $("weekSel").value, N)
+               : await getJSON(silo ? `data/silo/${day}.json` : `data/${day}.json`);
+        if (week && latestWeek) meta = await addToday(meta); }   // the latest 3 or 7 days also take in the rain since 9am today
   catch(e){
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : season ? "That total isn't available yet." : "That day's map isn't available yet."}</span>`; return; }
-  const fitKey = week ? "week" : fort ? "fortnight" : season ? "season" : null;
+  const fitKey = three ? "three" : week ? "week" : fort ? "fortnight" : season ? "season" : null;
   if (fitKey && meta && meta.grid) { fitBreaks(meta.grid, fitKey); legend(); }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
   $("mRaw").disabled = (today && !prov) || silo || season; $("mCorr").disabled = (today && !prov) || silo || season;
@@ -1536,8 +1538,10 @@ async function draw(){
     return;
   }
   if (week){
-    $("stats").innerHTML = stat(`${meta.days.length} of 7`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") + stat("Gauge-corrected", "Each day checked at 9am");
-    $("notes").textContent = meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "";
+    const tt = meta.today;
+    $("stats").innerHTML = stat(`${meta.days.length} of ${N}`, "Finished days added") + stat(span(addDays(meta.from, -1), meta.to), "9am to 9am") +
+      (tt ? stat(`+ today`, `Since 9am, to ${tt.as_of}`) : stat("Gauge-corrected", "Each day checked at 9am"));
+    $("notes").textContent = (tt ? `Includes the rain since 9am today (to ${tt.as_of}, ${tt.provisional ? "provisionally gauge-corrected" : "radar only so far"}), updated through the day while it's raining. ` : "") + (meta.missing.length ? `Not included (no finished map): ${meta.missing.length === 1 ? rainDay(meta.missing[0]) : `${meta.missing.length} rain days between ${wd(addDays(meta.missing[0], -1))} and ${wd(meta.missing[meta.missing.length - 1])} ${part(meta.missing[meta.missing.length - 1], {month:"short"})}`}. Totals will read low wherever it rained then.` : "");
     $("gauges").innerHTML = `<thead><tr><th>Gauge</th><th class="n">Gauge</th><th class="n">Radar</th><th class="n" title="How far the radar was above (+) or below (−) the gauge">Radar vs gauge</th><th class="n">Map</th></tr></thead><tbody>` +
       g.filter(x => !x.unplaced).sort((a,b)=>b.mm-a.mm).map(x => `<tr><td>${x.name}${x.source==="mine"?" (local)":""}${x.days<meta.days.length?` (${x.days} of ${meta.days.length} days)`:""}</td><td class="n">${fmt(x.mm)}</td><td class="n">${fmt(x.radar_mm)}</td><td class="n">${pctDiff(x.mm, x.radar_mm)}</td><td class="n">${fmt(x.corrected_mm)}</td></tr>`).join("") + `</tbody>`;
     drawGauges(); declutter();
@@ -1717,8 +1721,8 @@ $("hSeg").onclick = async e => { const b = e.target.closest("button"); if (!b) r
 // so no extra files are kept. Their map is drawn from the 2 km tap-to-read grid, smoothed.
 const dayFiles = {};
 const dayJSON = d => dayFiles[d] || (dayFiles[d] = getJSON(isSilo(d) ? `data/silo/${d}.json` : `data/${d}.json`));
-async function buildWeek(end){
-  const want = [...Array(7)].map((_, i) => addDays(end, i - 6)), have = want.filter(d => idx.days.includes(d) || isSilo(d));
+async function buildWeek(end, N = 7){
+  const want = [...Array(N)].map((_, i) => addDays(end, i - N + 1)), have = want.filter(d => idx.days.includes(d) || isSilo(d));
   if (!have.length) throw new Error("no days");
   const ms = await Promise.all(have.map(dayJSON)), n = ms[0].grid.length;
   const add = key => { const out = new Array(n).fill(0);
@@ -1733,6 +1737,21 @@ async function buildWeek(end){
   }
   return {days: have, missing: want.filter(d => !have.includes(d)), from: want[0], to: end, bounds: ms[0].bounds,
           grid_w: ms[0].grid_w, grid_h: ms[0].grid_h, grid: add("grid"), grid_raw: add("grid_raw"), gauges: Object.values(gauges)};
+}
+// add the running total since 9am today (today.json, provisionally gauge-corrected when it can be) to a finished
+// run of days, so the latest 3 or 7 days keep growing through a rain day instead of waiting for the 9am run
+async function addToday(m){
+  let t; try { t = await getJSON("data/today.json" + bust()); } catch(e){ return m; }
+  if (!t || !t.grid || t.grid.length !== m.grid.length || t.date !== addDays(m.to, 1)) return m;
+  const sum = (a, b) => a.map((v, k) => v < 0 || b[k] < 0 ? -1 : v + b[k]);
+  const gauges = (m.gauges || []).map(g => ({...g}));
+  for (const g of t.gauges || []){
+    if (g.radar_mm == null || g.ignored || g.unplaced || g.corrected_mm == null) continue;
+    let x = gauges.find(y => y.name === g.name);
+    if (!x) gauges.push(x = {name: g.name, lat: g.lat, lon: g.lon, source: g.source, mm: 0, radar_mm: 0, corrected_mm: 0, days: 0});
+    for (const k of ["mm", "radar_mm", "corrected_mm"]) x[k] = Math.round((x[k] + (g[k] || 0)) * 10) / 10;
+  }
+  return {...m, grid: sum(m.grid, t.grid), grid_raw: m.grid_raw ? sum(m.grid_raw, t.grid_raw || t.grid) : m.grid_raw, gauges, today: t};
 }
 function gridImage(vals, W, H){   // colour a tap-to-read grid (mm x10), 3x larger with bilinear smoothing
   const f = 3, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
@@ -1781,7 +1800,7 @@ function readTap(){
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   const hz = hailAt(tapAt.lat, tapAt.lng);
-  $("tap").innerHTML = (hz ? `<b class="hailtxt">${hz === 2 ? "Likely" : "Possible"} hail core</b> seen here by the radar. ` : "") + (v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"?" over the 7 days":view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`);
+  $("tap").innerHTML = (hz ? `<b class="hailtxt">${hz === 2 ? "Likely" : "Possible"} hail core</b> seen here by the radar. ` : "") + (v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"||view==="three"?` over the ${view==="three"?3:7} days${meta.today?" plus today so far":""}`:view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`);
 }
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
@@ -1940,9 +1959,13 @@ let rw = innerWidth, rh = innerHeight;   // phones: refit on a width change only
 addEventListener("resize", () => { if (innerWidth !== rw || (innerWidth > 600 && innerHeight !== rh)) { rw = innerWidth; rh = innerHeight; fitMap(); } });
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
-const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vWeek").setAttribute("aria-pressed", v==="week"); $("vFort").setAttribute("aria-pressed", v==="fortnight"); $("vSeason").setAttribute("aria-pressed", v==="season"); legend(); show(); };
+const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vThree").setAttribute("aria-pressed", v==="three"); $("vWeek").setAttribute("aria-pressed", v==="week"); $("vFort").setAttribute("aria-pressed", v==="fortnight"); $("vSeason").setAttribute("aria-pressed", v==="season"); legend(); show(); };
 $("vDay").onclick = () => setView("day");
 $("vWeek").onclick = () => setView("week");
+$("vThree").onclick = () => setView("three");
+// while the page is open, pick up the latest running total (the radar job refreshes it about hourly while it rains)
+setInterval(() => { if (document.visibilityState === "visible" && tab === "rain" && idx &&
+  (view === "three" || (view === "week" && (!$("weekSel").value || $("weekSel").value === "latest")) || (view === "day" && $("day").value === "today"))) show(); }, 15 * 60 * 1000);
 $("vSeason").onclick = () => setView("season");
 $("vFort").onclick = () => setView("fortnight");
 
