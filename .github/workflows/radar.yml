@@ -750,8 +750,13 @@ jobs:
                   issued = next((ln for ln in lines if ln.lower().startswith("issued at")), "")
                   warn.append({"id": n[:-4], "title": title[:160], "issued": issued[:120], "text": text[:6000]})
               log(f"  flood warnings for this river system: {[w['id'] + ' ' + w['title'] for w in warn] or 'none'}")
+              rivers = river_heights(src, names)
               out = {"checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "warnings": warn,
-                     "rivers": river_heights(src, names)}
+                     "rivers": rivers, "peaks": warning_peaks(warn)}
+              try:
+                  river_history(rivers)
+              except Exception as e:
+                  log(f"  river history skipped: {e}")
               p = os.path.join(DATA, "flood_warn.json")
               old = json.load(open(p)) if os.path.exists(p) else {}
               if {k: v for k, v in old.items() if k != "checked"} != {k: v for k, v in out.items() if k != "checked"}:
@@ -759,6 +764,86 @@ jobs:
                       json.dump(out, f, separators=(",", ":"))
           
           
+          def warning_peaks(warn):
+              """The Bureau's predicted (or reached) peaks in its flood warnings, by gauge: {"Condamine River at Tummaville":
+              {"h": 5.7, "when": "Saturday afternoon", "said": "...", "warn": "IDQ20827", "issued": "...", "past": False}}.
+              A sentence like "The river may peak near 5.70 m Saturday afternoon" belongs to the gauge named just before."""
+              out = {}
+              gauge_re = re.compile(r"([A-Z][A-Za-z']+(?: [A-Z][A-Za-z']+)* (?:River|Creek|Brook|Gully) at [A-Z][A-Za-z'-]+(?: [A-Z][A-Za-z'-]+)*)")
+              peak_re = re.compile(r"\b(?:has |have )?peak(?:s|ed)?\s+(?:near|around|at|about|of)\s+(\d+(?:\.\d+)?)\s*m(?:etres)?\b([^.;]*)", re.I)
+              # "... may reach around the minor flood level (6.00 m) overnight Sunday into Monday" / "is expected to reach 4.2 m ..."
+              reach_re = re.compile(r"\b(?:may|is likely to|is expected to|could|will)\s+(?:reach|rise to|exceed)\s+(?:around|near|about)?\s*(?:the\s+\w+\s+flood\s+level\s*)?\(?(\d+(?:\.\d+)?)\s*m(?:etres)?\)?([^.;]*)", re.I)
+              for w in warn:
+                  text = " ".join(w["text"].split())
+                  cur = None
+                  for sent in re.split(r"(?<=[.!?])\s+", text):
+                      g = gauge_re.findall(sent)
+                      if g:
+                          cur = re.sub(r"^The ", "", g[0])
+                      m = peak_re.search(sent) or reach_re.search(sent)
+                      if m and cur:
+                          when = m.group(2).strip(" ,")
+                          when = re.split(r",| with ", when)[0].strip()
+                          past = bool(re.search(r"\b(has|have) peaked|\bpeaked\b", sent, re.I))
+                          out[cur] = {"h": float(m.group(1)), "when": when[:60], "said": sent[:240], "warn": w["id"],
+                                      "issued": w.get("issued", ""), "past": past}
+              if out:
+                  log(f"  predicted peaks in the warnings: {[(k, v['h'], v['when']) for k, v in out.items()]}")
+              return out
+
+
+          def river_history(rivers):
+              """Each gauge's readings over the last 26 hours, kept in state/river_hist.json and published (only gauges that
+              moved) as data/river_hist.json, {name: [[minutes since 1970, height], ...]}, for the page's trend."""
+              hd = rivers.get("headers") or []
+              col = lambda pat: next((i for i, h in enumerate(hd) if re.search(pat, h, re.I)), None)
+              iN, iT, iH = col("station") or 0, col("time"), col("height")
+              if iT is None or iH is None:
+                  return
+              now = dt.datetime.now(dt.timezone.utc)
+              p = os.path.join(STATE, "river_hist.json")
+              try:
+                  hist = json.load(open(p))
+              except (OSError, ValueError):
+                  hist = {}
+              days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+              def when(s):   # "05.00AM Mon" -> that time, Queensland, within the last week
+                  m = re.match(r"(\d{1,2})\.(\d{2})\s*([AP]M)\s+(\w{3})", s or "")
+                  if not m or m.group(4) not in days:
+                      return None
+                  hh = int(m.group(1)) % 12 + (12 if m.group(3) == "PM" else 0)
+                  q = now + TZ_OFFSET
+                  for back in range(8):
+                      d = q - dt.timedelta(days=back)
+                      if d.weekday() == days.index(m.group(4)):
+                          t = d.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0) - TZ_OFFSET
+                          if t <= now + dt.timedelta(minutes=10):
+                              return t
+                  return None
+              cut = int((now - dt.timedelta(hours=26)).timestamp() // 60)
+              for r in rivers.get("rows") or []:
+                  if len(r) <= max(iT, iH):
+                      continue
+                  try:
+                      h = float(r[iH])
+                  except ValueError:
+                      continue
+                  t = when(r[iT])
+                  if t is None:
+                      continue
+                  tm = int(t.timestamp() // 60)
+                  pts = [x for x in hist.get(r[iN], []) if x[0] >= cut]
+                  if not pts or pts[-1][0] != tm:
+                      pts.append([tm, round(h, 2)])
+                  hist[r[iN]] = pts
+              hist = {k: v for k, v in hist.items() if v}
+              os.makedirs(STATE, exist_ok=True)
+              json.dump(hist, open(p, "w"), separators=(",", ":"))
+              moved = {k: v for k, v in hist.items() if len(v) >= 2 and max(x[1] for x in v) - min(x[1] for x in v) >= 0.02}
+              with open(os.path.join(DATA, "river_hist.json"), "w") as f:
+                  json.dump({"made": now.strftime("%Y-%m-%dT%H:%MZ"), "gauges": moved}, f, separators=(",", ":"))
+
+
           def write_known_gauges():
               """data/gauge_known.json: the (matching) names of the local gauges that have a position, private or from
               the page, so the page's form knows when a gauge is new and asks where it is. Names only, never positions."""
