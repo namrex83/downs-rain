@@ -206,7 +206,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .tsv{font-size:.85rem;color:var(--ink-2)} .tsv b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);font-size:.95rem}
 .tsv .up{color:#c06000} .tsv .dn{color:var(--ink-3)}
 .fchip{display:inline-block;margin-left:4px;padding:0 7px;border-radius:999px;color:#fff;font-size:.72rem;font-weight:700;vertical-align:.08em}
-.fchip.g2{background:#e00000} .fchip.g3{background:#a00000} .fchip.g4{background:#7a2db0}
+.fchip.g0{background:#5f8f6b} .fchip.g2{background:#e00000} .fchip.g3{background:#a00000} .fchip.g4{background:#7a2db0}
 .tsai{font-size:.78rem;color:#6a3fa0;font-weight:600} .tsai.q{color:var(--ink-3);font-weight:500}
 .ts .pkline{font-size:.78rem}
 .gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600} .estline{color:#6a3fa0;font-weight:600} .aicol{color:#6a3fa0;font-weight:700;white-space:nowrap} .ai-quiet{color:var(--ink-3);font-weight:500} .aicol small{font-weight:500;font-size:.72rem} .aidisc{display:block;margin-top:3px;font-size:.72rem;line-height:1.3;color:var(--ink-3)}
@@ -1005,7 +1005,7 @@ function drawStreams(){
   tubeLabels();
 }
 function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
-let DOTLIST = null, RHIST = {}, FEST = {};
+let DOTLIST = null, RHIST = {}, FEST = {}, FLV = null;
 // official positions of the Condamine gauges from the Queensland water monitoring records (the map's own positions
 // for these come from place names and can be a few km out)
 const GAUGE_POS = {"Condamine River at Elbow Valley": [-28.3714, 152.1415], "Condamine River at Warwick": [-28.2143, 152.0485],
@@ -1021,16 +1021,50 @@ const GAUGE_POS = {"Condamine River at Elbow Valley": [-28.3714, 152.1415], "Con
   "Oakey Creek at Dalmeny": [-27.4397, 151.6583], "Oakey Creek at Bowenville Reserve": [-27.3267, 151.4547],
   "Condamine River at Brosnans Barn": [-28.3322, 152.3142], "Glengallan Creek at Rocky Ridge": [-28.1176, 151.9613]};
 // the site's own estimate for a gauge (data/flood_est.json, from .github/flood_model.py), by the Bureau's gauge name
-const estFor = name => Object.entries(FEST).find(([k]) => name === k || name.startsWith(k + " ") || k.startsWith(name + " "))?.[1];
+const estFor = name => FEST[name];   // exact: "Warwick" and "Warwick (Scots College)", or "Allora" and "Allora Alert", are different gauges
 const whenTxt = iso => new Date(iso).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", hour: "numeric"}).replace(/,? (\d+),? /, " $1, ");
+// A gauge's flood heights (minor, moderate, major): from the Bureau's Queensland list (data/flood_levels.json, by the
+// station number in the gauge's graph link), else from what current flood warnings say ("...minor flood level (6.00 m)").
+function warnLevels(){
+  if (warnLevels.fw === FW) return warnLevels.out;
+  const out = {};
+  for (const w of (FW && FW.warnings) || []) for (const sn of w.text.replace(/\s+/g, " ").split(/(?<=\.)\s+/)) {
+    const g = sn.match(/([A-Z][A-Za-z']+(?: [A-Z][A-Za-z']+)* (?:River|Creek) at [A-Z][A-Za-z']+(?: [A-Z][A-Za-z']+)*)/); if (!g) continue;
+    for (const m of sn.matchAll(/(minor|moderate|major) flood level \((\d+(?:\.\d+)?) ?m\)/gi))
+      (out[g[1]] = out[g[1]] || {})[m[1].toLowerCase()] = +m[2];
+  }
+  warnLevels.fw = FW; return warnLevels.out = out;
+}
+function levelsFor(name){
+  const u = FW && FW.rivers && (FW.rivers.plots || {})[name], id = u && (u.match(/\.(\d{6})\.plt/) || [])[1];
+  const L = FLV && id && FLV.by_id && FLV.by_id[id];
+  if (L) return {minor: L[0], moderate: L[1], major: L[2]};
+  if (!u && FLV && FLV.by_name && name.includes(" at ")) {   // no graph link: by the place name
+    const p = FLV.by_name[name.split(" at ")[1].replace(/\s*\(.*\)|\s+(HG|TW|Tm|Alert)$/g, "").toUpperCase()];
+    if (p) return {minor: p[0], moderate: p[1], major: p[2]};
+  }
+  return warnLevels()[name] || null;
+}
+// what a height would mean at this gauge: {t: "minor", c: "g2"}, "below minor", or null when its levels aren't known
+function floodWord(name, h){
+  const L = levelsFor(name); if (!L || h == null) return null;
+  if (L.major != null && h >= L.major) return {t: "major", c: "g4"};
+  if (L.moderate != null && h >= L.moderate) return {t: "moderate", c: "g3"};
+  if (L.minor != null && h >= L.minor) return {t: "minor", c: "g2"};
+  if (L.minor != null) return {t: "below minor", c: "g0"};
+  return null;
+}
+const floodChip = (name, h) => { const f = floodWord(name, h); return f ? ` <span class="fchip ${f.c}">${f.t}</span>` : ""; };
 function estTxt(e, long){
   if (e.how === "steady") return `🤖 <b>AI: no rise expected in the next 48 hours</b> <span class="gnote2">(matched to this gauge's past behaviour; it isn't rising and no flood is on its way from upstream)</span>`;
-  if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
+  if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
   const t = new Date(e.t_mid).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(",", "");
-  if (!long) return `AI est.: ${e.mid.toFixed(2)} m ${whenTxt(e.t_mid)}`;
+  if (!long) return `AI est.: ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} ${whenTxt(e.t_mid)}`;
   const why = e.how === "from_up" ? `worked out from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m and ${e.n} past floods`
     : `matched to ${e.n} past times it was rising like this`;
-  return `🤖 <b>AI estimate: peak ${e.mid.toFixed(2)} m at ${t}</b><br><span class="gnote2">Likely range ${e.lo.toFixed(2)}–${e.hi.toFixed(2)} m, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}; ${why}.</span>`
+  const L = levelsFor(e.name);
+  return `🤖 <b>AI estimate: peak ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} at ${t}</b><br>`
+    + (L ? `<span class="gnote2">Flood levels here: ${["minor", "moderate", "major"].filter(k => L[k] != null).map(k => `${k} ${L[k]} m`).join(", ")}.</span><br>` : "") + `<span class="gnote2">Likely range ${e.lo.toFixed(2)}–${e.hi.toFixed(2)} m, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}; ${why}.</span>`
     + `<br><span class="aidisc">Disclaimer: an automated estimate learned from past floods in the Queensland Government's river records. It is not a Bureau of Meteorology forecast or warning, it can be well out (especially with more rain to come), and must not be relied on for safety or property decisions. Follow the Bureau's flood warnings and emergency services.</span>`;
 }
 // What's ahead for a gauge (in its box on the map): the Bureau's predicted peak if a flood warning gives one; which way
@@ -1427,8 +1461,8 @@ function drawRivers(fw){
   function aiCell(r){ if (!anyAI) return ""; const e = estFor(g(r, iName));
     if (!e) return `<td class="n aicol"></td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>no rise</small></td>`;
-    if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
-    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
+    if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
+    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
   const asLines = sel && cList === "lines";   // a picked catchment: as river lines (or the full table)
   $("rivers").innerHTML = asLines ? "" : head + `<tbody>${(sel ? rows : top).map(tr).join("")}</tbody>`;
@@ -1438,9 +1472,9 @@ function drawRivers(fw){
     const place = nm.includes(" at ") ? nm.split(" at ").slice(1).join(" at ") : nm;
     return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
-      + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`} ${pk[1].when}</div>` : "")
-      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`
-         : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`) };
+      + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
+      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+         : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";
   else $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
@@ -1486,6 +1520,7 @@ async function drawWatch(){
     const fw = FW = await getJSON("data/flood_warn.json");
     try { RHIST = (await getJSON("data/river_hist.json")).gauges || {}; } catch(e){ RHIST = {}; }
     try { FEST = (await getJSON("data/flood_est.json")).estimates || {}; } catch(e){ FEST = {}; }
+    if (!FLV) try { FLV = await getJSON("data/flood_levels.json"); } catch(e){ FLV = {by_id: {}, by_name: {}}; }
     drawRivers(fw); markCatchOptions(fw);
     const iN = Math.max(0, ((fw.rivers || {}).headers || []).findIndex(h => /station/i.test(h)));
     const mine = pick ? inCatch(pick, gaugeRows(fw), iN).map(r => r[iN]) : null;
