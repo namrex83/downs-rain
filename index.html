@@ -2549,7 +2549,7 @@ async function fChartDaily(at, pinned, still, quick){   // quick: the site's thr
 }
 // draws the chart from FC: "cum" = each model's running total, "day" = each day's rain (10am to 10am).
 // Touching or hovering over it shows that day's numbers for every model.
-let FC = null, fcMode = "cum";
+let FC = null, fcMode = "both";   // the chart opens on Both: daily bars with the running totals over them
 const FC_SHORT = {"ECMWF AI": "EC AI", "ACCESS-G (BOM)": "ACCESS-G", "UK Met Office": "UKMO", "ICON (Germany)": "ICON", "JMA (Japan)": "JMA"};
 // GFS, ECMWF and EC AI on the chart are scaled so each 10am-to-10am day adds up to the same rain as the maps (the
 // page's own model files); Open-Meteo's hourly figures only decide when in the day it falls. (Its hourly AI model
