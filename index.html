@@ -189,6 +189,26 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .creekbtn .ck{display:inline-block;width:18px;height:6px;border-radius:3px;background:linear-gradient(90deg,#9b0056 0 33%,#007f86 33% 66%,#8a4a00 66%)}
 .creekbtn a.off{color:var(--ink-3)} .creekbtn a.off .ck{opacity:.3}
 .bomplot{color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,.25);text-underline-offset:2px} .bomplot span{font-size:.75em;color:var(--accent)}
+/* the river line diagram (Catchments): each river or creek a coloured line, its gauges stations on it, creeks joining
+   the river they run into, like a train line diagram */
+.tube{padding:6px 0 4px}
+.tline{position:relative;padding-left:34px;margin:2px 0 6px}
+.tline::before{content:"";position:absolute;left:12px;top:34px;bottom:16px;width:6px;border-radius:3px;background:var(--c)}
+.tlab{display:inline-block;margin:0 0 2px -34px;padding:2px 10px;border-radius:999px;background:var(--c);color:#fff;font-weight:700;font-size:.78rem;letter-spacing:.01em}
+.tline .tline{margin:4px 0 22px} .tline.tend::before{bottom:4px}
+.tline .tline::after{content:"";position:absolute;left:-19px;width:37px;bottom:-16px;height:32px;box-sizing:border-box;border:solid var(--c);border-width:0 6px 6px 0;border-bottom-right-radius:16px}
+.ts{position:relative;padding:5px 0 5px 2px;min-height:28px;line-height:1.3}
+.tsd{position:absolute;left:-29px;top:7px;width:16px;height:16px;border-radius:50%;background:var(--panel);border:4px solid var(--c);box-sizing:border-box;z-index:1}
+.tsd.g1{background:#f0a020}
+.tsd.g2,.tsd.g3,.tsd.g4{width:24px;height:24px;left:-33px;top:3px;border-width:4px}
+.tsd.g2{background:#e00000} .tsd.g3{background:#a00000} .tsd.g4{background:#7a2db0}
+.tsn{font-weight:600;font-size:.92rem} .tsn a{color:inherit}
+.tsv{font-size:.85rem;color:var(--ink-2)} .tsv b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);font-size:.95rem}
+.tsv .up{color:#c06000} .tsv .dn{color:var(--ink-3)}
+.fchip{display:inline-block;margin-left:4px;padding:0 7px;border-radius:999px;color:#fff;font-size:.72rem;font-weight:700;vertical-align:.08em}
+.fchip.g2{background:#e00000} .fchip.g3{background:#a00000} .fchip.g4{background:#7a2db0}
+.tsai{font-size:.78rem;color:#6a3fa0;font-weight:600} .tsai.q{color:var(--ink-3);font-weight:500}
+.ts .pkline{font-size:.78rem}
 .gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600} .estline{color:#6a3fa0;font-weight:600} .aicol{color:#6a3fa0;font-weight:700;white-space:nowrap} .ai-quiet{color:var(--ink-3);font-weight:500} .aicol small{font-weight:500;font-size:.72rem} .aidisc{display:block;margin-top:3px;font-size:.72rem;line-height:1.3;color:var(--ink-3)}
 .clabelpin{overflow:visible} .rchip{display:inline-block;min-width:1.6em;text-align:center;border-radius:5px;padding:0 4px;margin:1px 0;background:#f4f6f8;border:1px solid rgba(0,0,0,.18)} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.85em;height:.85em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g0{visibility:hidden} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
@@ -415,7 +435,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls catchOnly" id="cControls" hidden>
-    <div class="field cshowfield"><div class="seg" id="cShow"><button data-s="table" aria-pressed="true">📋 Table</button><button data-s="map" aria-pressed="false">🗺 Map view</button></div></div>
+    <div class="field cshowfield"><div class="seg" id="cShow"><button data-s="table" aria-pressed="true">🚉 Line diagram</button><button data-s="map" aria-pressed="false">🗺 Map view</button></div></div>
     <div class="field cMapOnly"><span class="eyebrow">Rain on the map</span>
       <div class="seg" id="cView"><button data-v="today" aria-pressed="false">To 9am</button><button data-v="two" aria-pressed="false">2 days</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
     <div class="field rangefield copfield cMapOnly"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
@@ -535,6 +555,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 
   <section class="panel catchOnly" id="watchPanel" hidden>
     <details class="fsec" id="secRiv" open><summary id="sumRiv">🌊 River heights</summary>
+      <div id="riverTube" class="tube"></div>
       <div class="tablewrap"><table id="rivers" class="slim"></table></div>
       <p class="note gkey" id="riverKey"></p>
       <p class="note" id="riverWhen"></p>
@@ -1332,6 +1353,50 @@ function markCatchOptions(fw){   // 🔴 in the list for catchments with a gauge
     o.textContent = `${bad ? "🔴 " : ""}${c.name} (${areaTxt(c)})`;
   }
 }
+// A catchment's gauges as a train-line diagram. Each gauge's river or creek is the name before "at"; the Bureau lists
+// gauges from upstream down, each creek's gauges just before the river gauge below where it joins. So each creek is
+// drawn as a branch line joining its river just above that gauge (creeks of creeks join their creek the same way).
+const TUBE_PARENT = {"West Creek": "Gowrie Creek", "East Creek": "Gowrie Creek", "Gowrie Creek": "Oakey Creek", "Doctors Creek": "Oakey Creek",
+  "Thanes Creek": "Hodgson Creek", "Spring Creek": "Condamine River",
+  "Stanley River": "Brisbane River", "Bremer River": "Brisbane River", "Albert River": "Logan River", "Kilcoy Creek": "Stanley River", "North Maroochy River": "Maroochy River", "South Maroochy River": "Maroochy River", "Lockyer Creek": "Brisbane River",
+  ...Object.fromEntries(["Murphys Creek", "Flagstone Creek", "Ma Ma Creek", "Blackfellow Creek", "Tenthill Creek", "Laidley Creek", "Lagoon Creek",
+    "Lake Dyer", "Lake Clarendon Dam HW", "Buaraba Ck", "Sandy Creek"].map(k => [k, "Lockyer Creek"]))};   // only used when that creek is in the same list
+function streamColour(name){   // the same colour the stream has on the map
+  if (RMAP && RMAP.streams){ let k = 0;
+    for (const st of RMAP.streams){ const c = st.name === "North Branch" ? "#00a0e2" : st.main ? "#0019a8" : TUBE_COL[k++ % TUBE_COL.length];
+      if (st.name.toLowerCase() === name.toLowerCase()) return c; } }
+  if (/ River$/.test(name)) return "#0019a8";
+  let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TUBE_COL[h % TUBE_COL.length];
+}
+function tubeDiagram(rows, nameOf, cell){
+  const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
+  const items = rows.map((r, i) => ({r, i, s: streamOf(nameOf(r))}));
+  const streams = [...new Set(items.map(x => x.s))], at = s => items.filter(x => x.s === s).map(x => x.i);
+  let tops = streams.filter(s => / River$/.test(s) && !streams.includes(TUBE_PARENT[s]));
+  if (!tops.length) tops = [streams.slice().sort((a, b) => at(b).length - at(a).length)[0]];
+  // the end of a creek's first run of gauges: its last gauge before the river below shows up again
+  const runEnd = (s, stop) => { const own = at(s); let e = own[0];
+    for (const i of own) { if (items.some(x => x.i > e && x.i < i && stop(x.s))) break; e = i; } return e; };
+  const parent = {};
+  for (const s of streams){ if (tops.includes(s)) continue;
+    const p = TUBE_PARENT[s];
+    if (p && streams.includes(p) && p !== s) { parent[s] = p; continue; }
+    const e = runEnd(s, x => tops.includes(x)), nx = items.find(x => x.i > e && tops.includes(x.s)), pv = [...items].reverse().find(x => x.i < e && tops.includes(x.s));
+    parent[s] = (nx || pv || {s: tops[0]}).s; }
+  const joinAt = s => { const e = runEnd(s, x => x === parent[s]), nx = items.find(x => x.i > e && x.s === parent[s]); return nx ? nx.i : Infinity; };
+  const line = (s, deep) => {
+    const kids = streams.filter(k => parent[k] === s).map(k => ({k, j: joinAt(k)})), own = items.filter(x => x.s === s);
+    let html = "";
+    for (const x of own){
+      for (const kd of kids.filter(kd => kd.j === x.i)) html += line(kd.k, deep + 1);
+      const c = cell(x.r); html += `<div class="ts"><i class="tsd ${c.lvl}"></i>${c.html}</div>`;
+    }
+    for (const kd of kids.filter(kd => kd.j === Infinity)) html += line(kd.k, deep + 1);
+    return `<div class="tline${kids.some(kd => kd.j === Infinity) ? " tend" : ""}" style="--c:${streamColour(s)}"><span class="tlab">${s}${deep ? ` <small>→ ${parent[s].replace(/ (River|Creek)$/, "")}</small>` : ""}</span>${html}</div>`;
+  };
+  return tops.map(t => line(t, 0)).join("");
+}
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
   const plotOf = n => (rv.plots || {})[n];   // the gauge's river height graph on the Bureau's site
@@ -1348,7 +1413,7 @@ function drawRivers(fw){
   const seenAll = new Set(), every = allRows.filter(r => g(r, iH) !== "" && !seenAll.has(g(r, iName)) && seenAll.add(g(r, iName)));
   drawGaugeDots(every.map(r =>   // every gauge, those in flood big; outside a picked catchment faded
  ({name: g(r, iName), lvl: lvl(r), text: `${shortGauge(g(r, iName))}: ${g(r, iH)} m${rising(r) ? " ▲" : /falling/i.test(g(r, iT)) ? " ▼" : ""}${flood(r) ? " · " + g(r, iC) : ""}`, plot: plotOf(g(r, iName)), other: sel && !rows.includes(r), inArea: areaNames.has(g(r, iName))})));
-  if (!rows.length) { $("rivers").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
+  if (!rows.length) { $("rivers").innerHTML = ""; $("riverTube").innerHTML = ""; $("riversAll").innerHTML = ""; $("riverKey").innerHTML = ""; $("sumRiv").innerHTML = sel ? "🌊 No Bureau river gauges in this catchment" : "🌊 River heights appear after the next radar update"; return; }
   const nameCell = r => { const u = plotOf(g(r, iName)), t = shortGauge(g(r, iName));
     const nm = g(r, iName), pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
     const pkTxt = pk ? `<br><small class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`} ${pk[1].when}</small>` : "";
@@ -1365,8 +1430,19 @@ function drawRivers(fw){
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
     return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
-  $("rivers").innerHTML = head + `<tbody>${top.map(tr).join("")}</tbody>`;
-  $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
+  $("rivers").innerHTML = sel ? "" : head + `<tbody>${top.map(tr).join("")}</tbody>`;
+  $("riverTube").innerHTML = sel ? tubeDiagram(rows, r => g(r, iName), r => {   // a picked catchment: as a line diagram
+    const nm = g(r, iName), u = plotOf(nm), e = estFor(nm), L = lvl(r);
+    const pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
+    const place = nm.includes(" at ") ? nm.split(" at ").slice(1).join(" at ") : nm;
+    return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
+      <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
+      + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`} ${pk[1].when}</div>` : "")
+      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`
+         : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`) };
+  }) : "";
+  if (sel) { $("riversAll").innerHTML = `<details><summary>Show as a table</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rows.map(tr).join("")}</tbody></table></div></details>`; }
+  else $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
   const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
   $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
   $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
