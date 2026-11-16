@@ -32,20 +32,27 @@ def main():
             if re.search(r"condamine|tummaville|cecil plains|loudoun|pratten|minor|moderate", l, re.I):
                 print(i, "|", " || ".join(lines[max(0, i - 1):i + 3]))
         return
-    out = {}
+    # rows like "041499 TUMMAVILLE DRDMW Automatic 5 8 9 Quantitative ...": station number, place, owner, type, then the
+    # minor, moderate and major heights. The station number is the one in the Bureau's river height graph links.
+    out, names = {}, {}
     for l in lines:
-        m = re.match(rf"^(.*?[A-Za-z)].*?)\s+{NUM}\s+{NUM}\s+{NUM}$", l)
-        if m:
-            a, b, c = (float(x) for x in m.groups()[1:])
-            if a < b < c or a <= b <= c and a < c:
-                out[m.group(1).strip()] = [a, b, c]
+        m = re.match(rf"^(\d{{6}})\s+(.+?)\s+(?:Automatic|Manual|Telemetered)\s+{NUM}\s+{NUM}\s+{NUM}\b", l)
+        if not m:
+            continue
+        a, b, c = (float(x) for x in m.groups()[2:])
+        if not (a <= b <= c and a < c):
+            continue
+        out[m.group(1)] = [a, b, c]
+        place = re.sub(r"\s+(Bureau\S*|DRDMW|Seqwater|Sunwater|Gold Coast Water|Unitywater|(?:[A-Z][a-z]+ )+Council)$", "", m.group(2)).strip()
+        names.setdefault(place, []).append([a, b, c])
+    by_name = {k: v[0] for k, v in names.items() if all(x == v[0] for x in v)}   # only where every gauge there agrees
     print(f"{len(out)} gauges with flood levels")
-    for k in list(out)[:40]:
-        print(" ", k, out[k])
+    for k in list(by_name)[:60]:
+        print(" ", k, by_name[k])
     if out:
         os.makedirs("data", exist_ok=True)
         json.dump({"source": "Bureau of Meteorology, Service Level Specification for Flood Forecasting and Warning Services for Queensland",
-                   "levels": out}, open("data/flood_levels.json", "w"), indent=0)
+                   "by_id": out, "by_name": by_name}, open("data/flood_levels.json", "w"), indent=0)
 
 
 main()

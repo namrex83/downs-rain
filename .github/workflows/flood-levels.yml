@@ -30,8 +30,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash .github/pages.sh get
-      - name: Look at the layout
-        run: python -u .github/flood_levels.py --dump | head -400
       - name: Read the flood levels
         run: python -u .github/flood_levels.py
       - name: Publish
