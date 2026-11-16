@@ -1526,6 +1526,10 @@ jobs:
         if: steps.gate.outputs.go == 'true'
         run: python silo.py season || echo "Season total skipped"
 
+      - name: Flood peak estimates
+        if: steps.gate.outputs.go == 'true'
+        run: timeout 120 python .github/flood_model.py now || echo "Flood estimates skipped"
+
       - name: Save working state
         if: always() && steps.gate.outputs.go == 'true'
         uses: actions/cache/save@v5

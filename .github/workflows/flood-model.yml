@@ -1,14 +1,16 @@
 name: Flood model
 
-# The site's own peak estimates for the Condamine's gauges, learned from past floods. Run by hand.
+# The site's own peak estimates for the Condamine's gauges, learned from past floods (.github/flood_model.py).
+# Learning is run by hand every few months (and when the model's code changes); the estimates themselves are worked
+# out on each radar run from the model this publishes.
 on:
   workflow_dispatch: {}
   push:
     branches: [main]
-    paths: [".github/flood_probe.py"]
+    paths: [".github/flood_model.py"]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flood-model
@@ -17,7 +19,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -28,5 +30,18 @@ jobs:
       - name: Install
         run: pip install requests
 
-      - name: Check the Queensland water records
-        run: python -u .github/flood_probe.py
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+
+      - name: Learn from past floods
+        run: python -u .github/flood_model.py train
+
+      - name: First estimates
+        run: python -u .github/flood_model.py now || echo "estimates skipped"
+
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Flood model $(date -u +%Y-%m-%dT%H:%MZ)"
