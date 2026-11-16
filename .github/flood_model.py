@@ -34,10 +34,16 @@ SITES = {
     "422334A": "Kings Creek at Aides Bridge", "422319B": "Dalrymple Creek at Allora", "422306A": "Swan Creek at Swanfels",
     "422313B": "Emu Creek at Emu Vale", "422338A": "Canal Creek at Leyburn", "422350A": "Oakey Creek at Fairview",
     "422326A": "Gowrie Creek at Cranley", "422343A": "Charleys Creek at Chinchilla",
+    "422349B": "Condamine River at Lemon Tree Weir", "422347B": "Condamine River at Pampas Bridge",
+    "422345A": "Condamine River at Lone Pine", "422344A": "Condamine River at Bedarra", "422325A": "Condamine River at Cotswold",
+    "422340B": "Condamine River at Talgai Weir HG", "422341A": "Condamine River at Brosnans Barn",
+    "422317C": "Glengallan Creek at Rocky Ridge", "422359B": "Oakey Creek at Jondaryan", "422360A": "Oakey Creek at Dalmeny",
+    "422361A": "Oakey Creek at Bowenville Reserve",
 }
 # down the main river: each gauge's estimate can come from the one above it
-PAIRS = [("422394A", "422310C"), ("422310C", "422323A"), ("422323A", "422353B"), ("422323A", "422316A"),
-         ("422316A", "422333A"), ("422333A", "422336A"), ("422336A", "422358B")]
+PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422323A"), ("422323A", "422353B"), ("422323A", "422347B"),
+         ("422347B", "422349B"), ("422349B", "422345A"), ("422323A", "422316A"), ("422316A", "422333A"), ("422333A", "422336A"),
+         ("422336A", "422344A"), ("422344A", "422325A"), ("422360A", "422359B"), ("422359B", "422361A"), ("422361A", "422350A")]
 AHEAD_H = 96          # how far ahead a past rise is followed
 RATE_BINS = [0.02, 0.05, 0.1, 0.2, 0.4, 99]   # m an hour
 UP_RISE = 0.5         # an upstream rise of at least this (m) counts as a flood coming down
@@ -333,12 +339,24 @@ def now():
         o = off.get(s_, 0.0)
         if o:
             for k in ("now", "lo", "mid", "hi"):
-                e[k] = round(e[k] + o, 2)
+                if k in e:
+                    e[k] = round(e[k] + o, 2)
             e["bom_offset"] = o
         if e.get("up_site") and off.get(e["up_site"]):
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
+    # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), or no rise expected
+    for site, pts in live.items():
+        if site in est or site not in model["sites"]:
+            continue
+        v, t = max((vv, tt) for tt, vv in pts)
+        low = min(vv for tt, vv in pts if tt <= t)
+        h = pts[-1][1]
+        if v - low >= 0.3 and h < v - 0.02 and (nowt - t).total_seconds() > 2 * 3600:
+            est[site] = {"name": model["sites"][site]["name"], "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
+        else:
+            est[site] = {"name": model["sites"][site]["name"], "now": h, "how": "steady"}
     horizon = nowt + dt.timedelta(hours=48)
-    est = {s: e for s, e in est.items() if dt.datetime.fromisoformat(e["t_lo"]) <= horizon}
+    est = {s: e for s, e in est.items() if "t_lo" not in e or dt.datetime.fromisoformat(e["t_lo"]) <= horizon}
     out = {"made": t_end.strftime("%Y-%m-%dT%H:%M+10:00"), "model_made": model.get("made"),
            "now": {SITES[s]: round(p[-1][1], 2) for s, p in live.items() if s in SITES},
            "estimates": {e["name"]: e for e in est.values()}}

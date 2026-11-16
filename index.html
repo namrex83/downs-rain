@@ -186,7 +186,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .creekbtn .ck{display:inline-block;width:18px;height:6px;border-radius:3px;background:linear-gradient(90deg,#9b0056 0 33%,#007f86 33% 66%,#8a4a00 66%)}
 .creekbtn a.off{color:var(--ink-3)} .creekbtn a.off .ck{opacity:.3}
 .bomplot{color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,.25);text-underline-offset:2px} .bomplot span{font-size:.75em;color:var(--accent)}
-.gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600} .estline{color:#6a3fa0;font-weight:600} .aicol{color:#6a3fa0;font-weight:700;white-space:nowrap} .aicol small{font-weight:500;font-size:.72rem} .aidisc{display:block;margin-top:3px;font-size:.72rem;line-height:1.3;color:var(--ink-3)}
+.gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600} .estline{color:#6a3fa0;font-weight:600} .aicol{color:#6a3fa0;font-weight:700;white-space:nowrap} .ai-quiet{color:var(--ink-3);font-weight:500} .aicol small{font-weight:500;font-size:.72rem} .aidisc{display:block;margin-top:3px;font-size:.72rem;line-height:1.3;color:var(--ink-3)}
 .clabelpin{overflow:visible} .rchip{display:inline-block;min-width:1.6em;text-align:center;border-radius:5px;padding:0 4px;margin:1px 0;background:#f4f6f8;border:1px solid rgba(0,0,0,.18)} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.85em;height:.85em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g0{visibility:hidden} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
@@ -997,8 +997,10 @@ const GAUGE_POS = {"Condamine River at Elbow Valley": [-28.3714, 152.1415], "Con
   "Condamine River at Brosnans Barn": [-28.3322, 152.3142], "Glengallan Creek at Rocky Ridge": [-28.1176, 151.9613]};
 // the site's own estimate for a gauge (data/flood_est.json, from .github/flood_model.py), by the Bureau's gauge name
 const estFor = name => Object.entries(FEST).find(([k]) => name === k || name.startsWith(k + " ") || k.startsWith(name + " "))?.[1];
-const whenTxt = iso => new Date(iso).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric"}).replace(",", "");
+const whenTxt = iso => new Date(iso).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", hour: "numeric"}).replace(/,? (\d+),? /, " $1, ");
 function estTxt(e, long){
+  if (e.how === "steady") return `🤖 <b>AI: no rise expected in the next 48 hours</b> <span class="gnote2">(matched to this gauge's past behaviour; it isn't rising and no flood is on its way from upstream)</span>`;
+  if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
   const t = new Date(e.t_mid).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(",", "");
   if (!long) return `AI est.: ${e.mid.toFixed(2)} m ${whenTxt(e.t_mid)}`;
   const why = e.how === "from_up" ? `worked out from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m and ${e.n} past floods`
@@ -1354,7 +1356,10 @@ function drawRivers(fw){
   const rest = rows.filter(r => !top.includes(r));
   const anyAI = rows.some(r => estFor(g(r, iName)));   // the AI column only when there's an estimate to show
   function aiCell(r){ if (!anyAI) return ""; const e = estFor(g(r, iName));
-    return e ? `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>` : `<td class="n aicol"></td>`; }
+    if (!e) return `<td class="n aicol"></td>`;
+    if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>no rise</small></td>`;
+    if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
+    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
   $("rivers").innerHTML = head + `<tbody>${top.map(tr).join("")}</tbody>`;
   $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
