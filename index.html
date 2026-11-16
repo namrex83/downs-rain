@@ -2587,7 +2587,18 @@ const hHour = t => { const h = qld(t).getUTCHours(); return `${h % 12 || 12}${h 
 const hDay = t => `${part(qDate(t), {weekday: "short"})} ${part(qDate(t), {day: "numeric", month: "short"})}`;
 const hWhen = t => `${hDay(t)}, ${hHour(t)}`;
 // the chart's three views: running total, each day's own total as bars, rain in each 3 hours
-const fcButtons = () => `<div class="seg cmode"><button data-c="cum" aria-pressed="${fcMode === "cum"}">Running total</button><button data-c="bars" aria-pressed="${fcMode === "bars"}">Daily</button><button data-c="day" aria-pressed="${fcMode === "day"}">3-hourly</button></div>`;
+const fcButtons = () => `<div class="seg cmode"><button data-c="cum" aria-pressed="${fcMode === "cum"}">Running total</button><button data-c="bars" aria-pressed="${fcMode === "bars"}">Daily</button><button data-c="both" aria-pressed="${fcMode === "both"}">Both</button></div>`;
+// Both: the running total on top and each day's bars underneath, the days lined up
+function fChartDrawBoth(){
+  fcMode = "cum"; const ok = fChartDrawHourly();
+  const top = ok === false ? "" : $("fChart").querySelector(".cwrap").outerHTML;
+  fcMode = "bars"; const ok2 = fChartDrawBars(); fcMode = "both";
+  if (ok2 === false) return false;
+  $("fChart").querySelector(".cwrap").insertAdjacentHTML("beforebegin", top);
+  $("fChart").querySelectorAll(".cmode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.c === "both"));
+  const f = $("fChart").querySelector(".cfoot span"); if (f) f.textContent = "Top: the running total, hour by hour (dashed = median). Bottom: rain each day, 10am to 10am, a bar for each model (dashed = median). Tap a day for its numbers.";
+  fitMap();
+}
 // Daily: a bar for each forecast day (10am to 10am, as on the map) at the median of the models' totals for that
 // day, each model's own total marked across it as a coloured dash, and BOM's figure for the day as a green dot
 function fChartDrawBars(){
@@ -2653,7 +2664,9 @@ function fChartDrawBars(){
   fitMap();
 }
 function fChartDrawHourly(){
+  if (fcMode === "day") fcMode = "bars";   // (the 3-hourly view is gone)
   if (fcMode === "bars") return fChartDrawBars();
+  if (fcMode === "both") return fChartDrawBoth();
   const {hourly, pinned} = FC, cum = fcMode === "cum";
   // the time span: the same days as the map. 3/7/9/15 days from 10am at the start of the first forecast day not
   // finished yet; Daily: the one day picked (10am to 10am)
@@ -2812,7 +2825,7 @@ function fChartDraw(){
   const last = med.length ? med[med.length - 1][1] : null;
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
     <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${Object.keys(vals[k]).length ? fmt(Math.max(...Object.values(vals[k]))) : "–"}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
-    <div class="cfoot"><span>${cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="bars" aria-pressed="${!cum}">Daily</button></div></div>`;
+    <div class="cfoot"><span>${cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="bars" aria-pressed="${!cum}">Daily</button><button data-c="both" aria-pressed="false" disabled title="Needs the hour-by-hour forecasts">Both</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   // touch / hover readout
   const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
