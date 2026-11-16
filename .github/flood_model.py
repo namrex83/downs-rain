@@ -402,7 +402,7 @@ def now():
             continue
         dnow = pd[-1][1]
         src = None
-        if up in est and est[up]["how"] == "rise":   # still rising up there: where it's heading
+        if up in est and est[up]["how"] in ("rise", "from_up"):   # still rising up there, or a wave on its way: where it's heading
             e = est[up]
             low = min(vv for tt, vv in pu) if pu else e["now"]
             if e["mid"] - low >= UP_RISE:
@@ -425,8 +425,8 @@ def now():
         uv, urise, ut, kind = src
         rise = p["a"] + p["b"] * urise + p["c"] * dnow
         t_mid = ut + dt.timedelta(hours=p["lag"][1])
-        if t_mid < nowt - dt.timedelta(hours=3) or rise <= 0.1:
-            continue   # it's been and gone, or nothing much to come
+        if t_mid < nowt or rise <= 0.1:
+            continue   # its time has passed (the gauge's own readings say what's happening now), or nothing much to come
         cand = {"name": name_of(dn), "now": dnow, "how": "from_up",
                 "up": name_of(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
                 "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
