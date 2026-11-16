@@ -1,0 +1,40 @@
+name: Flood levels
+
+# The Bureau's minor / moderate / major flood heights for each Queensland gauge (.github/flood_levels.py). They
+# rarely change, so this is run by hand (and when the script changes).
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [".github/flood_levels.py"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-flood-levels
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install requests pypdf
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+      - name: Look at the layout
+        run: python -u .github/flood_levels.py --dump | head -400
+      - name: Read the flood levels
+        run: python -u .github/flood_levels.py
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Flood levels $(date -u +%Y-%m-%dT%H:%MZ)"
