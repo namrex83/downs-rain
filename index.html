@@ -135,7 +135,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
 .outlinks a b{display:block;font-size:1rem}
 .outlinks a span{display:block;font-size:.82rem;color:var(--ink-2)}
 .outlinks a::after{content:"↗";margin-left:auto;color:var(--accent);font-weight:700}
-.rimg{clip-path:inset(4.5% 0 4.5% 0)}
+.rimg{clip-path:inset(4.5% 0 4.5% 0);filter:url(#rsmooth)}
 .rpred{filter:saturate(.75) brightness(1.05)}   /* predicted frames look slightly washed out */   /* hide BOM's title and time bars along the top and bottom */
 .rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
@@ -503,6 +503,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="tap" id="wRead">Touch the chart for the wind at any time.</div>
     <p class="note wlink"><b>Local weather conditions:</b> live readings from the WAND weather station network (wind, Delta T, inversions) — <a href="https://app.wand.com.au/" target="_blank" rel="noopener">open WAND ↗</a> · Dalby's current conditions and radar on Oz Forecast — <a href="https://ozforecast.com.au/cgi-bin/weather.cgi?station=Dalby.QLD&amp;radar" target="_blank" rel="noopener">open Oz Forecast ↗</a></p>
   </section>
+  <!-- smooths the Bureau's blocky radar pictures (Radar tab): blur, then firm the edge back up, so the rain areas get
+       rounded, flowing outlines; the blur is set to the picture's pixel size on screen as the map zooms -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rsmooth" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
+    <feGaussianBlur id="rsmoothBlur" stdDeviation="1.5"/><feComponentTransfer><feFuncA type="linear" slope="2.6" intercept="-0.45"/></feComponentTransfer></filter></svg>
   <div id="mapRow"><div id="map"></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -3523,7 +3527,8 @@ async function rNewest(){
 }
 function rShow(i){
   rPos = i;
-  rLayers.forEach((l, k) => l.setOpacity(k === i ? 0.8 : 0));
+  rLayers.forEach((l, k) => { l.setOpacity(k === i ? 0.8 : 0); const el = l.getElement(); if (el) el.style.visibility = k === i ? "" : "hidden"; });   // hidden ones aren't smoothed
+  rSmooth();
   const d = rFrames[i], ago = Math.round((Date.now() - d) / 60000);
   $("rFrame").value = i;
   if (i >= rNReal){
@@ -3544,6 +3549,13 @@ function rPlay(on){
     rPause = 0; rShow((rPos + 1) % rFrames.length);
   }, 500);
 }
+// the smoothing blur: about one radar pixel on screen (a 512-pixel picture across the radar's range)
+function rSmooth(){
+  const l = rLayers[rPos]; if (!l || !l._map) return;
+  const b = l.getBounds(), w = map.latLngToContainerPoint(b.getNorthEast()).x - map.latLngToContainerPoint(b.getSouthWest()).x;
+  $("rsmoothBlur").setAttribute("stdDeviation", Math.max(0.6, Math.min(14, w / 512 * 0.75)).toFixed(2));
+}
+map.on("zoomend", () => { if (tab === "radar") rSmooth(); });
 function rClear(){
   rPlay(false); clearInterval(rRefresh); rRefresh = null;
   rLayers.forEach(l => map.removeLayer(l)); rLayers = [];
