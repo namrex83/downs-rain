@@ -362,15 +362,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .playbtn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
 /* the colour key, small, along the bottom of the map: always in view with the map (the full key with its notes is below) */
-.mapkey{position:absolute;left:54px;right:8px;bottom:20px;z-index:800;display:flex;align-items:flex-end;gap:4px;padding:3px 5px 2px;border-radius:7px;
-  background:rgba(255,255,255,.82);box-shadow:0 1px 3px rgba(0,0,0,.25);pointer-events:none}
+.mapkey{position:absolute;left:0;right:0;bottom:0;z-index:800;display:flex;align-items:flex-end;gap:3px;padding:2px 6px 1px;
+  background:rgba(255,255,255,.85);pointer-events:none}
 .mapkey .mk{display:flex;flex:1;min-width:0}
 .mapkey .mk div{flex:1;min-width:0}
-.mapkey .mk i{display:block;height:7px}
-.mapkey .mk span{display:block;font:600 8.5px/1.2 var(--mono);color:#1c2621;white-space:nowrap;overflow:hidden}
+.mapkey .mk i{display:block;height:4px}
+.mapkey .mk span{display:block;font:600 7.5px/1.15 var(--mono);color:#1c2621;white-space:nowrap;overflow:hidden}
 .mapkey .mk div:last-child span{overflow:visible}
-.mapkey .mu{margin-left:6px;font:600 8.5px/1 var(--body);color:#1c2621;white-space:nowrap;padding-bottom:1px}
-#map .leaflet-bottom.leaflet-right .leaflet-control-scale{margin-bottom:44px;margin-right:8px;clear:none;float:right}
+.mapkey .mu{margin-left:5px;font:600 7.5px/1 var(--body);color:#1c2621;white-space:nowrap;padding-bottom:1px}
+#map:has(.mapkey:not([hidden])) .leaflet-bottom{bottom:15px}   /* the map credits and km scale sit just above the key */
+#map .leaflet-bottom.leaflet-right .leaflet-control-scale{margin-bottom:4px;margin-right:6px;clear:none;float:right}
 .slegend{display:flex}
 .slegend div{flex:1;min-width:0}
 .slegend i{display:block;height:11px;border-right:2px solid var(--bg)}
