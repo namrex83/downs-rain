@@ -293,6 +293,7 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 .pinlabel::before{border-top-color:#1c2621!important}
 .pin.dot{width:10px;height:10px;margin:-5px 0 0 -5px;border-width:2.5px}
 .pinlabel.dotlabel{font-size:.82rem;padding:1px 5px}
+.leaflet-control-scale-line{background:rgba(255,255,255,.75);border-color:#1c2621;color:#1c2621;font:600 10px var(--mono);line-height:1.3;padding:0 4px}
 .locate a{display:flex!important;align-items:center;justify-content:center;width:34px!important;height:34px!important;cursor:pointer}
 .locate svg{width:20px;height:20px}
 #map.full{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;min-height:0!important;z-index:3000;border-radius:0!important;margin:0!important}
@@ -696,6 +697,7 @@ try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "o
 const HOME = [-27.4, 152.2], HOME_ZOOM = 8;   // South East Queensland, Dalby to the coast
 const SPOT = {name: "Toowoomba", ll: [-27.56, 151.95]};   // the chart and day buttons read here until a spot is tapped
 const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13}).setView(HOME, HOME_ZOOM);   // past about 13 the rain data (0.5-2 km squares) only gets blockier
+L.control.scale({metric: true, imperial: false, maxWidth: 90, position: "bottomleft"}).addTo(map);   // a distance scale in km
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
 map.getPane("labels").style.zIndex = 450;
@@ -1139,6 +1141,7 @@ function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the p
 async function catchRain(){
   if (tab !== "catch" || !idx) return;
   [...$("cView").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === cView));
+  $("legendBox").style.display = cView === "none" ? "none" : "";   // no rain on the map: no rain key
   legend();
   if (cView === "two") {   // the day finished at the last 9am plus the one running now: a storm across 9am in one total
     CMETA = null;
@@ -3585,7 +3588,8 @@ function oDraw(){
   if (oOverlay) map.removeLayer(oOverlay);
   oOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 0.75, interactive: false}); if (tab === "soil") oOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
   $("oLbl").textContent = oWhen(i);
-  $("oTimeline").style.opacity = oShow === "avg" ? .45 : "";   // the average doesn't change with the slider
+  // the 7-day average doesn't change with time: just its title, no slider or play buttons
+  ["oTime", "oTicks", "oTp"].forEach(id => $(id).hidden = oShow === "avg"); $("oTimeline").style.opacity = "";
   oReadTap();
 }
 // cotton planting guide at a spot: 14+ at 8am for 3 days in a row (and the day after not dropping below 12)
@@ -3874,7 +3878,7 @@ function setTab(t, first){
   $("weekField").hidden = !(t === "rain" && view === "week");
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
-  if (t !== "catch") clearCatchTab();
+  if (t !== "catch") { clearCatchTab(); $("legendBox").style.display = ""; }
   $("sevNote").hidden = !(t === "storms" && stormFlags.any);
   if (t === "catch" && tab_prev !== "catch") { if (cMapOn || cList !== "lines") { cMapOn = false; cList = "lines"; if (FW) drawRivers(FW); } }   // the Catchments tab opens on the river lines
   cShowSync();
