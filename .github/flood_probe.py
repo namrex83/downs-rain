@@ -1,17 +1,30 @@
-"""One-off check: the Condamine's gauge sites in the Queensland water monitoring records (basin 422, sub-basin 4223),
-with their names and years, to match against the BOM's gauge names."""
-import json
+"""One-off check: which data sources each Condamine gauge has in the Queensland records, and whether any holds the last
+few hours (telemetry), so the model can read the same gauge it learned from."""
+import json, time
 import requests
 
 URL = "https://water-monitoring.information.qld.gov.au/cgi/webservice.pl"
 UA = {"User-Agent": "weather-desk-flood-model/1.0"}
 
-r = requests.post(URL, data=json.dumps({"function": "get_db_info", "version": "3", "params": {
-    "table_name": "site", "return_type": "array",
-    "complex_filter": [{"fieldname": "station", "operator": "BEGINS", "value": "4223"}]}}), headers=UA, timeout=300)
-rows = r.json()["return"]["rows"]
-print(len(rows), "rows")
-cond = [x for x in rows if str(x.get("station", "")).startswith(("4223", "4224"))]
-print(len(cond), "Condamine-basin rows")
-for x in sorted(cond, key=lambda x: x["station"]):
-    print(x["station"], "|", x.get("stname"), "|", x.get("commence"), "-", x.get("cease"), "| active" if x.get("active") else "", "|", x.get("latitude"), x.get("longitude"))
+
+def call(fn, params, version="1"):
+    r = requests.post(URL, data=json.dumps({"function": fn, "version": version, "params": params}), headers=UA, timeout=180)
+    try:
+        return r.json()
+    except ValueError:
+        return {"http": r.status_code, "text": r.text[:300]}
+
+
+sites = "422323A,422316A,422333A,422310C"
+j = call("get_datasources_by_site", {"site_list": sites})
+print("datasources:", json.dumps(j)[:1500])
+now = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() + 10 * 3600))
+start = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() + 10 * 3600 - 3 * 86400))
+for ds in ("A", "TELEM", "TM", "T", "PROV", "CP"):
+    j = call("get_ts_traces", {"site_list": sites, "datasource": ds, "varfrom": "100.00", "varto": "100.00",
+                               "start_time": start, "end_time": now, "interval": "hour", "multiplier": "1", "data_type": "point"}, "2")
+    out = []
+    for tr in (j.get("return") or {}).get("traces", []):
+        pts = tr.get("trace") or []
+        out.append((tr.get("site"), len(pts), pts[-1] if pts else None, tr.get("error_msg")))
+    print(ds, "->", out or json.dumps(j)[:300])
