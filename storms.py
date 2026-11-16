@@ -30,7 +30,7 @@ from helicity import srh
 LAT_N, LAT_S = -23.0, -32.0       # Emerald/Rocky down to Port Macquarie
 LON_W, LON_E = 146.0, 155.0       # west of Roma out to the coast
 STEP = 0.5                        # degrees between grid points (about 50 km)
-HOURS = 54                        # forecast hours to keep (covers tomorrow afternoon from any run)
+HOURS = 108                       # forecast hours to keep (four days ahead from any run, for the severe-storm dots)
 CHUNK = 100                       # grid points per request
 URL = "https://api.open-meteo.com/v1/gfs"
 MODELS = ["gfs_global", "gfs_seamless"]   # GFS 0.25°; fall back to the blended set
@@ -252,6 +252,11 @@ def run():
         out["srh"] = hel
     with open(OUT, "w") as f:
         json.dump(out, f, separators=(",", ":"))
+    try:
+        from storm_days import update
+        update("gfs", out["made"], lats, lons, times, li, cape, sh, cin)
+    except Exception as e:
+        print(f"  storm days summary failed: {e}", flush=True)
     worst = min((v for row in li for v in row if v is not None), default=None)
     top = max((v for row in (hel or []) for v in row if v is not None), default=None)
     print(f"Wrote {OUT}: {len(points)} points x {nt} hours from {model}; lowest LI {worst and worst / 10}; "

@@ -25,7 +25,7 @@ from helicity import srh
 
 LAT_N, LAT_S = -23.0, -32.0       # same area as the GFS storm maps
 LON_W, LON_E = 146.0, 155.0
-STEPS = list(range(0, 73, 3))     # every 3 hours out to 3 days
+STEPS = list(range(0, 91, 3))     # every 3 hours out to 90 hours (as far as the 06 and 18 UTC runs go)
 OUT = os.path.join("data", "storms_ecmwf.json")
 KT = 1.94384                      # m/s to knots
 
@@ -139,7 +139,7 @@ def srh_grid(ps, u10, v10, levels):
 def run():
     from ecmwf.opendata import Client
     client = Client(source="ecmwf")
-    when = client.latest(type="fc", stream="oper", param="2t", step=72)
+    when = client.latest(type="fc", stream="oper", param="2t", step=90)
     tag = when.strftime("%Y-%m-%dT%HZ")
     old = json.load(open(OUT)) if os.path.exists(OUT) else {}
     if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and old.get("helicity_v") == 1 and "--force" not in sys.argv:   # files made before the cap was added are redone
@@ -206,6 +206,11 @@ def run():
                    "lats": [round(float(x), 3) for x in lats], "lons": [round(float(x), 3) for x in lons],
                    "times": times, "helicity_v": 1, "li": li, "cape": cp, "shear": sh, "cin": cn,
                    **({"srh": hl} if any(x is not None for row in hl for x in row) else {})}, f, separators=(",", ":"))
+    try:
+        from storm_days import update
+        update("ecmwf", tag, [float(x) for x in lats], [float(x) for x in lons], times, li, cp, sh, cn)
+    except Exception as e:
+        print(f"  storm days summary failed: {e}", flush=True)
     for p in ("sfc.grib2", "pl.grib2", "low.grib2", "cape.grib2", "cin.grib2", "wind.grib2"):
         if os.path.exists(p):
             os.remove(p)
