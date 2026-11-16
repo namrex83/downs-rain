@@ -1524,7 +1524,7 @@ function drawRivers(fw){
     return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
-      + (!e ? (FCOL[nm] ? `<div class="tsai q">AI: learning (readings kept since ${part(FCOL[nm].replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"), {day: "numeric", month: "short"})})</div>` : "") : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";
@@ -1532,7 +1532,8 @@ function drawRivers(fw){
   const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
   $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
   $("riverWhen").textContent = `Heights in metres on each gauge's own scale, from the Bureau of Meteorology, checked ${new Date(fw.checked.replace("Z", ":00Z")).toLocaleTimeString("en-AU", {timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit"})}. ▲ rising ▼ falling.`;
-  $("riverKey").innerHTML = `<i class="gdot g4"></i>major <i class="gdot g3"></i>moderate <i class="gdot g2"></i>minor flood <i class="gdot g1"></i>rising, below flood · no dot: steady or falling${RMAP ? " · on the map every gauge has a dot in its rough position, bigger when in flood" : ""}`;
+  $("riverKey").innerHTML = `<i class="gdot g4"></i>major <i class="gdot g3"></i>moderate <i class="gdot g2"></i>minor flood <i class="gdot g1"></i>rising, below flood · no dot: steady or falling${RMAP ? " · on the map every gauge has a dot in its rough position, bigger when in flood" : ""}`
+    + (rows.some(r => !estFor(g(r, iName)) && FCOL[g(r, iName)]) ? `<br>🤖 Gauges with no AI line have no past flood record to learn from yet: their readings are being kept (since ${part(Object.values(FCOL).sort()[0].replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"), {day: "numeric", month: "short"})}) so the AI can learn them as floods come through.` : "");
 }
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
@@ -2127,7 +2128,8 @@ function fitMap(){
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
   const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5)) : tab === "catch" ? Math.max(240, Math.round(innerHeight * 0.65)) : 240;
+  const least = innerWidth > 600 ? (tab === "fc" ? 180 : 190) : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5))
+    : tab === "catch" ? Math.max(240, Math.round(innerHeight * 0.65)) : Math.max(250, Math.round(innerHeight * 0.4));   // a phone: enough map to see the pattern
   el.style.minHeight = least + "px";
   let h = Math.max(least, innerHeight - top - legend - 10);
   el.style.height = h + "px";
