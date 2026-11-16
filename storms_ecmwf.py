@@ -144,6 +144,12 @@ def run():
     old = json.load(open(OUT)) if os.path.exists(OUT) else {}
     if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and old.get("helicity_v") == 1 and "--force" not in sys.argv:   # files made before the cap was added are redone
         print(f"Already have the {tag} storm run")
+        try:   # the severe-storm summary, if it hasn't got this model yet
+            from storm_days import OUT as SD_OUT, update
+            if "ecmwf" not in (json.load(open(SD_OUT)) if os.path.exists(SD_OUT) else {}):
+                update("ecmwf", tag, old["lats"], old["lons"], old["times"], old["li"], old["cape"], old["shear"], old.get("cin"))
+        except Exception as e:
+            print(f"  storm days summary failed: {e}", flush=True)
         return
     base = dict(date=when.strftime("%Y%m%d"), time=when.hour, type="fc", stream="oper", step=STEPS)
     print(f"Getting ECMWF {tag} storm ingredients", flush=True)
