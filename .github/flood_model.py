@@ -16,7 +16,7 @@ Two methods, both ordinary flood-forecasting practice, learned per gauge:
     python flood_model.py train   # (by hand, every few months) -> data/flood_model.json
     python flood_model.py now     # (each data run)             -> data/flood_est.json
 """
-import json, math, os, sys, time
+import json, math, os, re, sys, time
 import datetime as dt
 import requests
 
@@ -39,11 +39,31 @@ SITES = {
     "422340B": "Condamine River at Talgai Weir HG", "422341A": "Condamine River at Brosnans Barn",
     "422317C": "Glengallan Creek at Rocky Ridge", "422359B": "Oakey Creek at Jondaryan", "422360A": "Oakey Creek at Dalmeny",
     "422361A": "Oakey Creek at Bowenville Reserve",
+    # matched later (.github/flood_sources.py): the same gauge, or one beside it, in the government records
+    "422329A": "Condamine River at Pratten", "422330A": "Oakey Creek at Oakey (Weir Park)", "422395A": "Sandy Creek at Leslie Dam TW",
+    "422315B": "Sandy Creek at Leslie Dam HG", "422314A": "Condamine River at Ranges Bridge", "422332A": "Gowrie Creek at Oakey",
+    "422327A": "Thanes Creek at Ellangowan", "4223059": "Condamine River at Millbrook", "4223187": "Condamine River at Condamine",
+    "4223112": "Charleys Creek at Greenswamp Rd", "4223083": "Swan Creek at Yangan", "4223089": "Hodgson Creek at Felton Tm",
 }
 # down the main river: each gauge's estimate can come from the one above it
-PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422323A"), ("422323A", "422353B"), ("422323A", "422347B"),
+PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"), ("422329A", "422355A"), ("422355A", "4223059"),
+         ("4223059", "422323A"), ("422310C", "422323A"), ("422326A", "422332A"), ("422330A", "422359B"), ("422323A", "422353B"), ("422323A", "422347B"),
          ("422347B", "422349B"), ("422349B", "422345A"), ("422323A", "422316A"), ("422316A", "422333A"), ("422333A", "422336A"),
-         ("422336A", "422344A"), ("422344A", "422325A"), ("422360A", "422359B"), ("422359B", "422361A"), ("422361A", "422350A")]
+         ("422333A", "422314A"), ("422336A", "422344A"), ("422344A", "4223187"), ("422344A", "422325A"), ("422360A", "422359B"), ("422359B", "422361A"), ("422361A", "422350A")]
+STATE = "state"       # the radar job's working state (kept between its runs)
+BOM_ARCH = os.path.join(STATE, "bom_archive.json")   # every Condamine gauge's readings from the Bureau's table, kept from now on
+LOG = os.path.join(STATE, "flood_log.json")          # the estimates given, to check against what the river then did
+LEARN = os.path.join(STATE, "flood_learn.json")      # how far off they were, per gauge
+CONDAMINE_LAST = "Undulla Creek at Tara Lagoon"      # the end of the Condamine part of the Bureau's river table
+# the catchments (assets/catchments.json, rain in data/catch_wet.json) whose rain reaches each gauge
+RAIN_CATCH = {"Kings Creek": ["kings"], "Dalrymple Creek": ["dalrymple"], "Swan Creek": ["swan"], "Sandy Creek": ["sandy"],
+              "Gowrie Creek": ["northbranch"], "Oakey Creek": ["northbranch"], "Hodgson Creek": ["hodgson"], "Thanes Creek": ["hodgson"],
+              "Charleys Creek": ["charleys"], "Emu Creek": ["condamine_tum"], "Glengallan Creek": ["condamine_tum"],
+              "Canal Creek": ["condamine_tum"], "Spring Creek": ["condamine_tum"], "Myall Creek": ["myall"], "Jandowae Creek": ["jandowae"], "Jimbour Creek": ["jimbour"]}
+CONDAMINE_RAIN = [("Brosnans Barn Elbow Valley Warwick Pratten Talgai Millbrook Tummaville Emu Glengallan Canal", ["condamine_tum"]),
+                  ("Yarramalong Pampas Lemon Tree Lone Pine Cecil Plains Centenary", ["condamine_tum"]),
+                  ("Loudoun Ranges", ["condamine_tum", "condamine_mid"]),
+                  ("Brigalow Bedarra Condamine Cotswold Chinchilla", ["condamine_all"])]
 AHEAD_H = 96          # how far ahead a past rise is followed
 RATE_BINS = [0.02, 0.05, 0.1, 0.2, 0.4, 99]   # m an hour
 UP_RISE = 0.5         # an upstream rise of at least this (m) counts as a flood coming down
@@ -131,6 +151,20 @@ def train():
         print(f"{site} {name}: {len([x for x in s if x is not None])} hours from {t0:%Y-%m-%d}", flush=True)
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     json.dump(cached, open(CACHE, "w"), separators=(",", ":"))
+    # gauges with no government record: the Bureau's readings this site has kept (state/bom_archive.json), once
+    # there are 90 days of them (they're only learned from once floods have been seen)
+    try:
+        arch = json.load(open(BOM_ARCH))
+    except (OSError, ValueError):
+        arch = {}
+    have = set(SITES.values())
+    for name, h in arch.items():
+        if name in have or len(h) < 90 * 12:
+            continue
+        t0, s = to_list({int(k): v for k, v in h.items()})
+        if s:
+            series["bom:" + name] = (t0, s)
+            print(f"bom:{name}: {len([x for x in s if x is not None])} hours of kept readings from {t0:%Y-%m-%d}", flush=True)
     model = {"made": dt.datetime.now(QLD).strftime("%Y-%m-%d %H:%M"), "source": "Queensland Government water monitoring records (CC BY 4.0)",
              "sites": {}, "pairs": []}
     for site, (t0, s) in series.items():
@@ -142,7 +176,7 @@ def train():
             if a is None or b is None:
                 continue
             rate = (a - b) / 3
-            if rate < 0.02 or a < base + 0.2:
+            if rate < 0.007 or a < base + 0.2:   # slow rises near the top count too
                 continue
             ahead = [(x, k) for k, x in enumerate(s[i:i + AHEAD_H]) if x is not None]
             if len(ahead) < AHEAD_H * .7:
@@ -162,7 +196,9 @@ def train():
             rises, hrs = [x[0] for x in v], [x[1] for x in v]
             table[key] = [len(v), round(q(rises, .1), 2), round(q(rises, .5), 2), round(q(rises, .9), 2),
                           round(q(hrs, .1)), round(q(hrs, .5)), round(q(hrs, .9))]
-        model["sites"][site] = {"name": SITES[site], "base": round(base, 2), "max": round(max(vals), 2),
+        if not table and site.startswith("bom:"):
+            continue
+        model["sites"][site] = {"name": SITES.get(site) or site[4:], "base": round(base, 2), "max": round(max(vals), 2),
                                 "since": t0.strftime("%Y-%m-%d"), "states": len(recs), "table": table}
         print(f"  {site}: {len(recs)} rising hours, {len(table)} filed states", flush=True)
     # peak travel between gauges
@@ -234,6 +270,62 @@ def solve3(A, b):
     return [M[i][3] / M[i][i] for i in range(3)]
 
 
+def jload(p, default):
+    try:
+        return json.load(open(p))
+    except (OSError, ValueError):
+        return default
+
+
+def bom_readings(t_end):
+    """The Condamine gauges' latest readings from the Bureau's river table (data/flood_warn.json): {name: (time, height)}."""
+    fw = jload(os.path.join(DATA, "flood_warn.json"), {}).get("rivers") or {}
+    hd = fw.get("headers") or []
+    col = lambda w: next((i for i, h in enumerate(hd) if w in h.lower()), None)
+    iN, iT, iH = col("station") or 0, col("time"), col("height")
+    out, days = {}, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    if iT is None or iH is None:
+        return out
+    for r in fw.get("rows") or []:
+        try:
+            name, h = r[iN], float(r[iH])
+            m = re.match(r"(\d{1,2})\.(\d{2})\s*([AP]M)\s+(\w{3})", r[iT] or "")
+        except (ValueError, IndexError, TypeError):
+            m = None
+        if m and m.group(4) in days and name not in out:
+            hh = int(m.group(1)) % 12 + (12 if m.group(3) == "PM" else 0)
+            for back in range(8):
+                d = t_end - dt.timedelta(days=back)
+                if d.weekday() == days.index(m.group(4)):
+                    t = d.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
+                    if t <= t_end + dt.timedelta(minutes=10):
+                        out[name] = (t, h)
+                        break
+        if r and r[iN] == CONDAMINE_LAST:
+            break
+    return out
+
+
+def rain_for(name, wet):
+    """Rain over the gauge's catchment: (mm in the last 3 days to now, mm forecast over the next 2 days), area-weighted."""
+    ids = next((v for k, v in RAIN_CATCH.items() if name.startswith(k)), None)
+    if not ids and name.startswith("Condamine River"):
+        ids = next((v for words, v in CONDAMINE_RAIN if any(w in name for w in words.split())), ["condamine_all"])
+    if not ids or not wet:
+        return None, None
+    past, nxt, wsum = 0.0, 0.0, 0.0
+    for c in ids:
+        ser = (wet.get("mm") or {}).get(c)
+        if not ser:
+            continue
+        w = 1.0
+        past += w * (sum(x or 0 for x in ser[-3:]) + (((wet.get("today") or {}).get("mm") or {}).get(c) or 0))
+        f = ((wet.get("fc") or {}).get("catchments") or {}).get(c) or {}
+        nxt += w * sum((f.get("avg") or [])[:2])
+        wsum += w
+    return (round(past / wsum, 1), round(nxt / wsum, 1)) if wsum else (None, None)
+
+
 def now():
     try:
         model = json.load(open(os.path.join(DATA, "flood_model.json")))
@@ -241,8 +333,22 @@ def now():
         print("no flood model yet", flush=True)
         return
     t_end = dt.datetime.now(QLD)
+    nowt = t_end.replace(minute=0, second=0, microsecond=0)
+    hkey = lambda t: int(t.strftime("%Y%m%d%H"))
+    # keep every Condamine gauge's Bureau reading (from now on), to learn the gauges with no government record
+    bom = bom_readings(t_end)
+    arch = jload(BOM_ARCH, {})
+    cut = hkey(nowt - dt.timedelta(days=3 * 365))
+    for name, (t, h) in bom.items():
+        a = arch.setdefault(name, {})
+        a[str(hkey(t))] = h
+        if len(a) > 30000:
+            arch[name] = {k: v for k, v in a.items() if int(k) >= cut}
+    os.makedirs(STATE, exist_ok=True)
+    json.dump(arch, open(BOM_ARCH, "w"), separators=(",", ":"))
     live = {}
-    j = call("get_ts_traces", {"site_list": ",".join(model["sites"]), "datasource": "TE", "varfrom": "100.00", "varto": "100.00",
+    gov = [s_ for s_ in model["sites"] if not s_.startswith("bom:")]
+    j = call("get_ts_traces", {"site_list": ",".join(gov), "datasource": "TE", "varfrom": "100.00", "varto": "100.00",
                                "start_time": (t_end - dt.timedelta(hours=60)).strftime("%Y%m%d%H%M%S"), "end_time": t_end.strftime("%Y%m%d%H%M%S"),
                                "interval": "hour", "multiplier": "1", "data_type": "point"})
     for tr in (j.get("return") or {}).get("traces", []):
@@ -250,24 +356,30 @@ def now():
                if int(p.get("q", 10)) < 150]
         if pts:
             live[tr["site"]] = pts
+    for s_ in model["sites"]:   # the gauges learned from the site's own kept readings: those readings are their live data too
+        if s_.startswith("bom:"):
+            a = arch.get(s_[4:]) or {}
+            pts = sorted((dt.datetime.strptime(k, "%Y%m%d%H").replace(tzinfo=QLD), v) for k, v in a.items() if int(k) >= hkey(nowt - dt.timedelta(hours=60)))
+            if pts:
+                live[s_] = pts
+    name_of = lambda s_: model["sites"][s_]["name"] if s_ in model["sites"] else SITES.get(s_, s_)
     est = {}
-    nowt = t_end.replace(minute=0, second=0, microsecond=0)
 
     def at(pts, hours_ago):
         t = nowt - dt.timedelta(hours=hours_ago)
         c = [v for tt, v in pts if abs((tt - t).total_seconds()) <= 1800]
         return c[-1] if c else None
 
-    # 1. rising gauges: matched to their past rises
+    # 1. rising gauges: matched to their past rises (a slow rise near the top counts too)
     for site, m in model["sites"].items():
         pts = live.get(site)
-        if not pts or (nowt - pts[-1][0]).total_seconds() > 4 * 3600:
+        if not pts or (nowt - pts[-1][0]).total_seconds() > 4 * 3600 or not m.get("table"):
             continue
         h, h3 = pts[-1][1], at(pts, 3)
         if h3 is None:
             continue
         rate = (h - h3) / 3
-        if rate < 0.02:
+        if rate < 0.007:
             continue
         rb = next(j for j, top in enumerate(RATE_BINS) if rate < top)
         row = None
@@ -290,7 +402,12 @@ def now():
             continue
         dnow = pd[-1][1]
         src = None
-        if pu:
+        if up in est and est[up]["how"] == "rise":   # still rising up there: where it's heading
+            e = est[up]
+            low = min(vv for tt, vv in pu) if pu else e["now"]
+            if e["mid"] - low >= UP_RISE:
+                src = (e["mid"], e["mid"] - low, dt.datetime.fromisoformat(e["t_mid"]), "estimated")
+        if not src and pu:
             recent = [(v, t) for t, v in pu if (nowt - t).total_seconds() <= 48 * 3600]
             if recent:
                 v, t = max(recent)
@@ -310,31 +427,93 @@ def now():
         t_mid = ut + dt.timedelta(hours=p["lag"][1])
         if t_mid < nowt - dt.timedelta(hours=3) or rise <= 0.1:
             continue   # it's been and gone, or nothing much to come
-        est[dn] = {"name": model["sites"][dn]["name"] if dn in model["sites"] else SITES.get(dn), "now": dnow, "how": "from_up",
-                   "up": SITES.get(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
-                   "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
-                   "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
-                   "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()}
+        cand = {"name": name_of(dn), "now": dnow, "how": "from_up",
+                "up": name_of(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
+                "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
+                "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
+                "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()}
+        if dn not in est or cand["mid"] > est[dn]["mid"]:   # two rivers meeting: the higher of the two
+            est[dn] = cand
+    # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), or no rise expected
+    for site, pts in live.items():
+        if site in est or site not in model["sites"]:
+            continue
+        v, t = max((vv, tt) for tt, vv in pts)
+        low = min(vv for tt, vv in pts if tt <= t)
+        h = pts[-1][1]
+        if v - low >= 0.3 and h < v - 0.02 and (nowt - t).total_seconds() > 2 * 3600:
+            est[site] = {"name": name_of(site), "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
+        else:
+            est[site] = {"name": name_of(site), "now": h, "how": "steady"}
+    # 4. rain over each gauge's catchment: the last 3 days, and the next 2 days' forecast (the estimates above don't
+    #    know about rain still to fall)
+    wet = jload(os.path.join(DATA, "catch_wet.json"), None)
+    for s_, e in est.items():
+        past, nxt = rain_for(e["name"], wet)
+        if past is not None:
+            e["rain_past"], e["rain_next"] = past, nxt
+    # 5. learning from its own misses: every estimate is logged, and once the river has peaked it's checked; each
+    #    gauge's estimates are then scaled by how far off they've been (separately for wet and dry outlooks), more so
+    #    the more floods it's been checked on
+    log = jload(LOG, [])
+    learn = jload(LEARN, {})
+    obs_now = {s_: pts for s_, pts in live.items()}
+    keep = []
+    for L in log:
+        t_iss = dt.datetime.fromisoformat(L["t"])
+        pts = [(t, v) for t, v in obs_now.get(L["site"], []) if t >= t_iss]
+        if pts:   # the highest the river has been since the estimate, and when
+            tt, vv = max(pts, key=lambda x: x[1])
+            if vv > L.get("seen", -99):
+                L["seen"], L["seen_t"] = vv, tt.isoformat()
+        L.setdefault("seen", -99)
+        done = (nowt - t_iss).total_seconds() > 120 * 3600 or (pts and pts[-1][1] < L["seen"] - 0.05 and L["seen"] > L["now"] + 0.05)
+        if not done:
+            keep.append(L)
+            continue
+        if L["mid"] - L["now"] < 0.2 or L["seen"] < -50:
+            continue
+        ratio = max(0.1, min(3.0, (L["seen"] - L["now"]) / (L["mid"] - L["now"])))
+        key = f'{L["site"]}|{L["how"]}|{"wet" if (L.get("rain_next") or 0) >= 10 else "dry"}'
+        ev = (L.get("seen_t") or L["t"])[:10]
+        rows = learn.setdefault(key, [])
+        same = next((r for r in rows if r["event"] == ev), None)
+        terr = (dt.datetime.fromisoformat(L["seen_t"]) - dt.datetime.fromisoformat(L["t_mid"])).total_seconds() / 3600 if L.get("seen_t") else 0
+        if same:
+            same["n"] += 1; same["lr"] += math.log(ratio); same["terr"] += terr
+        else:
+            rows.append({"event": ev, "n": 1, "lr": math.log(ratio), "terr": terr})
+        learn[key] = rows[-12:]
+    for s_, e in est.items():
+        if e["how"] not in ("rise", "from_up"):
+            continue
+        key = f'{s_}|{e["how"]}|{"wet" if (e.get("rain_next") or 0) >= 10 else "dry"}'
+        rows = learn.get(key) or []
+        if rows:
+            n = len(rows)
+            f = math.exp(sum(r["lr"] / r["n"] for r in rows) / n)
+            w = n / (n + 2)                                   # trust it more as more floods are checked
+            f_use = max(0.5, min(1.5, f ** w))
+            shift = max(-48, min(48, w * sum(r["terr"] / r["n"] for r in rows) / n))
+            for k in ("lo", "mid", "hi"):
+                e[k] = round(e["now"] + (e[k] - e["now"]) * f_use, 2)
+            for k in ("t_lo", "t_mid", "t_hi"):
+                e[k] = (dt.datetime.fromisoformat(e[k]) + dt.timedelta(hours=shift)).isoformat()
+            e["learned"] = {"floods": n, "factor": round(f_use, 2), "shift_h": round(shift)}
+        last = next((L for L in reversed(keep) if L["site"] == s_), None)
+        if not last or (nowt - dt.datetime.fromisoformat(last["t"])).total_seconds() >= 3 * 3600:
+            keep.append({"site": s_, "how": e["how"], "t": nowt.isoformat(), "now": e["now"], "mid": e["mid"], "t_mid": e["t_mid"],
+                         "rain_next": e.get("rain_next")})
+    json.dump(keep[-3000:], open(LOG, "w"), separators=(",", ":"))
+    json.dump(learn, open(LEARN, "w"), separators=(",", ":"))
     # onto the Bureau's scale: where its board reads differently from these records (a different gauge board at the
     # same place, as at Loudoun Bridge), every height is moved by the difference between the two latest readings
     off = {}
-    try:
-        fw = json.load(open(os.path.join(DATA, "flood_warn.json")))
-        hd = fw["rivers"]["headers"]
-        iN = next(i for i, h in enumerate(hd) if "station" in h.lower()); iH = next(i for i, h in enumerate(hd) if "height" in h.lower())
-        bom = {}
-        for r in fw["rivers"]["rows"]:
-            try:
-                bom.setdefault(r[iN], float(r[iH]))
-            except (ValueError, IndexError):
-                pass
-        for s_, pts in live.items():
-            b = bom.get(SITES.get(s_))
-            if b is not None:
-                d = b - pts[-1][1]
-                off[s_] = round(d, 2) if abs(d) >= 0.15 else 0.0
-    except (OSError, ValueError, KeyError, StopIteration):
-        pass
+    for s_, pts in live.items():
+        b = bom.get(name_of(s_))
+        if b is not None:
+            d = b[1] - pts[-1][1]
+            off[s_] = round(d, 2) if abs(d) >= 0.15 else 0.0
     for s_, e in est.items():
         o = off.get(s_, 0.0)
         if o:
@@ -344,24 +523,18 @@ def now():
             e["bom_offset"] = o
         if e.get("up_site") and off.get(e["up_site"]):
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
-    # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), or no rise expected
-    for site, pts in live.items():
-        if site in est or site not in model["sites"]:
-            continue
-        v, t = max((vv, tt) for tt, vv in pts)
-        low = min(vv for tt, vv in pts if tt <= t)
-        h = pts[-1][1]
-        if v - low >= 0.3 and h < v - 0.02 and (nowt - t).total_seconds() > 2 * 3600:
-            est[site] = {"name": model["sites"][site]["name"], "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
-        else:
-            est[site] = {"name": model["sites"][site]["name"], "now": h, "how": "steady"}
     horizon = nowt + dt.timedelta(hours=48)
     est = {s: e for s, e in est.items() if "t_lo" not in e or dt.datetime.fromisoformat(e["t_lo"]) <= horizon}
+    # gauges with no record to learn from yet: the readings being kept for them
+    covered = {e["name"] for e in est.values()} | {m["name"] for m in model["sites"].values()}
+    collecting = {n: min(a)[:8] for n, a in arch.items() if n not in covered and a}
     out = {"made": t_end.strftime("%Y-%m-%dT%H:%M+10:00"), "model_made": model.get("made"),
-           "now": {SITES[s]: round(p[-1][1], 2) for s, p in live.items() if s in SITES},
-           "estimates": {e["name"]: e for e in est.values()}}
+           "now": {name_of(s): round(p[-1][1], 2) for s, p in live.items()},
+           "estimates": {e["name"]: e for e in est.values()}, "collecting": collecting,
+           "checked": sum(len(v) for v in learn.values())}
     json.dump(out, open(os.path.join(DATA, "flood_est.json"), "w"), separators=(",", ":"))
-    print(f"flood estimates: {len(est)} gauge(s) {[e['name'] + ' ' + str(e['mid']) for e in est.values()]}", flush=True)
+    print(f"flood estimates: {len(est)} gauge(s) {[e['name'] + ' ' + str(e.get('mid')) for e in est.values()]}; "
+          f"{len(keep)} logged, {sum(len(v) for v in learn.values())} floods checked; keeping readings for {len(arch)} gauges", flush=True)
 
 
 if __name__ == "__main__":

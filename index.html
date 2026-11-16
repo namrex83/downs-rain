@@ -1013,7 +1013,7 @@ function drawStreams(){
   tubeLabels();
 }
 function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
-let DOTLIST = null, RHIST = {}, FEST = {}, FLV = null;
+let DOTLIST = null, RHIST = {}, FEST = {}, FLV = null, FCOL = {};   // FCOL: gauges with no record yet, whose readings are being kept to learn from
 // official positions of the Condamine gauges from the Queensland water monitoring records (the map's own positions
 // for these come from place names and can be a few km out)
 const GAUGE_POS = {"Condamine River at Elbow Valley": [-28.3714, 152.1415], "Condamine River at Warwick": [-28.2143, 152.0485],
@@ -1071,8 +1071,10 @@ function estTxt(e, long){
   const why = e.how === "from_up" ? `worked out from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m and ${e.n} past floods`
     : `matched to ${e.n} past times it was rising like this`;
   const L = levelsFor(e.name);
+  const rain = e.rain_past != null ? `<br><span class="gnote2">Rain over its catchment: ${fmt(e.rain_past)} mm in the last 3 days (radar); ${fmt(e.rain_next)} mm forecast over the next 2 days${e.rain_next >= 10 ? " — not allowed for in this estimate, so the river could go higher" : ""}.</span>` : "";
+  const lrn = e.learned ? `<br><span class="gnote2">Learned from its own misses: the last ${e.learned.floods} flood${e.learned.floods > 1 ? "s" : ""} checked here came in ${e.learned.factor < 1 ? "lower" : "higher"} than estimated, so the rise is scaled ×${e.learned.factor}${e.learned.shift_h ? ` and the timing moved ${e.learned.shift_h > 0 ? "later" : "earlier"} by ${Math.abs(e.learned.shift_h)} h` : ""}.</span>` : "";
   return `🤖 <b>AI estimate: peak ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} at ${t}</b><br>`
-    + (L ? `<span class="gnote2">Flood levels here: ${["minor", "moderate", "major"].filter(k => L[k] != null).map(k => `${k} ${L[k]} m`).join(", ")}.</span><br>` : "") + `<span class="gnote2">Likely range ${e.lo.toFixed(2)}–${e.hi.toFixed(2)} m, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}; ${why}.</span>`
+    + (L ? `<span class="gnote2">Flood levels here: ${["minor", "moderate", "major"].filter(k => L[k] != null).map(k => `${k} ${L[k]} m`).join(", ")}.</span><br>` : "") + `<span class="gnote2">Likely range ${e.lo.toFixed(2)}–${e.hi.toFixed(2)} m, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}; ${why}.</span>` + rain + lrn
     + `<br><span class="aidisc">Disclaimer: an automated estimate learned from past floods in the Queensland Government's river records. It is not a Bureau of Meteorology forecast or warning, it can be well out (especially with more rain to come), and must not be relied on for safety or property decisions. Follow the Bureau's flood warnings and emergency services.</span>`;
 }
 // What's ahead for a gauge (in its box on the map): the Bureau's predicted peak if a flood warning gives one; which way
@@ -1502,7 +1504,7 @@ function drawRivers(fw){
   const rest = rows.filter(r => !top.includes(r));
   const anyAI = rows.some(r => estFor(g(r, iName)));   // the AI column only when there's an estimate to show
   function aiCell(r){ if (!anyAI) return ""; const e = estFor(g(r, iName));
-    if (!e) return `<td class="n aicol"></td>`;
+    if (!e) return `<td class="n aicol ai-quiet">${FCOL[g(r, iName)] ? "<small>learning</small>" : ""}</td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>no rise</small></td>`;
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
     return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
@@ -1516,7 +1518,7 @@ function drawRivers(fw){
     return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
-      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+      + (!e ? (FCOL[nm] ? `<div class="tsai q">AI: no flood record for this gauge yet; learning from its readings since ${part(FCOL[nm].replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"), {day: "numeric", month: "short"})}</div>` : "") : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";
@@ -1562,7 +1564,7 @@ async function drawWatch(){
   try {   // a current Bureau flood warning for this river system, from data/flood_warn.json (checked by the radar job)
     const fw = FW = await getJSON("data/flood_warn.json");
     try { RHIST = (await getJSON("data/river_hist.json")).gauges || {}; } catch(e){ RHIST = {}; }
-    try { FEST = (await getJSON("data/flood_est.json")).estimates || {}; } catch(e){ FEST = {}; }
+    try { const fe = await getJSON("data/flood_est.json"); FEST = fe.estimates || {}; FCOL = fe.collecting || {}; } catch(e){ FEST = {}; FCOL = {}; }
     if (!FLV) try { FLV = await getJSON("data/flood_levels.json"); } catch(e){ FLV = {by_id: {}, by_name: {}}; }
     drawRivers(fw); markCatchOptions(fw);
     const iN = Math.max(0, ((fw.rivers || {}).headers || []).findIndex(h => /station/i.test(h)));

@@ -42,6 +42,13 @@ jobs:
           key: flood-records-${{ github.run_id }}
           restore-keys: flood-records-
 
+      - name: The radar job's working state (the readings this site keeps for gauges with no government record)
+        uses: actions/cache/restore@v5
+        with:
+          path: state
+          key: radar-state-v2-${{ github.run_id }}
+          restore-keys: radar-state-v2-
+
       - name: Learn from past floods
         run: python -u .github/flood_model.py train
 
