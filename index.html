@@ -1315,34 +1315,34 @@ function wetNow(id){
 // Severe storms ahead (data/storm_days.json: each day's worst storm category at every point, from both storm models):
 // a red dot on the Storms tab, and a note at the top of it, when either model has Severe or worse over the Downs in the
 // next 4 days; and a red dot over those days on the forecast chart where it applies at the chart's spot.
-let SDAYS = null;
-const SEV_BOX = {s: -29.0, n: -26.0, w: 150.0, e: 152.6};   // the Darling Downs, Western Downs and Granite Belt
+let SDAYS = null, MYLL = null;   // MYLL: the phone's location, if it shared it (stays on the phone)
+const SEV_KM = 100;   // severe storms within this far count
+const kmBetween = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 * Math.cos((a + c) / 2 * Math.PI / 180));
 const CAT_NAME = ["no storms", "storms possible", "organised storms", "severe", "significant severe", "high-end severe"];
 const SM_NAME = {gfs: "GFS", ecmwf: "ECMWF"};
 async function stormFlags(){
-  try { SDAYS = await getJSON("data/storm_days.json"); } catch(e){ SDAYS = null; return; }
+  if (!SDAYS) { try { SDAYS = await getJSON("data/storm_days.json"); } catch(e){ SDAYS = null; return; } }
+  const [lat, lon] = MYLL || SPOT.ll, where = MYLL ? "you" : SPOT.name;
   const today = qDate(Date.now() / 1000), last = addDays(today, 3), byDay = {};
-  for (const [key, m] of Object.entries(SDAYS)) for (const [d, str] of Object.entries(m.days || {})){
+  for (const d of [...new Set(Object.values(SDAYS).flatMap(m => Object.keys(m.days || {})))]){
     if (d < today || d > last) continue;
-    let worst = 0, nc = m.lons.length;
-    m.lats.forEach((la, r) => { if (la < SEV_BOX.s || la > SEV_BOX.n) return;
-      m.lons.forEach((lo, c) => { if (lo >= SEV_BOX.w && lo <= SEV_BOX.e) worst = Math.max(worst, +str[r * nc + c]); }); });
-    if (worst >= 3) (byDay[d] = byDay[d] || []).push(`${SM_NAME[key] || key} ${CAT_NAME[worst]}`);
+    for (const [key, c] of Object.entries(stormCatAt(d, lat, lon))) if (c >= 3) (byDay[d] = byDay[d] || []).push(`${SM_NAME[key] || key} ${CAT_NAME[c]}`);
   }
   const days = Object.keys(byDay).sort();
   $("stormDot").hidden = !days.length;
-  $("tStorm").title = days.length ? "Severe storms possible on the Downs in the next 4 days" : "";
+  $("tStorm").title = days.length ? `Severe storms possible within ${SEV_KM} km of ${where} in the next 4 days` : "";
   $("sevNote").hidden = !days.length;
-  $("sevNote").innerHTML = days.length ? `⚠️ <b>Severe storms possible on the Downs:</b> ${days.map(d => `<b>${part(d, {weekday: "short", day: "numeric"})}</b> (${byDay[d].join(", ")})`).join("; ")}. `
+  $("sevNote").innerHTML = days.length ? `⚠️ <b>Severe storms possible within ${SEV_KM} km of ${where}:</b> ${days.map(d => `<b>${part(d, {weekday: "short", day: "numeric"})}</b> (${byDay[d].join(", ")})`).join("; ")}. `
     + `The models' storm ingredients, not a forecast that storms will form: check the Bureau's thunderstorm warnings.` : "";
 }
-// the worst storm category each model has within about one grid step of a spot on a day: {gfs: 3, ecmwf: 2}
+// the worst storm category each model has within SEV_KM of a spot on a day: {gfs: 3, ecmwf: 2}
 function stormCatAt(d, lat, lon){
   const out = {};
   for (const [key, m] of Object.entries(SDAYS || {})){
     const str = m.days && m.days[d]; if (!str) continue;
-    const st = Math.abs(m.lats[0] - m.lats[1]) * 1.01, nc = m.lons.length; let w = 0;
-    m.lats.forEach((la, r) => { if (Math.abs(la - lat) > st) return; m.lons.forEach((lo, c) => { if (Math.abs(lo - lon) <= st) w = Math.max(w, +str[r * nc + c]); }); });
+    const nc = m.lons.length; let w = 0;
+    m.lats.forEach((la, r) => { if (Math.abs(la - lat) * 111.2 > SEV_KM) return;
+      m.lons.forEach((lo, c) => { if (kmBetween(la, lo, lat, lon) <= SEV_KM) w = Math.max(w, +str[r * nc + c]); }); });
     out[key] = w;
   }
   return out;
@@ -2080,6 +2080,7 @@ function locateMe(btn){
   navigator.geolocation.getCurrentPosition(pos => {
     btn.classList.remove("busy");
     const ll = L.latLng(pos.coords.latitude, pos.coords.longitude), acc = pos.coords.accuracy;
+    MYLL = [ll.lat, ll.lng]; stormFlags();
     if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
     else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
     if (!map.getBounds().contains(ll)) map.panTo(ll);   // keep the zoom; only move if you're off the map
@@ -2663,7 +2664,7 @@ function fChartDrawBars(){
     // each model its own thin bar, side by side (and BOM's, green, at the end); the median a dashed line across them
     const sc = stormCatAt(qDate(t0 + k * 86400 + 1), spot[0], spot[1]), sw = Math.max(0, ...Object.values(sc));
     if (sw >= 3) anySev = true;
-    if (sw >= 3) g += `<circle cx="${x.toFixed(1)}" cy="5.5" r="4.5" fill="#dc2626" stroke="var(--panel)" stroke-width="1.2"><title>Severe storms possible ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</title></circle>`;
+    if (sw >= 3) g += `<circle cx="${x.toFixed(1)}" cy="5.5" r="4.5" fill="#dc2626" stroke="var(--panel)" stroke-width="1.2"><title>Severe storms possible within ${SEV_KM} km ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</title></circle>`;
     const b = bomDay(k), bars = [...shown.map(m => [hCol(m), tot[m][k]]), ...(bom ? [[BOM_COL, b ? b.min : null]] : [])];
     const gw = slot * .86, w1 = gw / bars.length, x0 = x - gw / 2;
     bars.forEach(([col, v], j) => { if (v == null || v <= 0) return;
@@ -2693,7 +2694,7 @@ function fChartDrawBars(){
   const sum = m => tot[m].some(v => v == null) ? null : tot[m].reduce((a, b) => a + b, 0);
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
-    <div class="cfoot"><span>${both ? "Lines: the running total for each model, against the right-hand scale (dashed = median). Bars (faded): " : ""}Rain each day, 10am to 10am: a bar for each model in its colour, and BOM's in green at the end (its days end at midnight); the dashed line and figure are the median of the models (the average where only one or two run that far). ${anySev ? "Red dot: severe storms possible here that day (see the Storms tab). " : ""}Key: each model's total over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– where its forecast stops sooner)" : ""}. Tap a day for its numbers.</span>${fcButtons()}</div>`;
+    <div class="cfoot"><span>${both ? "Lines: the running total for each model, against the right-hand scale (dashed = median). Bars (faded): " : ""}Rain each day, 10am to 10am: a bar for each model in its colour, and BOM's in green at the end (its days end at midnight); the dashed line and figure are the median of the models (the average where only one or two run that far). ${anySev ? `Red dot: severe storms possible within ${SEV_KM} km that day (see the Storms tab). ` : ""}Key: each model's total over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– where its forecast stops sooner)" : ""}. Tap a day for its numbers.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
@@ -2703,7 +2704,7 @@ function fChartDrawBars(){
     tip.innerHTML = `<b>10am ${part(qDate(t0 + k * 86400 + 1), {weekday: "short", day: "numeric"})} to 10am ${part(d, {weekday: "short", day: "numeric"})}:</b>${med[k] != null ? ` median <b>${fmt(med[k])} mm</b> ·` : ""} `
       + rows.map(([m, v]) => `<span style="white-space:nowrap"><i style="background:${hCol(m)}"></i>${hName(m)} ${fmt(v)}</span> `).join("")
       + (b ? `<br><span style="white-space:nowrap"><i style="background:${BOM_COL}"></i><b>BOM ${bom.name}</b></span> ${part(b.d, {weekday: "short"})}: ${fmt(b.min)}${b.max != null && b.max !== b.min ? `–${fmt(b.max)}` : ""} mm, ${b.chance ?? "?"}% chance` : "")
-      + (sc.length ? `<br><span style="color:#dc2626">●</span> <b>Severe storms possible here ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</b> (${sc.map(([m, c]) => `${SM_NAME[m] || m} ${CAT_NAME[c]}`).join(", ")}): see the Storms tab.` : "");
+      + (sc.length ? `<br><span style="color:#dc2626">●</span> <b>Severe storms possible within ${SEV_KM} km ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</b> (${sc.map(([m, c]) => `${SM_NAME[m] || m} ${CAT_NAME[c]}`).join(", ")}): see the Storms tab.` : "");
     if (tip.hidden) { tip.hidden = false; fitMap(); }
   };
   svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at); svg.addEventListener("click", at);
@@ -4009,6 +4010,7 @@ const COVER = {s: -30.5, n: -24.5, w: 148.0, e: 154.5};   // the smallest of the
 if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
   const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
   if (ll.lat < COVER.s || ll.lat > COVER.n || ll.lng < COVER.w || ll.lng > COVER.e) return;
+  MYLL = [ll.lat, ll.lng]; stormFlags();   // the severe-storm dot: within 100 km of the phone
   if (tab === "radar") viewBeforeRadar = {c: ll, z: HOME_ZOOM};   // the radar keeps its own view; the others open here
   else if (tab === "fc") { mainView = {c: ll, z: HOME_ZOOM}; fcView = null; map.setView(ll, fcZoom(), {animate: false}); }
   else map.setView(ll, HOME_ZOOM, {animate: false});
