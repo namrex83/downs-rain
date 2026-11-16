@@ -20,7 +20,7 @@ j = call("get_datasources_by_site", {"site_list": sites})
 print("datasources:", json.dumps(j)[:1500])
 now = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() + 10 * 3600))
 start = time.strftime("%Y%m%d%H%M%S", time.gmtime(time.time() + 10 * 3600 - 3 * 86400))
-for ds in ("A", "TELEM", "TM", "T", "PROV", "CP"):
+for ds in ("TE", "RAW", "FDR"):
     j = call("get_ts_traces", {"site_list": sites, "datasource": ds, "varfrom": "100.00", "varto": "100.00",
                                "start_time": start, "end_time": now, "interval": "hour", "multiplier": "1", "data_type": "point"}, "2")
     out = []
