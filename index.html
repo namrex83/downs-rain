@@ -136,7 +136,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
 .outlinks a span{display:block;font-size:.82rem;color:var(--ink-2)}
 .outlinks a::after{content:"↗";margin-left:auto;color:var(--accent);font-weight:700}
 .rimg{clip-path:inset(4.5% 0 4.5% 0);filter:url(#rsmooth)}
-.rpred{filter:saturate(.75) brightness(1.05)}   /* predicted frames look slightly washed out */   /* hide BOM's title and time bars along the top and bottom */
+.rpred{filter:url(#rsmooth) saturate(.75) brightness(1.05)}   /* predicted frames look slightly washed out */   /* hide BOM's title and time bars along the top and bottom */
 .rSlide input{width:100%}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .seg button:disabled{opacity:.45}
