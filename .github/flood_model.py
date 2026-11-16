@@ -40,6 +40,7 @@ PAIRS = [("422394A", "422310C"), ("422310C", "422323A"), ("422323A", "422353B"),
          ("422316A", "422333A"), ("422333A", "422336A"), ("422336A", "422358B")]
 AHEAD_H = 96          # how far ahead a past rise is followed
 RATE_BINS = [0.02, 0.05, 0.1, 0.2, 0.4, 99]   # m an hour
+UP_RISE = 0.5         # an upstream rise of at least this (m) counts as a flood coming down
 
 
 def call(fn, params, version="2", tries=3):
@@ -98,19 +99,32 @@ def q(vals, p):
     return v[lo] + (v[hi] - v[lo]) * (k - lo)
 
 
+CACHE = "fm_cache/series.json"   # the downloaded records, kept between runs (actions/cache)
+
+
 def train():
-    end = dt.datetime.now(QLD).strftime("%Y%m%d%H%M%S")
     series = {}
+    try:
+        cached = json.load(open(CACHE))
+    except (OSError, ValueError):
+        cached = {}
     for site, name in SITES.items():
-        h = {}
-        for y0 in range(1990, dt.datetime.now().year + 1, 6):
-            h.update(hourly(site, f"{y0}0101000000", f"{min(y0 + 6, 2100)}0101000000"))
+        h = {int(k): v for k, v in (cached.get(site) or {}).items()}
+        last = max(h) if h else None
+        if not last:
+            for y0 in range(1990, dt.datetime.now().year + 1, 6):
+                h.update(hourly(site, f"{y0}0101000000", f"{min(y0 + 6, 2100)}0101000000"))
+        else:   # only what's been added to the records since
+            h.update(hourly(site, f"{str(last)[:8]}000000", dt.datetime.now(QLD).strftime("%Y%m%d%H%M%S")))
+        cached[site] = {str(k): v for k, v in h.items()}
         t0, s = to_list(h)
         if not s:
             print(f"{site} {name}: no records", flush=True)
             continue
         series[site] = (t0, s)
         print(f"{site} {name}: {len([x for x in s if x is not None])} hours from {t0:%Y-%m-%d}", flush=True)
+    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+    json.dump(cached, open(CACHE, "w"), separators=(",", ":"))
     model = {"made": dt.datetime.now(QLD).strftime("%Y-%m-%d %H:%M"), "source": "Queensland Government water monitoring records (CC BY 4.0)",
              "sites": {}, "pairs": []}
     for site, (t0, s) in series.items():
@@ -151,16 +165,20 @@ def train():
             continue
         (tu, su), (td, sd) = series[up], series[dn]
         off = int((tu - td).total_seconds() // 3600)    # index in dn = index in up + off
-        vals = [x for x in su if x is not None]
-        thr = q(vals, .97)                               # the upstream gauge's top 3% of heights: a flood peak
         rows, last = [], -10 ** 9
-        for i in range(48, len(su) - 48):
+        for i in range(96, len(su) - 48):
             x = su[i]
-            if x is None or x < thr or i - last < 120:
+            if x is None or i - last < 120:
                 continue
             win = [y for y in su[i - 48:i + 49] if y is not None]
             if x < max(win):
                 continue                                  # not the peak of this rise
+            before = [y for y in su[i - 96:i] if y is not None]
+            if len(before) < 48:
+                continue
+            urise = x - min(before)
+            if urise < UP_RISE:
+                continue                                  # only real rises upstream
             last = i
             j0 = i + off
             if j0 < 0 or j0 + 168 >= len(sd):
@@ -170,13 +188,11 @@ def train():
             if dnow is None or len(after) < 100:
                 continue
             pk, k = max(after)
-            if pk <= dnow + 0.05:
-                continue
-            rows.append((x, dnow, pk, k))
-        if len(rows) < 6:
+            rows.append((urise, dnow, pk - dnow, k))
+        if len(rows) < 8:
             print(f"  {up}->{dn}: only {len(rows)} matched floods", flush=True)
             continue
-        # least squares  pk = a + b*x + c*dnow
+        # least squares  rise downstream = a + b x rise upstream + c x downstream height then
         n = len(rows)
         X = [(1.0, r[0], r[1]) for r in rows]
         Y = [r[2] for r in rows]
@@ -190,9 +206,8 @@ def train():
         sd_res = math.sqrt(sum(r * r for r in res) / max(1, n - 3))
         lags = [r[3] for r in rows]
         model["pairs"].append({"up": up, "dn": dn, "n": n, "a": round(coef[0], 3), "b": round(coef[1], 3), "c": round(coef[2], 3),
-                               "sd": round(sd_res, 2), "lag": [round(q(lags, .1)), round(q(lags, .5)), round(q(lags, .9))],
-                               "up_thr": round(thr, 2)})
-        print(f"  {up}->{dn}: {n} floods, peak = {coef[0]:.2f} + {coef[1]:.2f}x up + {coef[2]:.2f}x now (+/-{sd_res:.2f} m), "
+                               "sd": round(sd_res, 2), "lag": [round(q(lags, .1)), round(q(lags, .5)), round(q(lags, .9))]})
+        print(f"  {up}->{dn}: {n} floods, rise = {coef[0]:.2f} + {coef[1]:.2f}x upstream rise + {coef[2]:.2f}x height (+/-{sd_res:.2f} m), "
               f"lag {q(lags, .5):.0f} h", flush=True)
     os.makedirs(DATA, exist_ok=True)
     json.dump(model, open(os.path.join(DATA, "flood_model.json"), "w"), separators=(",", ":"))
@@ -273,24 +288,55 @@ def now():
             recent = [(v, t) for t, v in pu if (nowt - t).total_seconds() <= 48 * 3600]
             if recent:
                 v, t = max(recent)
-                still_rising = pu[-1][1] >= v - 0.01 and (at(pu, 3) or v) < pu[-1][1]
-                if v >= p["up_thr"] and not still_rising:
-                    src = (v, t, "peaked")
-        if not src and up in est and est[up]["mid"] >= p["up_thr"]:
+                low = min(vv for tt, vv in pu if tt <= t)
+                still_rising = (at(pu, 3) or v) < pu[-1][1] - 0.01
+                if v - low >= UP_RISE and not still_rising:
+                    src = (v, v - low, t, "peaked")
+        if not src and up in est:
             e = est[up]
-            src = (e["mid"], dt.datetime.fromisoformat(e["t_mid"]), "estimated")
+            low = min(vv for tt, vv in pu) if pu else e["now"]
+            if e["mid"] - low >= UP_RISE:
+                src = (e["mid"], e["mid"] - low, dt.datetime.fromisoformat(e["t_mid"]), "estimated")
         if not src:
             continue
-        uv, ut, kind = src
-        mid = p["a"] + p["b"] * uv + p["c"] * dnow
+        uv, urise, ut, kind = src
+        rise = p["a"] + p["b"] * urise + p["c"] * dnow
         t_mid = ut + dt.timedelta(hours=p["lag"][1])
-        if t_mid < nowt - dt.timedelta(hours=3) or mid <= dnow + 0.05:
+        if t_mid < nowt - dt.timedelta(hours=3) or rise <= 0.1:
             continue   # it's been and gone, or nothing much to come
         est[dn] = {"name": model["sites"][dn]["name"] if dn in model["sites"] else SITES.get(dn), "now": dnow, "how": "from_up",
-                   "up": SITES.get(up), "up_h": round(uv, 2), "up_kind": kind, "n": p["n"],
-                   "lo": round(mid - 1.28 * p["sd"], 2), "mid": round(mid, 2), "hi": round(mid + 1.28 * p["sd"], 2),
+                   "up": SITES.get(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
+                   "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
                    "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
                    "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()}
+    # onto the Bureau's scale: where its board reads differently from these records (a different gauge board at the
+    # same place, as at Loudoun Bridge), every height is moved by the difference between the two latest readings
+    off = {}
+    try:
+        fw = json.load(open(os.path.join(DATA, "flood_warn.json")))
+        hd = fw["rivers"]["headers"]
+        iN = next(i for i, h in enumerate(hd) if "station" in h.lower()); iH = next(i for i, h in enumerate(hd) if "height" in h.lower())
+        bom = {}
+        for r in fw["rivers"]["rows"]:
+            try:
+                bom.setdefault(r[iN], float(r[iH]))
+            except (ValueError, IndexError):
+                pass
+        for s_, pts in live.items():
+            b = bom.get(SITES.get(s_))
+            if b is not None:
+                d = b - pts[-1][1]
+                off[s_] = round(d, 2) if abs(d) >= 0.15 else 0.0
+    except (OSError, ValueError, KeyError, StopIteration):
+        pass
+    for s_, e in est.items():
+        o = off.get(s_, 0.0)
+        if o:
+            for k in ("now", "lo", "mid", "hi"):
+                e[k] = round(e[k] + o, 2)
+            e["bom_offset"] = o
+        if e.get("up_site") and off.get(e["up_site"]):
+            e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
     horizon = nowt + dt.timedelta(hours=48)
     est = {s: e for s, e in est.items() if dt.datetime.fromisoformat(e["t_lo"]) <= horizon}
     out = {"made": t_end.strftime("%Y-%m-%dT%H:%M+10:00"), "model_made": model.get("made"),

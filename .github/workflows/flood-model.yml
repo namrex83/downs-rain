@@ -35,8 +35,21 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash .github/pages.sh get
 
+      - name: Restore the downloaded records
+        uses: actions/cache/restore@v5
+        with:
+          path: fm_cache
+          key: flood-records-${{ github.run_id }}
+          restore-keys: flood-records-
+
       - name: Learn from past floods
         run: python -u .github/flood_model.py train
+
+      - name: Keep the downloaded records
+        uses: actions/cache/save@v5
+        with:
+          path: fm_cache
+          key: flood-records-${{ github.run_id }}
 
       - name: First estimates
         run: python -u .github/flood_model.py now || echo "estimates skipped"

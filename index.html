@@ -186,7 +186,7 @@ table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
 .creekbtn .ck{display:inline-block;width:18px;height:6px;border-radius:3px;background:linear-gradient(90deg,#9b0056 0 33%,#007f86 33% 66%,#8a4a00 66%)}
 .creekbtn a.off{color:var(--ink-3)} .creekbtn a.off .ck{opacity:.3}
 .bomplot{color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,.25);text-underline-offset:2px} .bomplot span{font-size:.75em;color:var(--accent)}
-.gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600}
+.gout{margin:4px 0 2px;font-size:.82rem;line-height:1.4} .pkline{color:#b00000;font-weight:600} .estline{color:#6a3fa0;font-weight:600}
 .clabelpin{overflow:visible} .rchip{display:inline-block;min-width:1.6em;text-align:center;border-radius:5px;padding:0 4px;margin:1px 0;background:#f4f6f8;border:1px solid rgba(0,0,0,.18)} .cmapbox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(255,255,255,.95);border:2px solid #e00000;border-radius:12px;padding:3px 9px;font:600 .75rem/1.25 var(--body);color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:calc(100% - 130px);pointer-events:none} .cmapbox b{font-size:.95rem} .cmapbox .nums{display:block;white-space:nowrap} .cmapbox .cn{display:block;font-weight:700;font-size:.68rem;color:#e00000} .clabel{position:absolute;left:0;top:0;background:rgba(255,255,255,.92);color:#0b3d6e;border:1.5px solid #0b3d6e;border-radius:8px;padding:1px 5px;font:700 .72rem/1.15 var(--body);white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)} .clabel small{font-weight:500;font-size:.62rem;margin:0 1px} .clabel.sel{border-color:#e00000;color:#e00000}
 .gdot{display:inline-block;width:.85em;height:.85em;border-radius:50%;margin-right:.45em;vertical-align:.05em;background:#3aa655;flex:none} .gdot.g0{visibility:hidden} .gdot.g1{background:#f0a020} .gdot.g2{background:#e00000} .gdot.g3{background:#a00000} .gdot.g4{background:#7a2db0} .gkey{margin:6px 0 0} .gkey .gdot{margin-left:.6em;margin-right:.25em} .gkey .gdot:first-child{margin-left:0}
 #watch tbody tr{cursor:pointer} #watch tr.sel td{background:rgba(224,0,0,.07)}
@@ -980,7 +980,17 @@ function drawStreams(){
   tubeLabels();
 }
 function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
-let DOTLIST = null, RHIST = {};
+let DOTLIST = null, RHIST = {}, FEST = {};
+// the site's own estimate for a gauge (data/flood_est.json, from .github/flood_model.py), by the Bureau's gauge name
+const estFor = name => Object.entries(FEST).find(([k]) => name === k || name.startsWith(k + " ") || k.startsWith(name + " "))?.[1];
+const whenTxt = iso => new Date(iso).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric"}).replace(",", "");
+function estTxt(e, long){
+  const range = `${e.lo.toFixed(1)}–${e.hi.toFixed(1)} m`, t = whenTxt(e.t_mid);
+  if (!long) return `Site est.: ~${e.mid.toFixed(1)} m ${t}`;
+  const why = e.how === "from_up" ? `from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m, and ${e.n} past floods`
+    : `matched to ${e.n} past times it was rising like this`;
+  return `🧮 <b>Site estimate: peak ~${e.mid.toFixed(2)} m around ${t}</b> (likely ${range}, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}) <span class="gnote2">${why}. From past floods, not the Bureau's forecast.</span>`;
+}
 // What's ahead for a gauge (in its box on the map): the Bureau's predicted peak if a flood warning gives one; which way
 // it's heading over the last few hours (from the readings this site has kept); and the forecast rain over its catchment
 // for the next 48 hours. Not a forecast of our own: a river's peak needs the Bureau's calibrated river models.
@@ -989,6 +999,7 @@ function gaugeOutlook(name){
   const pk = FW && FW.peaks ? Object.entries(FW.peaks).find(([k]) => name === k || name.startsWith(k + " ") || name.startsWith(k + " (")) : null;
   if (pk) { const v = pk[1];
     out.push(v.past ? `🔺 <b>BOM: peaked at ${v.h.toFixed(2)} m</b> ${v.when}` : `🔺 <b>BOM forecast: around ${v.h.toFixed(2)} m</b> ${v.when}`); }
+  const e = estFor(name); if (e) out.push(estTxt(e, true));
   const h = RHIST[name];
   if (h && h.length >= 2) {
     const last = h[h.length - 1], back = h.filter(p => p[0] <= last[0] - 150).pop() || h[0];   // about 3 hours back (at least 2.5)
@@ -1320,7 +1331,8 @@ function drawRivers(fw){
   const nameCell = r => { const u = plotOf(g(r, iName)), t = shortGauge(g(r, iName));
     const nm = g(r, iName), pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
     const pkTxt = pk ? `<br><small class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`} ${pk[1].when}</small>` : "";
-    return (u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${t} <span aria-hidden="true">↗</span></a>` : t) + pkTxt; };
+    const es = estFor(nm), esTxt = es ? `<br><small class="estline">${estTxt(es)}</small>` : "";
+    return (u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${t} <span aria-hidden="true">↗</span></a>` : t) + pkTxt + esTxt; };
   const tr = r => `<tr><td><i class="gdot ${lvl(r)}"></i>${nameCell(r)}</td><td class="n${flood(r) ? " fl" : ""}">${g(r, iH)}</td><td>${rising(r) ? "▲" : /falling/i.test(g(r, iT)) ? "▼" : "–"}</td><td${flood(r) ? ' class="fl"' : ""}>${flood(r) ? g(r, iC) : /below/i.test(g(r, iC)) ? "below" : ""}</td></tr>`;
   const local = r => LOCAL_GAUGES.test(g(r, iName)) && !/AHD/i.test(g(r, iD));   // our creeks, not weir-pool levels
   const top = sel ? rows : rows.filter(r => flood(r) || (rising(r) && local(r)) || KEY_GAUGES.test(g(r, iName))).sort((a, b) => flood(b) - flood(a) || rising(b) - rising(a));
@@ -1369,6 +1381,7 @@ async function drawWatch(){
   try {   // a current Bureau flood warning for this river system, from data/flood_warn.json (checked by the radar job)
     const fw = FW = await getJSON("data/flood_warn.json");
     try { RHIST = (await getJSON("data/river_hist.json")).gauges || {}; } catch(e){ RHIST = {}; }
+    try { FEST = (await getJSON("data/flood_est.json")).estimates || {}; } catch(e){ FEST = {}; }
     drawRivers(fw); markCatchOptions(fw);
     const iN = Math.max(0, ((fw.rivers || {}).headers || []).findIndex(h => /station/i.test(h)));
     const mine = pick ? inCatch(pick, gaugeRows(fw), iN).map(r => r[iN]) : null;
