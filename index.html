@@ -435,7 +435,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls catchOnly" id="cControls" hidden>
-    <div class="field cshowfield"><div class="seg" id="cShow"><button data-s="table" aria-pressed="true">🚉 Line diagram</button><button data-s="map" aria-pressed="false">🗺 Map view</button></div></div>
+    <div class="field cshowfield"><div class="seg" id="cShow"><button data-s="lines" aria-pressed="true">🚉 River lines</button><button data-s="table" aria-pressed="false">📋 Table</button><button data-s="map" aria-pressed="false">🗺 Map</button></div></div>
     <div class="field cMapOnly"><span class="eyebrow">Rain on the map</span>
       <div class="seg" id="cView"><button data-v="today" aria-pressed="false">To 9am</button><button data-v="two" aria-pressed="false">2 days</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
     <div class="field rangefield copfield cMapOnly"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
@@ -896,7 +896,7 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null, cView = "none", catchLabels = null, cMapOn = false;
+let catchAll = null, cView = "none", catchLabels = null, cMapOn = false, cList = "lines";   // cList: the gauges as river lines or a table
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
 map.createPane("labelPane").style.zIndex = 465;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
@@ -1430,8 +1430,9 @@ function drawRivers(fw){
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
     return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
-  $("rivers").innerHTML = sel ? "" : head + `<tbody>${top.map(tr).join("")}</tbody>`;
-  $("riverTube").innerHTML = sel ? tubeDiagram(rows, r => g(r, iName), r => {   // a picked catchment: as a line diagram
+  const asLines = sel && cList === "lines";   // a picked catchment: as river lines (or the full table)
+  $("rivers").innerHTML = asLines ? "" : head + `<tbody>${(sel ? rows : top).map(tr).join("")}</tbody>`;
+  $("riverTube").innerHTML = asLines ? tubeDiagram(rows, r => g(r, iName), r => {   // a picked catchment: as a line diagram
     const nm = g(r, iName), u = plotOf(nm), e = estFor(nm), L = lvl(r);
     const pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
     const place = nm.includes(" at ") ? nm.split(" at ").slice(1).join(" at ") : nm;
@@ -1441,7 +1442,7 @@ function drawRivers(fw){
       + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
-  if (sel) { $("riversAll").innerHTML = `<details><summary>Show as a table</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rows.map(tr).join("")}</tbody></table></div></details>`; }
+  if (sel) $("riversAll").innerHTML = "";
   else $("riversAll").innerHTML = rest.length ? `<details><summary>All ${rows.length} gauges</summary><div class="tablewrap"><table class="slim">${head}<tbody>${rest.map(tr).join("")}</tbody></table></div></details>` : "";
   const nf = rows.filter(flood), nr = rows.filter(r => rising(r) && !flood(r) && (sel || local(r)));
   $("sumRiv").innerHTML = `🌊 ${sel ? `${rows.length} gauge${rows.length > 1 ? "s" : ""} in this catchment · ` : ""}<b>${nf.length ? `${nf.length} gauge${nf.length > 1 ? "s" : ""} in flood` : "No gauges in flood"}</b>${nf.length ? ` (${nf.slice(0, 2).map(r => shortGauge(g(r, iName))).join(", ")}${nf.length > 2 ? "…" : ""})` : ""}${nr.length ? ` · ${nr.length} rising` : ""}`;
@@ -1924,11 +1925,12 @@ $("catchSel").onchange = () => pickCatch(true);
 function cShowSync(){
   const t = tab === "catch" && !cMapOn;
   document.body.classList.toggle("ctable", t);
-  [...$("cShow").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.s === "map") === cMapOn));
+  [...$("cShow").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.s === "map" ? cMapOn : !cMapOn && b.dataset.s === cList));
   $("catchSelLbl").textContent = cMapOn ? "Catchment (or tap one on the map)" : "Catchment";
 }
-$("cShow").onclick = e => { const b = e.target.closest("button"); if (!b || (b.dataset.s === "map") === cMapOn) return;
-  cMapOn = b.dataset.s === "map"; cShowSync();
+$("cShow").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+  const was = cList; if (b.dataset.s === "map") cMapOn = true; else { cMapOn = false; cList = b.dataset.s; }
+  cShowSync(); if (cList !== was && FW) drawRivers(FW);
   if (cMapOn) { map.invalidateSize();
     if (catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [10, 10]});
     else if (catchAll) map.fitBounds(L.featureGroup(catchAll.getLayers()).getBounds(), {padding: [10, 10]});
@@ -3649,7 +3651,7 @@ function setTab(t, first){
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
   if (t !== "catch") clearCatchTab();
-  if (t === "catch" && tab_prev !== "catch") cMapOn = false;   // the Catchments tab opens on its table
+  if (t === "catch" && tab_prev !== "catch") { if (cMapOn || cList !== "lines") { cMapOn = false; cList = "lines"; if (FW) drawRivers(FW); } }   // the Catchments tab opens on the river lines
   cShowSync();
   fsSync();
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
