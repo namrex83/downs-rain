@@ -981,6 +981,20 @@ function drawStreams(){
 }
 function tubeLabels(){ $("map").classList.toggle("tubezoom", map.getZoom() >= CREEKS_ZOOM); }
 let DOTLIST = null, RHIST = {}, FEST = {};
+// official positions of the Condamine gauges from the Queensland water monitoring records (the map's own positions
+// for these come from place names and can be a few km out)
+const GAUGE_POS = {"Condamine River at Elbow Valley": [-28.3714, 152.1415], "Condamine River at Warwick": [-28.2143, 152.0485],
+  "Condamine River at Talgai Weir TW": [-27.9901, 151.7576], "Condamine River at Tummaville": [-27.8699, 151.5105],
+  "Condamine River at Yarramalong": [-27.8349, 151.4497], "Condamine River at Cecil Plains": [-27.5337, 151.2033],
+  "Condamine River at Loudoun Bridge": [-27.2251, 151.1857], "Condamine River at Brigalow Bridge": [-26.9043, 150.7830],
+  "Kings Creek at Aides Bridge": [-27.9267, 151.8604], "Dalrymple Creek at Allora": [-28.0352, 152.0143],
+  "Canal Creek at Leyburn": [-28.0321, 151.5853], "Oakey Creek at Fairview": [-27.3034, 151.2780],
+  "Gowrie Creek at Cranley": [-27.5173, 151.9412], "Charleys Creek at Chinchilla": [-26.7421, 150.6043],
+  "Condamine River at Lemon Tree Weir": [-27.7534, 151.3120], "Condamine River at Pampas Bridge": [-27.7834, 151.4244],
+  "Condamine River at Lone Pine": [-27.6690, 151.3467], "Condamine River at Bedarra": [-26.8417, 150.3443],
+  "Condamine River at Cotswold": [-27.0855, 149.7866], "Oakey Creek at Jondaryan": [-27.3900, 151.5506],
+  "Oakey Creek at Dalmeny": [-27.4397, 151.6583], "Oakey Creek at Bowenville Reserve": [-27.3267, 151.4547],
+  "Condamine River at Brosnans Barn": [-28.3322, 152.3142], "Glengallan Creek at Rocky Ridge": [-28.1176, 151.9613]};
 // the site's own estimate for a gauge (data/flood_est.json, from .github/flood_model.py), by the Bureau's gauge name
 const estFor = name => Object.entries(FEST).find(([k]) => name === k || name.startsWith(k + " ") || k.startsWith(name + " "))?.[1];
 const whenTxt = iso => new Date(iso).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", hour: "numeric"}).replace(",", "");
@@ -1027,8 +1041,8 @@ function drawGaugeDots(list){   // list: [{name, lvl, text, other (outside the p
   if (!RMAP || tab !== "catch" || !list) return;
   const close = map.getZoom() >= ALLDOTS_ZOOM;
   const keep = x => x.lvl >= "g2" ? x.inArea !== false : !x.other && (x.lvl === "g1" || close);
-  riverDots = L.layerGroup(list.filter(x => RMAP.gauges[x.name] && keep(x)).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
-    L.circleMarker((RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", bubblingMouseEvents: false, radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
+  riverDots = L.layerGroup(list.filter(x => (GAUGE_POS[x.name] || RMAP.gauges[x.name]) && keep(x)).sort((a, b) => (b.other ? 1 : 0) - (a.other ? 1 : 0) || a.lvl.localeCompare(b.lvl)).map(x =>   // the picked catchment's, and the worst, on top
+    L.circleMarker(GAUGE_POS[x.name] || (RMAP._snap || RMAP.gauges)[x.name], {pane: "gaugePane", bubblingMouseEvents: false, radius: {g0: 5, g1: 6, g2: 10}[x.lvl] || 12, color: "#fff", weight: x.lvl < "g2" ? 1.5 : 3, fillColor: GCOL[x.lvl], fillOpacity: x.other ? .6 : 1, opacity: 1})
       .bindTooltip(x.text, {direction: "top", offset: [0, -6]})
       .bindPopup(() => `<b>${x.text}</b>${gaugeOutlook(x.name)}${x.plot ? `<br><a href="${x.plot}" target="_blank" rel="noopener">River height graph (BOM) ↗</a>` : ""}`, {offset: [0, -4]}))).addTo(map);
 }
