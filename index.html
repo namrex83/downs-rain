@@ -62,6 +62,15 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .transport .tpplay{background:color-mix(in srgb, var(--accent) 12%, var(--panel));width:52px}
 .transport .tpplay svg{width:24px;height:24px}
 .tlmid .transport{margin:6px auto 2px}
+@media (max-width:600px){   /* phones: a more compact time slider so the readout under it fits on screen */
+  .tlmid{padding:4px 10px 3px}
+  .tltime{font-size:.85rem}
+  .tlticks{height:15px;font-size:.7rem}
+  .tlmid .transport{margin:3px auto 1px;padding:1px 4px}
+  .transport button{height:30px;width:40px}
+  .transport .tpplay{width:46px}
+  .tap{padding:5px 9px}
+}
 /* on a computer the play controls sit beside the time slider, to keep the timeline short */
 @media (min-width:900px) and (max-width:999px){
   .tlmid{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:16px;align-items:center}
@@ -551,8 +560,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="transport" id="rTp"><button data-k="first" aria-label="First"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="2.6" height="14" rx="1"/><path d="M13 5.5v13L6.6 12zM20.4 5.5v13L14 12z"/></svg></button><button data-k="prev" aria-label="Back"><svg viewBox="0 0 24 24"><rect x="5.5" y="5" width="2.6" height="14" rx="1"/><path d="M18.5 5.5v13L9.6 12z"/></svg></button><button id="rPlay" class="tpplay" aria-pressed="true" aria-label="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button data-k="next" aria-label="Forward"><svg viewBox="0 0 24 24"><rect x="15.9" y="5" width="2.6" height="14" rx="1"/><path d="M5.5 5.5v13l8.9-6.5z"/></svg></button><button data-k="last" aria-label="Last"><svg viewBox="0 0 24 24"><rect x="17.9" y="5" width="2.6" height="14" rx="1"/><path d="M11 5.5v13l6.4-6.5zM3.6 5.5v13L10 12z"/></svg></button></div>
     </div>
   </div>
-  <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
   <div class="tap radarOnly" id="rTap" hidden>Loading the latest radar…</div>
+  <p class="note radarOnly rnote" id="rNote" hidden><b>About the part after Now:</b> it's our own simple prediction. It takes the latest radar picture and moves the rain along at the speed and direction it has been travelling, so it can't show storms growing, weakening, turning or new ones forming, and it gets less reliable further ahead. The Bureau's app and website run their own forecast radar: <a href="https://www.bom.gov.au/weather-and-climate/rain-radar-and-weather-maps?radar=108-toowoomba" target="_blank" rel="noopener">open BOM's Toowoomba radar ↗</a></p>
+  
   <div class="radarOnly" id="rLegendBox" hidden><div class="eyebrow" style="margin-bottom:5px">Rain rate (mm per hour)</div><div class="legend" id="rLegend"></div></div>
   <div class="rTimeline windOld" id="wTimeline" hidden>
     <div class="tlmid">
@@ -2172,10 +2182,11 @@ function fitMap(){
   el.style.width = "";
   const top = el.getBoundingClientRect().top + scrollY;
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
-  const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
+  // what should be in view under the map when a tab opens: its time slider and the tap readout (and the rain stats)
+  const ids = {fc: ["fTap", "fChart"], rain: ["tap", "stats"], temp: ["tTimeline", "tTap"], soil: ["oTimeline", "oTap"], storms: ["sTap"],
+               radar: ["rTimeline", "rTap"]}[tab] || ["tap"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  const least = innerWidth > 600 ? (tab === "fc" ? 180 : 190) : tab === "fc" ? 200 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5))
-    : tab === "catch" ? Math.max(240, Math.round(innerHeight * 0.65)) : Math.max(250, Math.round(innerHeight * 0.4));   // a phone: enough map to see the pattern
+  const least = innerWidth > 600 ? (tab === "fc" ? 180 : 190) : tab === "fc" ? 200 : tab === "catch" ? Math.max(240, Math.round(innerHeight * 0.65)) : 210;   // a phone: at least enough map to see the pattern
   el.style.minHeight = least + "px";
   let h = Math.max(least, innerHeight - top - legend - 10);
   el.style.height = h + "px";
