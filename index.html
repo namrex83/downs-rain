@@ -325,6 +325,7 @@ body.mapfull{overflow:hidden}
 .fstoggle{display:block;margin:0 auto 5px;font:600 .85rem var(--body);background:#fff;color:#1c2621;border:0;border-radius:999px;padding:7px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer}
 .fspanel.shut .fstoggle{margin:0}
 .locate a.busy svg{animation:spin 1s linear infinite}
+.locate a.on{background:#2a7de1!important} .locate a.on svg{stroke:#fff} .locate a.on svg circle:last-child{fill:#fff;stroke:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
 .town i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#1c2621;border:1.5px solid #fff}
@@ -2097,10 +2098,50 @@ const Locate = L.Control.extend({ options: {position: "topleft"}, onAdd(){
   a.title = "Show my location"; a.setAttribute("role", "button"); a.setAttribute("aria-label", "Show my location");
   a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#2a7de1" stroke="#2a7de1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
   L.DomEvent.disableClickPropagation(box);
-  L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); locateMe(a); });
+  L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); setFollow(!following, a); });
   return box;
 }});
 new Locate().addTo(map);
+// Follow me: the location button keeps the map on you as you move (driving), the pin and its reading updating as you
+// go; tap it again, or drag the map, to stop. It pauses while the page isn't on screen, to save the battery.
+let following = false, followId = null, followBtn = null, lastFollowRead = null;
+function setFollow(on, btn){
+  followBtn = btn || followBtn;
+  following = on;
+  if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (and follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
+  if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; }
+  if (!on) return;
+  if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return setFollow(false); }
+  lastFollowRead = null;
+  if (followBtn) followBtn.classList.add("busy");
+  followId = navigator.geolocation.watchPosition(onFollow, err => {
+      if (err.code !== 1) return;   // no fix for a while (standing still, a cutting or a patch with poor signal): keep waiting
+      if (followBtn) followBtn.classList.remove("busy"); locateErr(err); setFollow(false); },
+    {enableHighAccuracy: true, maximumAge: 5000});
+}
+function onFollow(pos){
+  if (followBtn) followBtn.classList.remove("busy");
+  const ll = L.latLng(pos.coords.latitude, pos.coords.longitude), acc = pos.coords.accuracy;
+  if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
+  else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
+  map.panTo(ll, {animate: true, duration: 0.6});
+  tapAt = ll;
+  if (pin) pin.setLatLng(ll);
+  // read the maps again every 500 m or 90 seconds (the forecast chart asks a server, so not on every move)
+  const now = Date.now(), moved = lastFollowRead ? lastFollowRead.ll.distanceTo(ll) : Infinity;
+  if (!lastFollowRead || moved > 500 || now - lastFollowRead.t > 90000) {
+    lastFollowRead = {ll, t: now};
+    const farther = !MYLL || L.latLng(MYLL).distanceTo(ll) > 10000;
+    MYLL = [ll.lat, ll.lng]; if (farther) stormFlags();   // the severe-storm dot is for within 100 km of you
+    readAnyTap();
+  }
+}
+map.on("dragstart", () => { if (following) setFollow(false); });   // you've moved the map yourself: stop following
+document.addEventListener("visibilitychange", () => {
+  if (!following) return;
+  if (document.hidden) { if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; } }
+  else setFollow(true);
+});
 // Full screen: the map fills the whole screen (for a better look or a screenshot); the same button brings it back
 const FS_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
 const FS_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
@@ -2157,8 +2198,10 @@ function locateMe(btn){
     else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
     if (!map.getBounds().contains(ll)) map.panTo(ll);   // keep the zoom; only move if you're off the map
     tapAt = ll; readAnyTap();
-  }, err => {
-    btn.classList.remove("busy");
+  }, err => { btn.classList.remove("busy"); locateErr(err); }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
+}
+function locateErr(err){
+  {
     $("tap").textContent = err.code === 1
       ? "Location is turned off for this site. On iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App, then try again."
       : "Couldn't get your location just now. Try again in the open, away from buildings.";
@@ -2166,7 +2209,7 @@ function locateMe(btn){
     if (tab === "wind") $("wTap").textContent = $("tap").textContent;
     if (tab === "temp") $("tTap").textContent = $("tap").textContent;
     if (tab === "soil") $("oTap").textContent = $("tap").textContent;
-  }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
+  }
 }
 function fitMap(){
   const el = $("map");
