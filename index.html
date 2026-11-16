@@ -3906,10 +3906,12 @@ $("tTemp").onclick = () => tab !== "temp" && setTab("temp");
 $("tSoil").onclick = () => tab !== "soil" && setTab("soil");
 $("tOut").onclick = () => tab !== "outlook" && setTab("outlook");
 // on phones, swipe left or right anywhere except the map (where a swipe moves the map) to change tab
-const TAB_ORDER = ["fc", "temp", "wind", "radar", "rain", "soil", "storms", "outlook"];
+// the order is the tab bar's own, left to right, so it always matches what's on screen
+const TAB_KEY = {tRain: "rain", tFc: "fc", tTemp: "temp", tWind: "wind", tRadar: "radar", tSoil: "soil", tStorm: "storms", tCatch: "catch", tOut: "outlook"};
+const TAB_ORDER = [...$("tRain").parentElement.children].map(b => TAB_KEY[b.id]).filter(Boolean);
 let swX = null, swY = 0, swT = 0;
 document.addEventListener("touchstart", e => {
-  swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap, .chartbox svg") ? e.touches[0].clientX : null;
+  swX = e.touches.length === 1 && !e.target.closest("#map, input[type=range], .tablewrap, .chartbox svg, .cwrap, select") ? e.touches[0].clientX : null;
   if (swX != null) { swY = e.touches[0].clientY; swT = Date.now(); }
 }, {passive: true});
 document.addEventListener("touchend", e => {
@@ -3917,7 +3919,7 @@ document.addEventListener("touchend", e => {
   const t = e.changedTouches[0], dx = t.clientX - swX, dy = t.clientY - swY; swX = null;
   if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy) || Date.now() - swT > 700) return;   // a clear sideways flick only
   const i = TAB_ORDER.indexOf(tab) + (dx < 0 ? 1 : -1);
-  if (i >= 0 && i < TAB_ORDER.length) setTab(TAB_ORDER[i]);
+  if (i >= 0 && i < TAB_ORDER.length) { setTab(TAB_ORDER[i]); if (scrollY > 200) scrollTo({top: 0, behavior: "smooth"}); }
 }, {passive: true});
 $("tRadar").onclick = () => tab !== "radar" && setTab("radar");
 $("fDay").onchange = () => { fLoop(false); fDraw(); };
