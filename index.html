@@ -97,6 +97,9 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 }
 #mapRow{display:flex;flex-direction:column;gap:12px}
 #side{display:flex;flex-direction:column;gap:12px}
+/* Catchments tab, table view (the default): no map, just the tables; "Map view" brings the map back */
+body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapOnly{display:none!important}
+.cshowfield{flex-basis:100%} #cShow{width:max-content;max-width:100%} #cShow button{font-weight:600}
 #fTap.merged{display:none}   /* its text is in the chart's heading */
 /* BOM station readings on the Temp and Wind maps */
 .obsw{position:relative}
@@ -412,12 +415,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </div>
 
   <div class="controls catchOnly" id="cControls" hidden>
-    <div class="field"><span class="eyebrow">Rain on the map</span>
+    <div class="field cshowfield"><div class="seg" id="cShow"><button data-s="table" aria-pressed="true">📋 Table</button><button data-s="map" aria-pressed="false">🗺 Map view</button></div></div>
+    <div class="field cMapOnly"><span class="eyebrow">Rain on the map</span>
       <div class="seg" id="cView"><button data-v="today" aria-pressed="false">To 9am</button><button data-v="two" aria-pressed="false">2 days</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="fortnight" aria-pressed="false">14 days</button><button data-v="season" aria-pressed="false">Season</button><button data-v="none" aria-pressed="true">Off</button></div></div>
-    <div class="field rangefield copfield"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
+    <div class="field rangefield copfield cMapOnly"><label for="cOp">See-through</label><input type="range" id="cOp" min="0.2" max="1" step="0.05" value="0.6" aria-label="Rain layer see-through"></div>
     <div class="field"><span class="eyebrow">Area</span>
       <div class="seg" id="cRegion"><button data-r="dd" aria-pressed="true">Downs</button><button data-r="seq" aria-pressed="false">SE coast</button><button data-r="wide" aria-pressed="false">Wide Bay</button><button data-r="border" aria-pressed="false">Border</button></div></div>
-    <div class="field catchfield"><label for="catchSel">Catchment (or tap one on the map)</label><select id="catchSel"><option value="">None</option></select></div>
+    <div class="field catchfield"><label for="catchSel" id="catchSelLbl">Catchment</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="controls stormOnly" hidden>
     <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
@@ -871,7 +875,7 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 }
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
-let catchAll = null, cView = "none", catchLabels = null;
+let catchAll = null, cView = "none", catchLabels = null, cMapOn = false;
 map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
 map.createPane("labelPane").style.zIndex = 465;   // each catchment's average rain
 map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
@@ -1415,7 +1419,7 @@ async function drawWatch(){
       || `<p class="fnone">✅ No Bureau of Meteorology flood warning ${pick ? "for this catchment" : "for the Condamine system"} right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
   $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
-    $("catchSel").value = tr.dataset.id; $("catchSel").onchange(); drawWatch(); $("map").scrollIntoView({behavior: "smooth", block: "center"}); };
+    $("catchSel").value = tr.dataset.id; $("catchSel").onchange(); drawWatch(); if (cMapOn) $("map").scrollIntoView({behavior: "smooth", block: "center"}); };
 }
 async function groundWet(c){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
@@ -1840,6 +1844,19 @@ function setMore(open){
 }
 $("rMoreBtn").onclick = () => setMore($("rMore").hidden);
 $("catchSel").onchange = () => pickCatch(true);
+// Table / Map view on the Catchments tab: it opens on the table (the map is busy); the map is a button away
+function cShowSync(){
+  const t = tab === "catch" && !cMapOn;
+  document.body.classList.toggle("ctable", t);
+  [...$("cShow").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.s === "map") === cMapOn));
+  $("catchSelLbl").textContent = cMapOn ? "Catchment (or tap one on the map)" : "Catchment";
+}
+$("cShow").onclick = e => { const b = e.target.closest("button"); if (!b || (b.dataset.s === "map") === cMapOn) return;
+  cMapOn = b.dataset.s === "map"; cShowSync();
+  if (cMapOn) { map.invalidateSize();
+    if (catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [10, 10]});
+    else if (catchAll) map.fitBounds(L.featureGroup(catchAll.getLayers()).getBounds(), {padding: [10, 10]});
+    fitMap(); if (innerWidth < 1000) $("map").scrollIntoView({behavior: "smooth", block: "start"}); } };
 $("cView").onclick = e => { const b = e.target.closest("button"); if (!b) return; cView = b.dataset.v; catchRain(); };
 try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $("rMoreBtn").setAttribute("aria-expanded", true); $("rMoreBtn").textContent = "Fewer options ▴"; } } catch(e){}
 
@@ -1938,7 +1955,7 @@ function fitMap(){
   // on Forecast the rain chart (not the colour key) should fit under the map, so the map may be a little shorter
   const ids = tab === "fc" ? ["fTap", "fChart"] : ["legendBox", "tap", "stats", "sTap", "sLegendBox", "rTap", "rLegendBox", "rTimeline", "wTap", "wLegendBox", "wTimeline", "tTap", "tLegendBox", "tTimeline", "oTap", "oLegendBox", "oTimeline"];
   const legend = ids.reduce((a, id) => a + $(id).offsetHeight, 0) + 24;
-  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5)) : 240;
+  const least = tab === "fc" ? 180 : innerWidth > 600 ? 190 : (tab === "rain" || tab === "radar") ? Math.max(240, Math.round(innerHeight * 0.5)) : tab === "catch" ? Math.max(240, Math.round(innerHeight * 0.65)) : 240;
   el.style.minHeight = least + "px";
   let h = Math.max(least, innerHeight - top - legend - 10);
   el.style.height = h + "px";
@@ -3523,6 +3540,7 @@ let viewBeforeRadar = null;
 const fcZoom = () => HOME_ZOOM - (innerWidth >= 1000 ? 1.5 : 1.75);   // about Emerald to Grafton; a little closer on a wide screen
 let fcView = null, mainView = null;
 function setTab(t, first){
+  const tab_prev = first ? null : tab;
   // Forecast has its own wider view (the models cover a big area); the other tabs share the closer one
   if (tab === "fc" && t !== "fc" && !first) { fcView = {c: map.getCenter(), z: map.getZoom()}; if (mainView) map.setView(mainView.c, mainView.z, {animate: false}); }
   if (t === "radar" && tab !== "radar") viewBeforeRadar = {c: map.getCenter(), z: map.getZoom()};
@@ -3555,6 +3573,8 @@ function setTab(t, first){
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
   if (t !== "catch") clearCatchTab();
+  if (t === "catch" && tab_prev !== "catch") cMapOn = false;   // the Catchments tab opens on its table
+  cShowSync();
   fsSync();
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
