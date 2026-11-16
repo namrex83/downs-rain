@@ -325,6 +325,9 @@ body.mapfull{overflow:hidden}
 .fstoggle{display:block;margin:0 auto 5px;font:600 .85rem var(--body);background:#fff;color:#1c2621;border:0;border-radius:999px;padding:7px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer}
 .fspanel.shut .fstoggle{margin:0}
 .locate a.busy svg{animation:spin 1s linear infinite}
+.northarrow{position:absolute;top:12px;left:50%;margin-left:-17px;width:34px;height:34px;z-index:1000;border-radius:50%;background:rgba(28,38,33,.85);
+  box-shadow:0 1px 4px rgba(0,0,0,.4);pointer-events:none;transition:transform .5s}
+.northarrow svg{width:100%;height:100%}
 .locate a.on{background:#2a7de1!important} .locate a.on svg{stroke:#fff} .locate a.on svg circle:last-child{fill:#fff;stroke:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
@@ -671,6 +674,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -720,7 +724,7 @@ try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "o
 // tabs keeps wherever the map has been moved to
 const HOME = [-27.4, 152.2], HOME_ZOOM = 8;   // South East Queensland, Dalby to the coast
 const SPOT = {name: "Toowoomba", ll: [-27.56, 151.95]};   // the chart and day buttons read here until a spot is tapped
-const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13}).setView(HOME, HOME_ZOOM);   // past about 13 the rain data (0.5-2 km squares) only gets blockier
+const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13, rotate: !!L.Map.prototype.setBearing, bearing: 0, rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false}).setView(HOME, HOME_ZOOM);   // past about 13 the rain data (0.5-2 km squares) only gets blockier
 L.control.scale({metric: true, imperial: false, maxWidth: 90, position: "bottomright"}).addTo(map);   // a distance scale in km
 // the tab's colour key copied, small, onto the bottom of the map, kept in step with the full key below the map
 const mapKey = document.createElement("div"); mapKey.className = "mapkey"; mapKey.hidden = true; map.getContainer().appendChild(mapKey);
@@ -743,13 +747,18 @@ const keyWatch = new MutationObserver(() => syncKey());
 ["legend", "tLegend", "oLegend", "rLegend", "sLegend"].forEach(id => { const el = document.getElementById(id); if (el) keyWatch.observe(el, {childList: true, subtree: true}); });
 keyWatch.observe(document.getElementById("legendBox"), {attributes: true, attributeFilter: ["style"]});
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
-map.createPane("labels");
+// panes that turn with the map when it's rotated (driving, heading up) go in its rotate pane; ones holding markers
+// (labels that stay upright) in its no-rotate pane (without the rotate add-on both are just the map pane)
+const ROT_PANE = map._rotatePane, UPRIGHT_PANE = map._norotatePane;
+map.createPane("labels", UPRIGHT_PANE);
 map.getPane("labels").style.zIndex = 450;
+map.createPane("labelTiles", ROT_PANE).style.zIndex = 450;   // the satellite map's own place names (tiles)
+map.getPane("labelTiles").style.pointerEvents = "none";
 map.getPane("labels").style.pointerEvents = "none";
 const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"});
 // The satellite map's own place names are only shown close in, where our town labels switch off,
 // so a town is never named twice (see townsForZoom)
-const satLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, pane: "labels"});
+const satLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, pane: "labelTiles"});
 const satellite = L.layerGroup([
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 17, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"})
 ]);
@@ -966,9 +975,9 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
 // The Catchments tab's map: every catchment outlined (tap one to pick it), the chosen one in red; and its summary from
 // data/catch_wet.json: its average rain over recent days and the volume that is (1 mm over 1 km² = 1 ML), then the ground.
 let catchAll = null, cView = "none", catchLabels = null, cMapOn = false, cList = "lines";   // cList: the gauges as river lines or a table
-map.createPane("catchPane").style.zIndex = 450;   // catchment outlines above the rain map
-map.createPane("labelPane").style.zIndex = 465;   // each catchment's average rain
-map.createPane("gaugePane").style.zIndex = 460;   // river gauges above the outlines
+map.createPane("catchPane", ROT_PANE).style.zIndex = 450;   // catchment outlines above the rain map
+map.createPane("labelPane", UPRIGHT_PANE).style.zIndex = 465;   // each catchment's average rain
+map.createPane("gaugePane", ROT_PANE).style.zIndex = 460;   // river gauges above the outlines
 // Rough gauge positions and the creek and river lines from OpenStreetMap (data/river_map.json, made by river-map.yml)
 let RMAP = undefined, streamLayer = null, riverDots = null;
 const GCOL = {g0: "#3aa655", g1: "#f0a020", g2: "#e00000", g3: "#a00000", g4: "#7a2db0"};
@@ -2098,19 +2107,29 @@ const Locate = L.Control.extend({ options: {position: "topleft"}, onAdd(){
   a.title = "Show my location"; a.setAttribute("role", "button"); a.setAttribute("aria-label", "Show my location");
   a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#2a7de1" stroke="#2a7de1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
   L.DomEvent.disableClickPropagation(box);
-  L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); setFollow(!following, a); });
+  // on the page: show where I am; full screen: follow me (map turned to the way you're heading)
+  L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); if ($("map").classList.contains("full") || following) setFollow(!following, a); else locateMe(a); });
   return box;
 }});
 new Locate().addTo(map);
 // Follow me: the location button keeps the map on you as you move (driving), the pin and its reading updating as you
 // go; tap it again, or drag the map, to stop. It pauses while the page isn't on screen, to save the battery.
-let following = false, followId = null, followBtn = null, lastFollowRead = null;
+let following = false, followId = null, followBtn = null, lastFollowRead = null, lastHeadPos = null;
+// north arrow, shown while the map is turned
+const northArrow = L.DomUtil.create("div", "northarrow", map.getContainer()); northArrow.hidden = true;
+northArrow.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2l5 12h-10z" fill="#d22"/><path d="M12 22l5-8h-10z" fill="#fff" stroke="#1c2621" stroke-width=".8"/><text x="12" y="13.2" text-anchor="middle" font-size="5.5" font-weight="700" fill="#fff">N</text></svg>';
+function setHeading(deg){
+  if (!map.setBearing) return;
+  map.setBearing(-deg);   // the add-on turns the map clockwise by its angle; heading up needs the opposite
+  northArrow.hidden = !deg;
+  northArrow.style.transform = `rotate(${-deg}deg)`;
+}
 function setFollow(on, btn){
   followBtn = btn || followBtn;
   following = on;
-  if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (and follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
+  if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (full screen: follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
   if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; }
-  if (!on) return;
+  if (!on) { lastHeadPos = null; setHeading(0); return; }
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return setFollow(false); }
   lastFollowRead = null;
   if (followBtn) followBtn.classList.add("busy");
@@ -2124,6 +2143,18 @@ function onFollow(pos){
   const ll = L.latLng(pos.coords.latitude, pos.coords.longitude), acc = pos.coords.accuracy;
   if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
   else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
+  // heading up: the phone's own heading when moving, else the bearing from the last spot 25 m+ back
+  let hd = pos.coords.heading;
+  if (!(hd >= 0) || !(pos.coords.speed > 1)) {
+    hd = null;
+    if (lastHeadPos && lastHeadPos.distanceTo(ll) >= 25) {
+      const r = Math.PI / 180, y = Math.sin((ll.lng - lastHeadPos.lng) * r) * Math.cos(ll.lat * r),
+        x = Math.cos(lastHeadPos.lat * r) * Math.sin(ll.lat * r) - Math.sin(lastHeadPos.lat * r) * Math.cos(ll.lat * r) * Math.cos((ll.lng - lastHeadPos.lng) * r);
+      hd = (Math.atan2(y, x) / r + 360) % 360;
+    }
+  }
+  if (!lastHeadPos || lastHeadPos.distanceTo(ll) >= 25) lastHeadPos = ll;
+  if (hd != null) setHeading(Math.round(hd));
   map.panTo(ll, {animate: true, duration: 0.6});
   tapAt = ll;
   if (pin) pin.setLatLng(ll);
@@ -2136,7 +2167,8 @@ function onFollow(pos){
     readAnyTap();
   }
 }
-map.on("dragstart", () => { if (following) setFollow(false); });   // you've moved the map yourself: stop following
+map.on("dragstart", () => { if (following) setFollow(false); });
+// back to the page from full screen: stop following and turn the map north-up again   // you've moved the map yourself: stop following
 document.addEventListener("visibilitychange", () => {
   if (!following) return;
   if (document.hidden) { if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; } }
@@ -2150,6 +2182,7 @@ function setFull(on){
   $("map").classList.toggle("full", on); document.body.classList.toggle("mapfull", on);
   fsBtn.innerHTML = on ? FS_CLOSE : FS_OPEN; fsBtn.title = on ? "Back to the page" : "Full screen map"; fsBtn.setAttribute("aria-label", fsBtn.title);
   fsSync();
+  if (!on && following) setFollow(false);
   setTimeout(() => { map.invalidateSize(); if (!on) fitMap(); }, 50);
 }
 const FullScreen = L.Control.extend({ options: {position: "topleft"}, onAdd(){
