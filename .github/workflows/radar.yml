@@ -129,6 +129,7 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
+          CORRECT_VERSION = 2        # bump when correct() changes, so recent days with your readings are redone
           GAUGE_HOLD_KM = 3.0        # the map is pulled to each gauge's reading within about this distance
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
           FAR_RADAR_MM = 15.0        # a gauge is also ignored if the radar shows at least this over it
@@ -978,11 +979,20 @@ jobs:
                       den += w
                   field = np.maximum(0, field + num / den)
                   # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
-                  # so the map at a gauge matches what it measured even where the radar changes quickly
+                  # so the map at a gauge matches what it measured even where the radar changes quickly.
+                  # All gauges are blended at once, the nearest counting by far the most, so a gauge a few km
+                  # away (e.g. Obe 0 mm, 3 km from Taqng's 14.4 mm) no longer drags another gauge's spot.
+                  hold = np.zeros_like(radar)
+                  tnum = np.zeros_like(radar)
+                  tden = np.zeros_like(radar)
                   for g in used:
                       c, r = g["_px"]
-                      w = np.exp(-(np.hypot(xx - c, yy - r) * k / GAUGE_HOLD_KM) ** 2)
-                      field = field * (1 - w) + g["mm"] * w
+                      d = np.hypot(xx - c, yy - r) * k
+                      hold = np.maximum(hold, np.exp(-(d / GAUGE_HOLD_KM) ** 2))
+                      wi = 1.0 / (d * d + 0.25)        # nearest gauge wins near its own spot
+                      tnum += wi * g["mm"]
+                      tden += wi
+                  field = field * (1 - hold) + (tnum / tden) * hold
               for g in used:
                   c, r = g.pop("_px")
                   g["corrected_mm"] = round(float(field[int(r), int(c)]), 1)
@@ -1017,7 +1027,8 @@ jobs:
               A hash, so private gauges' positions aren't written out."""
               if not gauges:
                   return ""
-              return hashlib.sha1(json.dumps(sorted([g["name"], g["lat"], g["lon"], g["mm"]] for g in gauges)).encode()).hexdigest()[:16]
+              # CORRECT_VERSION is in the hash so days are redone when the correction method changes
+              return hashlib.sha1(json.dumps([CORRECT_VERSION] + sorted([g["name"], g["lat"], g["lon"], g["mm"]] for g in gauges)).encode()).hexdigest()[:16]
           
           
           def recorrect_changed_days():
