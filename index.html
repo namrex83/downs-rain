@@ -99,6 +99,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #side{display:flex;flex-direction:column;gap:12px}
 /* Catchments tab, table view (the default): no map, just the tables; "Map view" brings the map back */
 body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapOnly{display:none!important}
+@media (min-width:1000px){   /* a computer, River lines or Table: the gauges on the left, the catchment watch and warnings beside them */
+  body.ctable #watchPanel:not([hidden]){display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);column-gap:22px;align-items:start}
+  body.ctable #watchPanel > #secRiv{grid-column:1;grid-row:1 / span 20}
+  body.ctable #watchPanel > :not(#secRiv){grid-column:2}
+  body.ctable #watchPanel > #secWatch{margin-top:0}
+}
 .cshowfield{flex-basis:100%} #cShow{width:max-content;max-width:100%} #cShow button{font-weight:600}
 #fTap.merged{display:none}   /* its text is in the chart's heading */
 /* BOM station readings on the Temp and Wind maps */
@@ -446,7 +452,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <div class="seg" id="cRegion"><button data-r="dd" aria-pressed="true">Downs</button><button data-r="seq" aria-pressed="false">SE coast</button><button data-r="wide" aria-pressed="false">Wide Bay</button><button data-r="border" aria-pressed="false">Border</button></div></div>
     <div class="field catchfield"><label for="catchSel" id="catchSelLbl">Catchment</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
-  <div class="sevnote stormOnly" id="sevNote" hidden></div>
+  <div class="sevnote" id="sevNote" hidden></div>
   <div class="controls stormOnly" hidden>
     <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
       <option value="mix" selected>Combined storm risk</option>
@@ -1333,7 +1339,7 @@ async function stormFlags(){
   const days = Object.keys(byDay).sort();
   $("stormDot").hidden = !days.length;
   $("tStorm").title = days.length ? `Severe storms possible within ${SEV_KM} km of ${where} in the next 4 days` : "";
-  $("sevNote").hidden = !days.length;
+  stormFlags.any = !!days.length; $("sevNote").hidden = !(days.length && tab === "storms");
   $("sevNote").innerHTML = days.length ? `⚠️ <b>Severe storms possible within ${SEV_KM} km of ${where}:</b> ${days.map(d => `<b>${part(d, {weekday: "short", day: "numeric"})}</b> (${byDay[d].join(", ")})`).join("; ")}. `
     + `The models' storm ingredients, not a forecast that storms will form: check the Bureau's thunderstorm warnings.` : "";
 }
@@ -1518,7 +1524,7 @@ function drawRivers(fw){
     return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
-      + (!e ? (FCOL[nm] ? `<div class="tsai q">AI: no flood record for this gauge yet; learning from its readings since ${part(FCOL[nm].replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"), {day: "numeric", month: "short"})}</div>` : "") : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+      + (!e ? (FCOL[nm] ? `<div class="tsai q">AI: learning (readings kept since ${part(FCOL[nm].replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"), {day: "numeric", month: "short"})})</div>` : "") : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";
@@ -1531,6 +1537,13 @@ function drawRivers(fw){
 // Catchment watch: every catchment's ground now, the models' average forecast rain for the next three 10am-to-10am
 // days, and the run-off that would make, day by day (the ground getting wetter as the rain falls). Rated by that run-off
 // over the catchment: under 3 mm low, 3-10 mm a possible creek rise, over 10 mm a likely rise. Tapping a row picks it.
+// the Bureau's warnings come wrapped at about 65 characters: join the wrapped lines back into paragraphs (a long line
+// running on into the next), keeping short lines (headings, codes) and blank lines as they are
+const reflow = t => t.replace(/\r/g, "").split("\n").reduce((out, ln, i, all) => {
+  const prev = all[i - 1];
+  if (i && prev && prev.trim().length >= 50 && ln.trim() && !/^[*•-]/.test(ln.trim()) && !/^[A-Z0-9 ,.'():-]+$/.test(prev.trim())) out[out.length - 1] += " " + ln.trim();
+  else out.push(ln);
+  return out; }, []).join("\n");
 async function drawWatch(){
   if (WET === undefined) { try { WET = await getJSON("data/catch_wet.json"); } catch(e){ WET = null; } }
   await loadCatch();
@@ -1572,7 +1585,7 @@ async function drawWatch(){
     const about = w => { const t = w.text.replace(/\s+/g, " ");   // the warning's lines wrap mid-name
       return !mine || mine.some(n => t.includes(n.replace(/ \(.*\)| (HG|TW|Tm|Alert)$/g, "")) || t.includes(n.split(" at ")[1] || "@@") || (!/^Condamine River/.test(n) && t.includes(n.split(" at ")[0]))); };   // a gauge, its place or its creek
     const head = t => (t.match(/^[A-Z][A-Z ,'-]{12,}$/m) || [""])[0];   // the warning's headline, e.g. MINOR FLOODING OCCURRING AT TUMMAVILLE
-    $("floodWarn").innerHTML = (fw.warnings || []).filter(about).map(w => `<details class="fwarn fsec" open><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${w.text.replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
+    $("floodWarn").innerHTML = (fw.warnings || []).filter(about).map(w => `<details class="fwarn fsec" open><summary>🔴 <b>${w.title.replace(/^(Minor|Moderate|Major)?\s*Flood Warning for the /i, (m, k) => (k ? k + " flood warning: " : "Flood warning: "))}</b>${head(w.text) ? `<br><span class="fsub">${head(w.text).toLowerCase().replace(/^./, c => c.toUpperCase()).replace(/\b(at|near|along|in) ([a-z])/g, (m, w1, c) => `${w1} ${c.toUpperCase()}`)}</span>` : ""}</summary><pre>${reflow(w.text).replace(/[<&]/g, ch => ch === "<" ? "&lt;" : "&amp;")}</pre></details>`).join("")
       || `<p class="fnone">✅ No Bureau of Meteorology flood warning ${pick ? "for this catchment" : "for the Condamine system"} right now.</p>`;
   } catch(e){ $("floodWarn").innerHTML = ""; }
   $("watch").onclick = e => { const tr = e.target.closest("tr[data-id]"); if (!tr) return;
@@ -2696,7 +2709,7 @@ function fChartDrawBars(){
   const sum = m => tot[m].some(v => v == null) ? null : tot[m].reduce((a, b) => a + b, 0);
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
-    <div class="cfoot"><span>${both ? "Lines: the running total for each model, against the right-hand scale (dashed = median). Bars (faded): " : ""}Rain each day, 10am to 10am: a bar for each model in its colour, and BOM's in green at the end (its days end at midnight); the dashed line and figure are the median of the models (the average where only one or two run that far). ${anySev ? `Red dot: severe storms possible within ${SEV_KM} km that day (see the Storms tab). ` : ""}Key: each model's total over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– where its forecast stops sooner)" : ""}. Tap a day for its numbers.</span>${fcButtons()}</div>`;
+    <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). " : "Each day's rain, 10am to 10am. "}Dashed = median; green = BOM (days end at midnight). ${anySev ? `Red dot: severe storms possible within ${SEV_KM} km that day (see the Storms tab). ` : ""}Key: totals over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– stops sooner)" : ""}. Tap a day for numbers.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
@@ -3838,6 +3851,7 @@ function setTab(t, first){
   if (t !== "storms" && sOverlay) map.removeLayer(sOverlay);
   if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
   if (t !== "catch") clearCatchTab();
+  $("sevNote").hidden = !(t === "storms" && stormFlags.any);
   if (t === "catch" && tab_prev !== "catch") { if (cMapOn || cList !== "lines") { cMapOn = false; cList = "lines"; if (FW) drawRivers(FW); } }   // the Catchments tab opens on the river lines
   cShowSync();
   fsSync();
