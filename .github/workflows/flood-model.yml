@@ -1,0 +1,32 @@
+name: Flood model
+
+# The site's own peak estimates for the Condamine's gauges, learned from past floods. Run by hand.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [".github/flood_probe.py"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flood-model
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install requests
+
+      - name: Check the Queensland water records
+        run: python -u .github/flood_probe.py
