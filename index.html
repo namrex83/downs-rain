@@ -187,6 +187,15 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
 .fwarn.fsec{background:#fee2e2;border-color:#dc2626}
 .fsub{font-size:.85em;color:#7f1d1d}
 table.slim td, table.slim th{padding:4px 5px;font-size:.82rem}
+table.slim .gdot.g0{display:none}   /* no dot: no gap before the name */
+table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.66rem}
+@media (max-width:600px){
+  #rivers, #riversAll table{font-size:.8rem}
+  #rivers td, #rivers th, #riversAll td, #riversAll th{padding:5px 3px}
+  #rivers td:first-child, #riversAll td:first-child{min-width:88px}
+  #rivers .n, #riversAll .n{font-size:.78rem}
+  #rivers .aicol, #riversAll .aicol{white-space:normal;min-width:62px}
+}
 .fhow summary{cursor:pointer;color:var(--accent);font-size:.8rem;margin-top:4px}
 .watchsub{margin:12px 0 4px;font:700 .9rem var(--body)} .watchsub span{font-weight:500;color:var(--ink-3);font-size:.8rem}
 #cControls .catchfield{flex:1 1 220px;min-width:0} #cControls .catchfield select{width:100%}
@@ -1068,7 +1077,8 @@ function floodWord(name, h){
   if (L.minor != null) return {t: "below minor", c: "g0"};
   return null;
 }
-const floodChip = (name, h) => { const f = floodWord(name, h); return f ? ` <span class="fchip ${f.c}">${f.t}</span>` : ""; };
+const SHORT_FLOOD = {"below minor": "&lt;minor", "minor": "minor", "moderate": "mod", "major": "major"};
+const floodChip = (name, h, short) => { const f = floodWord(name, h); return f ? `${short ? "<br>" : " "}<span class="fchip ${f.c}">${short ? SHORT_FLOOD[f.t] : f.t}</span>` : ""; };
 function estTxt(e, long){
   if (e.how === "steady") return `🤖 <b>AI: no rise expected in the next 48 hours</b> <span class="gnote2">(matched to this gauge's past behaviour; it isn't rising and no flood is on its way from upstream)</span>`;
   if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
@@ -1512,8 +1522,8 @@ function drawRivers(fw){
   function aiCell(r){ if (!anyAI) return ""; const e = estFor(g(r, iName));
     if (!e) return `<td class="n aicol ai-quiet">${FCOL[g(r, iName)] ? "<small>learning</small>" : ""}</td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>no rise</small></td>`;
-    if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
-    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
+    if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
+    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
   const asLines = sel && cList === "lines";   // a picked catchment: as river lines (or the full table)
   $("rivers").innerHTML = asLines ? "" : head + `<tbody>${(sel ? rows : top).map(tr).join("")}</tbody>`;
