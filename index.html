@@ -370,7 +370,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .mapkey .mk span{display:block;font:600 7.5px/1.15 var(--mono);color:#1c2621;white-space:nowrap;overflow:hidden}
 .mapkey .mk div:last-child span{overflow:visible}
 .mapkey .mu{margin-left:5px;font:600 7.5px/1 var(--body);color:#1c2621;white-space:nowrap;padding-bottom:1px}
-#map:has(.mapkey:not([hidden])) .leaflet-bottom{bottom:15px}   /* the map credits and km scale sit just above the key */
+#map:has(.mapkey:not([hidden])) .leaflet-bottom{bottom:15px}
+/* the key on the map replaces the big one under it (its notes stay: hail key, the Temp note) */
+#legendBox > .eyebrow, #legend, #tLegendBox > .eyebrow, #tLegend, #oLegendBox, #rLegendBox, #sLegendBox{display:none!important}   /* the map credits and km scale sit just above the key */
 #map .leaflet-bottom.leaflet-right .leaflet-control-scale{margin-bottom:4px;margin-right:6px;clear:none;float:right}
 .slegend{display:flex}
 .slegend div{flex:1;min-width:0}
@@ -711,7 +713,7 @@ const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13}).setVi
 L.control.scale({metric: true, imperial: false, maxWidth: 90, position: "bottomright"}).addTo(map);   // a distance scale in km
 // the tab's colour key copied, small, onto the bottom of the map, kept in step with the full key below the map
 const mapKey = document.createElement("div"); mapKey.className = "mapkey"; mapKey.hidden = true; map.getContainer().appendChild(mapKey);
-const KEY_SRC = {rain: ["legend", "mm"], fc: ["legend", "mm"], catch: ["legend", "mm"], temp: ["tLegend", "°C"], soil: ["oLegend", "°C"], radar: ["rLegend", "mm/h"], storms: ["sLegend", ""]};
+const KEY_SRC = {rain: ["legend", "mm"], fc: ["legend", "mm"], catch: ["legend", "mm"], temp: ["tLegend", "°C"], soil: ["oLegend", "°C · green 14+"], radar: ["rLegend", "mm/h"], storms: ["sLegend", ""]};
 const KEY_SHORT = {"Storms possible": "Storms", "Organised storms": "Organised", "Severe": "Severe", "Significant severe": "Sig. severe", "High-end severe": "High-end"};
 function syncKey(){ try { syncKey2(); } catch(e){} }
 function syncKey2(){
@@ -722,7 +724,7 @@ function syncKey2(){
   const unit = tab === "storms" ? ((document.getElementById("sLegendTitle") || {}).textContent || "").replace(/ ·.*| —.*/, "").replace(/^Where the ingredients overlap$/, "") : src[1];
   const html = `<div class="mk">${[...el.children].map(d => { const i = d.querySelector("i"), sp = d.querySelector("span");
     const t = sp ? (KEY_SHORT[sp.textContent.trim()] || sp.textContent.trim()) : "";
-    return `<div><i style="background:${i ? i.style.background : "transparent"}"></i><span>${t.replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;")}</span></div>`; }).join("")}</div>${unit ? `<span class="mu">${unit.length > 14 ? "" : unit}</span>` : ""}`;
+    return `<div><i style="background:${i ? i.style.background : "transparent"}"></i><span>${t.replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;")}</span></div>`; }).join("")}</div>${unit ? `<span class="mu">${unit.length > 26 ? "" : unit}</span>` : ""}`;
   if (html !== syncKey.last) { mapKey.innerHTML = html; syncKey.last = html; }
 }
 // redrawn whenever a key changes (only the keys are watched, so updating the copy can't set it off again)
