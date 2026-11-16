@@ -361,6 +361,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .playbtn{font:700 .9rem var(--body);border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:999px;min-height:38px;padding:0 16px;cursor:pointer}
 .playbtn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .verdict{display:block;margin-top:3px;font-size:.85rem;color:var(--ink-2)}
+/* the colour key, small, along the bottom of the map: always in view with the map (the full key with its notes is below) */
+.mapkey{position:absolute;left:54px;right:8px;bottom:20px;z-index:800;display:flex;align-items:flex-end;gap:4px;padding:3px 5px 2px;border-radius:7px;
+  background:rgba(255,255,255,.82);box-shadow:0 1px 3px rgba(0,0,0,.25);pointer-events:none}
+.mapkey .mk{display:flex;flex:1;min-width:0}
+.mapkey .mk div{flex:1;min-width:0}
+.mapkey .mk i{display:block;height:7px}
+.mapkey .mk span{display:block;font:600 8.5px/1.2 var(--mono);color:#1c2621;white-space:nowrap;overflow:hidden}
+.mapkey .mk div:last-child span{overflow:visible}
+.mapkey .mu{margin-left:6px;font:600 8.5px/1 var(--body);color:#1c2621;white-space:nowrap;padding-bottom:1px}
+#map .leaflet-bottom.leaflet-right .leaflet-control-scale{margin-bottom:44px;margin-right:8px;clear:none;float:right}
 .slegend{display:flex}
 .slegend div{flex:1;min-width:0}
 .slegend i{display:block;height:11px;border-right:2px solid var(--bg)}
@@ -697,7 +707,27 @@ try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "o
 const HOME = [-27.4, 152.2], HOME_ZOOM = 8;   // South East Queensland, Dalby to the coast
 const SPOT = {name: "Toowoomba", ll: [-27.56, 151.95]};   // the chart and day buttons read here until a spot is tapped
 const map = L.map("map", {zoomControl: true, zoomSnap: 0.25, maxZoom: 13}).setView(HOME, HOME_ZOOM);   // past about 13 the rain data (0.5-2 km squares) only gets blockier
-L.control.scale({metric: true, imperial: false, maxWidth: 90, position: "bottomleft"}).addTo(map);   // a distance scale in km
+L.control.scale({metric: true, imperial: false, maxWidth: 90, position: "bottomright"}).addTo(map);   // a distance scale in km
+// the tab's colour key copied, small, onto the bottom of the map, kept in step with the full key below the map
+const mapKey = document.createElement("div"); mapKey.className = "mapkey"; mapKey.hidden = true; map.getContainer().appendChild(mapKey);
+const KEY_SRC = {rain: ["legend", "mm"], fc: ["legend", "mm"], catch: ["legend", "mm"], temp: ["tLegend", "°C"], soil: ["oLegend", "°C"], radar: ["rLegend", "mm/h"], storms: ["sLegend", ""]};
+const KEY_SHORT = {"Storms possible": "Storms", "Organised storms": "Organised", "Severe": "Severe", "Significant severe": "Sig. severe", "High-end severe": "High-end"};
+function syncKey(){ try { syncKey2(); } catch(e){} }
+function syncKey2(){
+  const src = KEY_SRC[tab], el = src && document.getElementById(src[0]);
+  const off = !el || !el.children.length || (tab === "catch" && (typeof cView === "undefined" || cView === "none" || !cMapOn)) || $("legendBox").style.display === "none" && src[0] === "legend";
+  mapKey.hidden = !!off;
+  if (off) return;
+  const unit = tab === "storms" ? ((document.getElementById("sLegendTitle") || {}).textContent || "").replace(/ ·.*| —.*/, "").replace(/^Where the ingredients overlap$/, "") : src[1];
+  const html = `<div class="mk">${[...el.children].map(d => { const i = d.querySelector("i"), sp = d.querySelector("span");
+    const t = sp ? (KEY_SHORT[sp.textContent.trim()] || sp.textContent.trim()) : "";
+    return `<div><i style="background:${i ? i.style.background : "transparent"}"></i><span>${t.replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;")}</span></div>`; }).join("")}</div>${unit ? `<span class="mu">${unit.length > 14 ? "" : unit}</span>` : ""}`;
+  if (html !== syncKey.last) { mapKey.innerHTML = html; syncKey.last = html; }
+}
+// redrawn whenever a key changes (only the keys are watched, so updating the copy can't set it off again)
+const keyWatch = new MutationObserver(() => syncKey());
+["legend", "tLegend", "oLegend", "rLegend", "sLegend"].forEach(id => { const el = document.getElementById(id); if (el) keyWatch.observe(el, {childList: true, subtree: true}); });
+keyWatch.observe(document.getElementById("legendBox"), {attributes: true, attributeFilter: ["style"]});
 // Place names sit above the rain overlay (overlay pane is z 400) so the rain never hides them
 map.createPane("labels");
 map.getPane("labels").style.zIndex = 450;
@@ -2037,7 +2067,7 @@ function cShowSync(){
 }
 $("cShow").onclick = e => { const b = e.target.closest("button"); if (!b) return;
   const was = cList; if (b.dataset.s === "map") cMapOn = true; else { cMapOn = false; cList = b.dataset.s; }
-  cShowSync(); if (cList !== was && FW) drawRivers(FW);
+  cShowSync(); syncKey(); if (cList !== was && FW) drawRivers(FW);
   if (cMapOn) { map.invalidateSize();
     if (catchLayer) map.fitBounds(catchLayer.getBounds(), {padding: [10, 10]});
     else if (catchAll) map.fitBounds(L.featureGroup(catchAll.getLayers()).getBounds(), {padding: [10, 10]});
@@ -3882,7 +3912,7 @@ function setTab(t, first){
   $("sevNote").hidden = !(t === "storms" && stormFlags.any);
   if (t === "catch" && tab_prev !== "catch") { if (cMapOn || cList !== "lines") { cMapOn = false; cList = "lines"; if (FW) drawRivers(FW); } }   // the Catchments tab opens on the river lines
   cShowSync();
-  fsSync();
+  fsSync(); syncKey();
   if (t !== "fc" && fOverlay) map.removeLayer(fOverlay);
   if (t === "storms"){
     if (overlay) map.removeLayer(overlay);
