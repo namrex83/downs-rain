@@ -724,10 +724,12 @@ const bust = () => "?v=" + Date.now();
 let idx = null, meta = null, overlay = null, gaugeLayer = null, mode = "corr", view = "week", ring = null,   /* the Rainfall tab opens on the last 7 days */ siloDays = [];
 const isSilo = d => siloDays.includes(d);   // days before the radar record (or missed by it), from SILO's gauge-based map
 const allDays = () => [...new Set([...idx.days, ...siloDays])].sort();
-let tab = "rain";   // "rain", "fc" (forecast), "temp", "wind", "radar", "soil", "storms" or "outlook"; the page always opens on Rainfall
+let tab = "fc";   // "rain", "fc" (forecast), "temp", "wind", "radar", "soil", "storms" or "outlook"; the page opens on Forecast,
+// or on Rainfall when rain has fallen nearby lately (checked once the rain data is in, see recentRainTab)
+let autoTab = true;   // still the tab picked on opening (cleared once a tab is chosen by hand)
 // after a pull-down refresh (the address has ?r=), stay on the tab you were on
-try { const t = localStorage.getItem("tab"); if (new URLSearchParams(location.search).has("r") && ["fc","temp","wind","radar","rain","soil","storms","outlook"].includes(t)) tab = t; } catch(e){}
-try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "outlook"].includes(t)) tab = t; } catch(e){}   // unless a link names a tab, e.g. …/#radar
+try { const t = localStorage.getItem("tab"); if (new URLSearchParams(location.search).has("r") && ["fc","temp","wind","radar","rain","soil","storms","outlook","catch"].includes(t)) { tab = t; autoTab = false; } } catch(e){}
+try { const t = location.hash.slice(1); if (["fc", "storms", "radar", "rain", "outlook"].includes(t)) { tab = t; autoTab = false; } } catch(e){}   // unless a link names a tab, e.g. …/#radar
 
 // Every tab shares one map view: it opens on Kingaroy to Clifton, Tara to Crows Nest, and switching
 // tabs keeps wherever the map has been moved to
@@ -911,7 +913,7 @@ async function init(){
   for (let end = ad[ad.length - 1]; end && end >= ad[0]; end = addDays(end, -7)) ends.push(end);
   $("weekSel").innerHTML = ends.map((d, i) => `<option value="${i ? d : "latest"}">${span(addDays(d, -7), d)}${i ? "" : " (latest)"}</option>`).join("");
   $("weekSel").onchange = show;
-  await loadCatch(); floodDot(); stormFlags();
+  await loadCatch(); floodDot(); stormFlags(); recentRainTab();
   try { const d = await stormDay(); if (d && view === "week") { sel.value = d; setView("day"); return; } } catch(e){}
   if (tab === "rain") show();
 }
@@ -934,6 +936,17 @@ function rainNear(m){
     }
   }
   return false;
+}
+// On opening: Rainfall if 5 mm+ has fallen within 50 km of Dalby in about the last 24 hours (since 9am; and in the first 6
+// hours after 9am, when that's still short, the day to 9am too),
+// otherwise the page stays on Forecast
+async function recentRainTab(){
+  if (!autoTab || tab !== "fc") return;
+  let wet = false;
+  try { wet = rainNear(await getJSON("data/today.json")); } catch(e){}
+  const last = idx && idx.days[idx.days.length - 1], qldHour = Math.floor(Date.now() / 3600000 + 10) % 24;
+  if (!wet && last && last === addDays(runningEnd(), -1) && qldHour >= 9 && qldHour < 15) { try { wet = rainNear(await getJSON(`data/${last}.json`)); } catch(e){} }
+  if (wet && autoTab && tab === "fc") setTab("rain");
 }
 async function stormDay(){
   try { if (rainNear(await getJSON("data/today.json"))) return "today"; } catch(e){}
@@ -4036,6 +4049,7 @@ let viewBeforeRadar = null;
 const fcZoom = () => HOME_ZOOM - (innerWidth >= 1000 ? 1.5 : 1.75);   // about Emerald to Grafton; a little closer on a wide screen
 let fcView = null, mainView = null;
 function setTab(t, first){
+  if (!first) autoTab = false;   // a tab chosen (by hand, or by the opening check): leave it there
   const tab_prev = first ? null : tab;
   // Forecast has its own wider view (the models cover a big area); the other tabs share the closer one
   if (tab === "fc" && t !== "fc" && !first) { fcView = {c: map.getCenter(), z: map.getZoom()}; if (mainView) map.setView(mainView.c, mainView.z, {animate: false}); }
