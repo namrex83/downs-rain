@@ -1151,7 +1151,7 @@ jobs:
               try:
                   mine = read_my_gauges(day)
                   gauges = fetch_bom_gauges(day, positions) + usable(mine)
-                  if any(g["mm"] >= 0.5 for g in gauges):
+                  if gauges:   # dry readings count too: they take out radar rain that didn't reach the ground
                       field, bias, overall, npairs = correct(accum, gauges)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
                       out.update({"provisional": True, "grid_raw": out["grid"], "grid": enc(field).flatten().tolist(),
