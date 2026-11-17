@@ -514,6 +514,9 @@ def now():
         if v - low >= 0.3 and h < v - 0.02 and (nowt - t).total_seconds() > 2 * 3600:
             return {"name": name_of(site), "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
         h3 = at(pts, 3)
+        if h3 is None:   # read only a few times a day (manual gauges): the reading before, 1 to 24 hours earlier
+            prev = [vv for tt, vv in pts if 3600 <= (pts[-1][0] - tt).total_seconds() <= 24 * 3600]
+            h3 = prev[-1] if prev else None
         if h3 is not None and h - h3 >= 0.03:
             return {"name": name_of(site), "now": h, "how": "rising"}
         return {"name": name_of(site), "now": h, "how": "steady"}
@@ -639,7 +642,11 @@ def now():
             fits = [f for f in fits if f[4] >= 0.8 * nmax]
         best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: abs(f[0])) if fits else None
         e = est.get(up)
-        if not pts or not e or e["how"] not in ("rise", "from_up"):
+        # the neighbour has just peaked but its wave hasn't got here yet: take its peak (sure of, as it's been)
+        if e and e["how"] == "peaked" and best and dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=best[0]) > nowt:
+            tp = dt.datetime.fromisoformat(e["t_mid"])
+            e = {**e, "lo": e["mid"], "hi": e["mid"], "t_lo": (tp - dt.timedelta(hours=6)).isoformat(), "t_hi": (tp + dt.timedelta(hours=6)).isoformat()}
+        elif not pts or not e or e["how"] not in ("rise", "from_up"):
             continue
         if not best:   # a wave is coming down to the neighbour, but the two can't be compared yet: say so, without a height
             est[key] = {**settle(key, pts), "exp": True, "nofit": True, "later": {"up": name_of(up), "t_mid": e["t_mid"]}}
