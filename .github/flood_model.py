@@ -45,6 +45,10 @@ SITES = {
     "422327A": "Thanes Creek at Ellangowan", "4223059": "Condamine River at Millbrook", "4223187": "Condamine River at Condamine",
     "4223112": "Charleys Creek at Greenswamp Rd", "4223083": "Swan Creek at Yangan", "4223089": "Hodgson Creek at Felton Tm",
 }
+# the same gauge under another station number in the records: tried when the first number has nothing since 1990
+# (the flood sources check found these numbers' records ending in 1960-1981, or none at all)
+ALT = {"422330A": "422330B", "422332A": "422332B", "422349B": "422349A", "422340B": "422340A", "422353B": "422353A",
+       "422358B": "422358A"}
 # down the main river: each gauge's estimate can come from the one above it
 PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"), ("422329A", "422355A"), ("422355A", "4223059"),
          ("4223059", "422323A"), ("422310C", "422323A"), ("422326A", "422332A"), ("422330A", "422359B"), ("422323A", "422353B"), ("422323A", "422347B"),
@@ -137,11 +141,19 @@ def train():
     for site, name in SITES.items():
         h = {int(k): v for k, v in (cached.get(site) or {}).items()}
         last = max(h) if h else None
+        src = (cached.get("_src") or {}).get(site, site)   # the number this gauge's records came from
         if not last:
-            for y0 in range(1990, dt.datetime.now().year + 1, 6):
-                h.update(hourly(site, f"{y0}0101000000", f"{min(y0 + 6, 2100)}0101000000"))
+            for cand in [site] + ([ALT[site]] if site in ALT else []):
+                for y0 in range(1990, dt.datetime.now().year + 1, 6):
+                    h.update(hourly(cand, f"{y0}0101000000", f"{min(y0 + 6, 2100)}0101000000"))
+                if h:
+                    src = cand
+                    break
         else:   # only what's been added to the records since
-            h.update(hourly(site, f"{str(last)[:8]}000000", dt.datetime.now(QLD).strftime("%Y%m%d%H%M%S")))
+            h.update(hourly(src, f"{str(last)[:8]}000000", dt.datetime.now(QLD).strftime("%Y%m%d%H%M%S")))
+        if src != site:
+            cached.setdefault("_src", {})[site] = src
+            print(f"  {site}: records under {src}", flush=True)
         cached[site] = {str(k): v for k, v in h.items()}
         t0, s = to_list(h)
         if not s:
@@ -348,14 +360,20 @@ def now():
     json.dump(arch, open(BOM_ARCH, "w"), separators=(",", ":"))
     live = {}
     gov = [s_ for s_ in model["sites"] if not s_.startswith("bom:")]
-    j = call("get_ts_traces", {"site_list": ",".join(gov), "datasource": "TE", "varfrom": "100.00", "varto": "100.00",
+    back = {ALT[s_]: s_ for s_ in gov if s_ in ALT}   # the other number's live readings stand in for the gauge
+    j = call("get_ts_traces", {"site_list": ",".join(gov + list(back)), "datasource": "TE", "varfrom": "100.00", "varto": "100.00",
                                "start_time": (t_end - dt.timedelta(hours=60)).strftime("%Y%m%d%H%M%S"), "end_time": t_end.strftime("%Y%m%d%H%M%S"),
                                "interval": "hour", "multiplier": "1", "data_type": "point"})
     for tr in (j.get("return") or {}).get("traces", []):
         pts = [(dt.datetime.strptime(str(p["t"])[:10], "%Y%m%d%H").replace(tzinfo=QLD), float(p["v"])) for p in tr.get("trace") or []
                if int(p.get("q", 10)) < 150]
         if pts:
-            live[tr["site"]] = pts
+            k = tr["site"]
+            if k in back:
+                if back[k] in live:
+                    continue
+                k = back[k]
+            live[k] = pts
     for s_ in model["sites"]:   # the gauges learned from the site's own kept readings: those readings are their live data too
         if s_.startswith("bom:"):
             a = arch.get(s_[4:]) or {}
