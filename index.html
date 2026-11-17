@@ -1142,7 +1142,11 @@ function floodWord(name, h){
 }
 const SHORT_FLOOD = {"below minor": "&lt;minor", "minor": "minor", "moderate": "mod", "major": "major"};
 const floodChip = (name, h, short) => { const f = floodWord(name, h); return f ? `${short ? "<br>" : " "}<span class="fchip ${f.c}">${short ? SHORT_FLOOD[f.t] : f.t}</span>` : ""; };
+// a wave due from upstream more than 2 days off (too far to put a height on), or a rise with no past case like it
+const laterTxt = e => e.later ? `wave from ${(e.later.up || "upstream").replace(/^Condamine River at /, "")} due ${whenTxt(e.later.t_mid)}, too far off to put a height on` : "";
 function estTxt(e, long){
+  if (e.later) return `🤖 <b>AI: ${laterTxt(e)}</b> <span class="gnote2">(estimates are shown once the peak is within 2 days)</span>`;
+  if (e.how === "rising") return `🤖 <b>AI: rising, but no past rise like this to match yet</b> <span class="gnote2">(no estimate until it matches its past floods or a peak comes down from upstream)</span>`;
   if (e.how === "steady") return `🤖 <b>AI: no rise expected in the next 48 hours</b> <span class="gnote2">(matched to this gauge's past behaviour; it isn't rising and no flood is on its way from upstream)</span>`;
   if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
   const t = new Date(e.t_mid).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(",", "");
@@ -1591,6 +1595,8 @@ function drawRivers(fw){
   const anyAI = rows.some(r => estFor(g(r, iName)));   // the AI column only when there's an estimate to show
   function aiCell(r){ if (!anyAI) return ""; const e = estFor(g(r, iName));
     if (!e) return `<td class="n aicol ai-quiet">${FCOL[g(r, iName)] ? "<small>learning</small>" : ""}</td>`;
+    if (e.later) return `<td class="n aicol ai-quiet"><small>wave due<br>${whenTxt(e.later.t_mid)}</small></td>`;
+    if (e.how === "rising") return `<td class="n aicol ai-quiet"><small>rising, no match</small></td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>no rise</small></td>`;
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
     return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
@@ -1604,7 +1610,7 @@ function drawRivers(fw){
     return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
-      + (!e ? "" : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+      + (!e ? "" : e.later ? `<div class="tsai q">AI: ${laterTxt(e)}</div>` : e.how === "rising" ? `<div class="tsai q">AI: rising, no past rise like this to match yet</div>` : e.how === "steady" ? `<div class="tsai q">AI: no rise expected</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`) };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";

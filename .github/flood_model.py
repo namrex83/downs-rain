@@ -381,6 +381,18 @@ def now():
             if pts:
                 live[s_] = pts
     name_of = lambda s_: model["sites"][s_]["name"] if s_ in model["sites"] else SITES.get(s_, s_)
+    # gauges with no live government readings (some newer station numbers only have the archive): the Bureau's readings
+    # kept by this site stand in, when they sit in the range the records know (the same gauge board; a weir read on a
+    # different datum, like Lemon Tree Weir in metres above sea level, can't be used this way)
+    for s_ in gov:
+        if s_ in live:
+            continue
+        m_ = model["sites"][s_]
+        a = arch.get(m_["name"]) or {}
+        pts = sorted((dt.datetime.strptime(k, "%Y%m%d%H").replace(tzinfo=QLD), v) for k, v in a.items() if int(k) >= hkey(nowt - dt.timedelta(hours=60)))
+        if pts and m_["base"] - 0.5 <= pts[-1][1] <= m_["max"] + 1.0:
+            live[s_] = pts
+            print(f"  {s_} {m_['name']}: live from the Bureau's readings ({len(pts)} hours)", flush=True)
     est = {}
 
     def at(pts, hours_ago):
@@ -452,17 +464,22 @@ def now():
                 "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()}
         if dn not in est or cand["mid"] > est[dn]["mid"]:   # two rivers meeting: the higher of the two
             est[dn] = cand
-    # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), or no rise expected
-    for site, pts in live.items():
-        if site in est or site not in model["sites"]:
-            continue
+    # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), rising (with no past case to match),
+    #    or no rise expected
+    def settle(site, pts):
         v, t = max((vv, tt) for tt, vv in pts)
         low = min(vv for tt, vv in pts if tt <= t)
         h = pts[-1][1]
         if v - low >= 0.3 and h < v - 0.02 and (nowt - t).total_seconds() > 2 * 3600:
-            est[site] = {"name": name_of(site), "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
-        else:
-            est[site] = {"name": name_of(site), "now": h, "how": "steady"}
+            return {"name": name_of(site), "now": h, "how": "peaked", "mid": round(v, 2), "t_mid": t.isoformat()}
+        h3 = at(pts, 3)
+        if h3 is not None and h - h3 >= 0.03:
+            return {"name": name_of(site), "now": h, "how": "rising"}
+        return {"name": name_of(site), "now": h, "how": "steady"}
+    for site, pts in live.items():
+        if site in est or site not in model["sites"]:
+            continue
+        est[site] = settle(site, pts)
     # 4. rain over each gauge's catchment: the last 3 days, and the next 2 days' forecast (the estimates above don't
     #    know about rain still to fall)
     wet = jload(os.path.join(DATA, "catch_wet.json"), None)
@@ -542,7 +559,18 @@ def now():
         if e.get("up_site") and off.get(e["up_site"]):
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
     horizon = nowt + dt.timedelta(hours=48)
-    est = {s: e for s, e in est.items() if "t_lo" not in e or dt.datetime.fromisoformat(e["t_lo"]) <= horizon}
+    far = {s: e for s, e in est.items() if "t_lo" in e and dt.datetime.fromisoformat(e["t_lo"]) > horizon}
+    for s_, e in far.items():   # a peak more than 2 days off is too uncertain to show: say what the gauge is doing now
+        if s_ in live:
+            n = settle(s_, live[s_])
+            o = off.get(s_, 0.0)
+            for k in ("now", "mid"):
+                if k in n:
+                    n[k] = round(n[k] + o, 2)
+            n["later"] = {"up": e.get("up"), "t_mid": e["t_mid"]}
+            est[s_] = n
+        else:
+            del est[s_]
     # gauges with no record to learn from yet: the readings being kept for them
     covered = {e["name"] for e in est.values()} | {m["name"] for m in model["sites"].values()}
     collecting = {n: min(a)[:8] for n, a in arch.items() if n not in covered and a}
