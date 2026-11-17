@@ -334,11 +334,10 @@ body.mapfull{overflow:hidden}
 .car{width:30px;height:30px;margin:-15px 0 0 -15px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .car svg{width:100%;height:100%;fill:#2a7de1;stroke:#fff;stroke-width:1.8;stroke-linejoin:round}
 /* while following: the car is the pin, and its reading a very small label under it */
-body.following .pin, body.atme .pin{display:none}
-body.atme .pinlabel.leaflet-tooltip-top{margin-top:-12px}
+body.following .pin{display:none}
 body.following .pinlabel.leaflet-tooltip-top{margin-top:44px;padding:0 4px;font-size:.62rem;border-width:1px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.35)}
 body.following .pinlabel.leaflet-tooltip-top::before{display:none}   /* the car is the pin while following (its reading box stays) */
-.locate a.on{background:#2a7de1!important} .locate a.on svg{stroke:#fff} .locate a.on svg circle:last-child{fill:#fff;stroke:#fff}
+.locate a.on{background:#2a7de1!important}
 @keyframes spin{to{transform:rotate(360deg)}}
 .town{width:0;height:0}
 .town i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#1c2621;border:1.5px solid #fff}
@@ -2130,11 +2129,13 @@ try { if (localStorage.getItem("rMore") === "1") { $("rMore").hidden = false; $(
 // "My location" button: puts the pin on the phone's GPS position and reads the rainfall there.
 // The blue circle shows how accurate the phone thinks its position is.
 let accCircle = null;
+const LOCATE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#2a7de1" stroke="#2a7de1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+const LIVE_ICON = '<svg viewBox="0 0 24 24" class="live"><path d="M12 3l6.6 16-6.6-3.8-6.6 3.8z" fill="#fff" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';   // live: an arrowhead
 const Locate = L.Control.extend({ options: {position: "topleft"}, onAdd(){
   const box = L.DomUtil.create("div", "leaflet-bar locate");
   const a = L.DomUtil.create("a", "", box);
   a.title = "Show my location"; a.setAttribute("role", "button"); a.setAttribute("aria-label", "Show my location");
-  a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#2a7de1" stroke="#2a7de1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+  a.innerHTML = LOCATE_ICON;
   L.DomEvent.disableClickPropagation(box);
   // on the page: show where I am; full screen: follow me (map turned to the way you're heading)
   L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); if ($("map").classList.contains("full") || following) setFollow(!following, a); else locateMe(a); });
@@ -2165,12 +2166,11 @@ async function keepAwake(on){
 function setFollow(on, btn){
   followBtn = btn || followBtn;
   following = on;
-  if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (full screen: follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
+  if (followBtn) { followBtn.innerHTML = on ? LIVE_ICON : LOCATE_ICON; followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (full screen: follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
   if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; }
   document.body.classList.toggle("following", on);
   keepAwake(on);
-  if (meMk) { if (on) { map.removeLayer(meMk); meMk = null; } }
-  if (!on) { if (fCur) showMe(L.latLng(fCur.lat, fCur.lng)); lastHeadPos = null; headSm = null; fCur = null; fAnim = null; fLastFixT = 0; if (carMk) { map.removeLayer(carMk); carMk = null; } setHeading(0); return; }
+  if (!on) { lastHeadPos = null; headSm = null; fCur = null; fAnim = null; fLastFixT = 0; if (carMk) { map.removeLayer(carMk); carMk = null; } setHeading(0); return; }
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return setFollow(false); }
   lastFollowRead = null;
   if (map.getZoom() < 9.5) map.setZoom(10, {animate: false});   // about 40 km across: a driving scale (+ and − still work)
@@ -2290,14 +2290,6 @@ function fsSync(){
     fsPanel.querySelector(".fstoggle").textContent = fsOpen ? "Options ▾" : "Options ▴";
   }
 }
-// your location (the location button, or found on opening): a blue arrowhead instead of the pin's dot; tapping
-// somewhere else puts the dot there and leaves the arrow where you are
-let meMk = null;
-function showMe(ll){
-  if (meMk) meMk.setLatLng(ll); else meMk = L.marker(ll, {icon: CAR_ICON, interactive: false, keyboard: false, zIndexOffset: 1900}).addTo(map);
-  document.body.classList.add("atme");
-}
-map.on("click", () => document.body.classList.remove("atme"));
 function locateMe(btn){
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return; }
   btn.classList.add("busy");
@@ -2308,7 +2300,7 @@ function locateMe(btn){
     if (accCircle) accCircle.setLatLng(ll).setRadius(acc);
     else accCircle = L.circle(ll, {radius: acc, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
     if (!map.getBounds().contains(ll)) map.panTo(ll);   // keep the zoom; only move if you're off the map
-    tapAt = ll; showMe(ll); readAnyTap();
+    tapAt = ll; readAnyTap();
   }, err => { btn.classList.remove("busy"); locateErr(err); }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
 }
 function locateErr(err){
@@ -4260,8 +4252,7 @@ if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
   else if (tab === "fc") { mainView = {c: ll, z: HOME_ZOOM}; fcView = null; map.setView(ll, fcZoom(), {animate: false}); }
   else map.setView(ll, HOME_ZOOM, {animate: false});
   if (!accCircle) accCircle = L.circle(ll, {radius: pos.coords.accuracy, color: "#2a7de1", weight: 1.5, fillColor: "#2a7de1", fillOpacity: 0.15, interactive: false}).addTo(map);
-  showMe(ll);
-  if (!tapAt) { tapAt = ll; readAnyTap(); } else document.body.classList.remove("atme");   // don't move a pin the person has already put down
+  if (!tapAt) { tapAt = ll; readAnyTap(); }   // don't move a pin the person has already put down
 }, () => {}, {enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60000});
 })();
 </script>
