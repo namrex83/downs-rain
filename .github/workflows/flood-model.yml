@@ -1,10 +1,12 @@
 name: Flood model
 
 # The site's own peak estimates for the Condamine's gauges, learned from past floods (.github/flood_model.py).
-# Learning is run by hand every few months (and when the model's code changes); the estimates themselves are worked
-# out on each radar run from the model this publishes.
+# Learning runs every Sunday night (so gauges with only this site's kept readings join once they have enough), when the
+# model's code changes, and by hand; the estimates themselves are worked out on each radar run from the model this publishes.
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "17 16 * * 6"   # Sunday 2:17 am Queensland time
   push:
     branches: [main]
     paths: [".github/flood_model.py"]

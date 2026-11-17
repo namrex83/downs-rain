@@ -1151,7 +1151,8 @@ function estTxt(e, long){
   if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
   const t = new Date(e.t_mid).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(",", "");
   if (!long) return `AI est.: ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} ${whenTxt(e.t_mid)}`;
-  const why = e.how === "from_up" ? `worked out from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m and ${e.n} past floods`
+  const why = e.how === "from_near" ? `following ${e.up.replace(/^Condamine River at /, "")} (AI peak ${e.up_h.toFixed(2)} m there) about ${e.lag} h later, fitted to ${e.n} hours of both gauges' readings kept by this site — a rough guide until it has seen more floods`
+    : e.how === "from_up" ? `worked out from ${e.up.replace(/^Condamine River at /, "")} ${e.up_kind === "peaked" ? "peaking at" : "heading for about"} ${e.up_h.toFixed(2)} m and ${e.n} past floods`
     : `matched to ${e.n} past times it was rising like this`;
   const L = levelsFor(e.name);
   const rain = e.rain_past != null ? `<br><span class="gnote2">Rain over its catchment: ${fmt(e.rain_past)} mm in the last 3 days (radar); ${fmt(e.rain_next)} mm forecast over the next 2 days${e.rain_next >= 10 ? " — not allowed for in this estimate, so the river could go higher" : ""}.</span>` : "";

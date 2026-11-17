@@ -49,6 +49,9 @@ SITES = {
 # (the flood sources check found these numbers' records ending in 1960-1981, or none at all)
 ALT = {"422330A": "422330B", "422332A": "422332B", "422349B": "422349A", "422340B": "422340A", "422353B": "422353A",
        "422358B": "422358A"}
+# gauges with no usable record that sit just below one that has: how they follow it is fitted from the Bureau readings
+# this site keeps for both (the last 10 days), and the upstream gauge's estimate is passed on through that fit
+NEAR = {"Condamine River at Ranges Bridge": "422333A"}   # Ranges Bridge (record ends 1960) follows Loudoun Bridge
 # down the main river: each gauge's estimate can come from the one above it
 PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"), ("422329A", "422355A"), ("422355A", "4223059"),
          ("4223059", "422323A"), ("422310C", "422323A"), ("422326A", "422332A"), ("422330A", "422359B"), ("422323A", "422353B"), ("422323A", "422347B"),
@@ -380,7 +383,7 @@ def now():
             pts = sorted((dt.datetime.strptime(k, "%Y%m%d%H").replace(tzinfo=QLD), v) for k, v in a.items() if int(k) >= hkey(nowt - dt.timedelta(hours=60)))
             if pts:
                 live[s_] = pts
-    name_of = lambda s_: model["sites"][s_]["name"] if s_ in model["sites"] else SITES.get(s_, s_)
+    name_of = lambda s_: model["sites"][s_]["name"] if s_ in model["sites"] else s_[5:] if s_.startswith("near:") else SITES.get(s_, s_)
     # gauges with no live government readings (some newer station numbers only have the archive): the Bureau's readings
     # kept by this site stand in, when they sit in the range the records know (the same gauge board; a weir read on a
     # different datum, like Lemon Tree Weir in metres above sea level, can't be used this way)
@@ -558,6 +561,45 @@ def now():
             e["bom_offset"] = o
         if e.get("up_site") and off.get(e["up_site"]):
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
+    # gauges that follow a neighbour (NEAR): fit  height here = a + b x neighbour's height (lag hours before), on the
+    # Bureau's own scale, from the readings kept for both; then the neighbour's coming peak gives this gauge's
+    for nm, up in NEAR.items():
+        mine, theirs = arch.get(nm) or {}, arch.get(name_of(up)) or {}
+        key = "near:" + nm
+        cut10 = hkey(nowt - dt.timedelta(days=10))
+        tr_ = {dt.datetime.strptime(k, "%Y%m%d%H"): v for k, v in theirs.items() if int(k) >= cut10}
+        mn_ = {dt.datetime.strptime(k, "%Y%m%d%H"): v for k, v in mine.items() if int(k) >= cut10}
+        pts = sorted((t.replace(tzinfo=QLD), v) for t, v in mn_.items() if t.replace(tzinfo=QLD) >= nowt - dt.timedelta(hours=60))
+        if pts:
+            live[key] = pts
+        fits = []
+        for lag in range(0, 25):
+            xy = [(tr_[t - dt.timedelta(hours=lag)], v) for t, v in mn_.items() if (t - dt.timedelta(hours=lag)) in tr_]
+            if len(xy) < 12 or max(x for x, _ in xy) - min(x for x, _ in xy) < 0.5:
+                continue
+            n = len(xy); mx = sum(x for x, _ in xy) / n; my = sum(y for _, y in xy) / n
+            sxx = sum((x - mx) ** 2 for x, _ in xy)
+            b = sum((x - mx) * (y - my) for x, y in xy) / sxx
+            a = my - b * mx
+            sd_ = math.sqrt(sum((y - a - b * x) ** 2 for x, y in xy) / max(1, n - 2))
+            if b > 0:
+                fits.append((lag, a, b, sd_, n, min(x for x, _ in xy), max(x for x, _ in xy)))
+        # on a steady rise several lags fit about as well: the shortest of those that do
+        best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: f[0]) if fits else None
+        e = est.get(up)
+        if not best or not pts or not e or e["how"] not in ("rise", "from_up"):
+            continue
+        lag, a, b, sd_, n, xlo, xhi = best
+        sd_ = sd_ + 0.1 * max(0, e["mid"] - xhi)   # less sure the further past the heights seen together
+        mid = a + b * e["mid"]
+        here = pts[-1][1]
+        if mid <= here + 0.05:
+            continue
+        sh = lambda k: (dt.datetime.fromisoformat(e[k]) + dt.timedelta(hours=lag)).isoformat()
+        est[key] = {"name": nm, "now": here, "how": "from_near", "up": name_of(up), "up_h": e["mid"], "n": n, "lag": lag,
+                    "lo": round(max(here, a + b * e["lo"] - 1.28 * sd_), 2), "mid": round(mid, 2), "hi": round(a + b * e["hi"] + 1.28 * sd_, 2),
+                    "t_lo": sh("t_lo"), "t_mid": sh("t_mid"), "t_hi": sh("t_hi")}
+        print(f"  {nm}: follows {name_of(up)} {lag} h later, height = {a:.2f} + {b:.2f} x ({n} hours, +/-{sd_:.2f} m) -> {mid:.2f}", flush=True)
     horizon = nowt + dt.timedelta(hours=48)
     far = {s: e for s, e in est.items() if "t_lo" in e and dt.datetime.fromisoformat(e["t_lo"]) > horizon}
     for s_, e in far.items():   # a peak more than 2 days off is too uncertain to show: say what the gauge is doing now
