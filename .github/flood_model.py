@@ -307,13 +307,13 @@ def bom_readings(t_end):
             m = re.match(r"(\d{1,2})\.(\d{2})\s*([AP]M)\s+(\w{3})", r[iT] or "")
         except (ValueError, IndexError, TypeError):
             m = None
-        if m and m.group(4) in days and name not in out:
+        if m and m.group(4) in days:   # a gauge listed twice (manual and automatic): the newer reading is kept
             hh = int(m.group(1)) % 12 + (12 if m.group(3) == "PM" else 0)
             for back in range(8):
                 d = t_end - dt.timedelta(days=back)
                 if d.weekday() == days.index(m.group(4)):
                     t = d.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
-                    if t <= t_end + dt.timedelta(minutes=10):
+                    if t <= t_end + dt.timedelta(minutes=10) and (name not in out or t > out[name][0]):
                         out[name] = (t, h)
                         break
         if r and r[iN] == CONDAMINE_LAST:
