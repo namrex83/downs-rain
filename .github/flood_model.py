@@ -51,7 +51,31 @@ ALT = {"422330A": "422330B", "422332A": "422332B", "422349B": "422349A", "422340
        "422358B": "422358A"}
 # gauges with no usable record that sit just below one that has: how they follow it is fitted from the Bureau readings
 # this site keeps for both (the last 10 days), and the upstream gauge's estimate is passed on through that fit
-NEAR = {"Condamine River at Ranges Bridge": "422333A"}   # Ranges Bridge (record ends 1960) follows Loudoun Bridge
+NEAR = {"Condamine River at Ranges Bridge": "422333A",   # Ranges Bridge (record ends 1960) follows Loudoun Bridge
+        "Condamine River at The Head": "422341A", "Spring Creek at Killarney Alert": "422394A", "Condamine River at Killarney": "422394A",
+        "Condamine River at Murrays Bridge": "422394A", "Condamine River at Harrisons Road": "422310C", "Swan Creek at Yangan": "422306A",
+        "Connolly Dam": "422310C", "Condamine River at Warwick (Scots College)": "422310C", "Campbells Gully": "422310C",
+        "Glengallan Creek": "422317C", "Dalrymple Creek at Goomburra": "422319B", "Dalrymple Creek at Victoria Hill": "422319B",
+        "Dalrymple Creek at Allora Alert": "422319B", "Condamine River at Millbrook": "422355A", "Canal Creek at Karara": "422338A",
+        "Canal Creek at Torridon": "422338A", "Condamine River at Centenary Bridge": "422323A",
+        "West Creek at Margaret Street": "422326A", "West Creek at Herries St": "422326A", "West Creek at Alderly": "422326A",
+        "East Creek at South St": "422326A", "East Creek at Long St": "422326A", "East Creek at Alderley": "422326A",
+        "Doctors Creek at Oakey (Pechey-Maclagan Rd)": "422360A", "Doctors Creek at Oakey (Oakey-Cooyar Rd)": "422360A",
+        "Oakey Creek at Oakey (Boodua Muniganeen Road)": "422360A", "Oakey Creek at Oakey (Kingsthorpe Haden Road)": "422360A",
+        "Oakey Creek at Oakey (Weir Park)": "422360A", "Condamine River at Loudoun Weir": "422333A",
+        "Condamine River at Chinchilla Weir TW": "422336A", "Condamine River at Condamine": "422344A",
+        "Charleys Creek at Greenswamp Rd": "422343A", "Charleys Creek at Beruna": "422343A", "Charleys Creek at Seven Oaks": "422343A",
+        "Charleys Creek at Burncluith Bridge": "422343A", "Kings Creek at Clifton": "422334A", "Condamine River at Tipton Bridge": "422316A",
+        "Condamine River at Warra-Kogan Rd Bridge": "422336A"}
+# creeks with no gauge with AI on them: a rise is matched to a similar Downs creek's past rises (by how fast it's rising
+# only, as the heights are on another board) - experimental
+BORROW = {**{n: "422359B" for n in ["Myall Creek at Quinalow Peranga Rd", "Myall Creek at Clydesdale", "Myall Creek at Moffatt",
+                                    "Myall Creek at Blaxland", "Myall Creek at Dalby"]},
+          **{n: "422343A" for n in ["Jimbour Creek at Macalister Bell Rd", "Jandowae Creek at Niagara Rd", "Jandowae Creek at Sengs Road",
+                                    "Jandowae Creek at Jandowae Dam", "Jandowae Creek at Jandowae", "Cooranga Creek at Jandowae-Macalister Rd",
+                                    "Cooranga Creek at Warra", "Undulla Creek at Tara Lagoon", "Undulla Creek at Leichhardt Highway"]},
+          **{n: "422319B" for n in ["Hodgson Creek at Cambooya (Rolleston Park)", "Hodgson Creek at Felton", "Hodgson Creek at Felton Tm"]},
+          "Thanes Creek at Ellangowan": "422319B", "Bowenville": "422361A"}
 # down the main river: each gauge's estimate can come from the one above it
 PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"), ("422329A", "422355A"), ("422355A", "4223059"),
          ("4223059", "422323A"), ("422310C", "422323A"), ("422326A", "422332A"), ("422330A", "422359B"), ("422323A", "422353B"), ("422323A", "422347B"),
@@ -563,7 +587,10 @@ def now():
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
     # gauges that follow a neighbour (NEAR): fit  height here = a + b x neighbour's height (lag hours before), on the
     # Bureau's own scale, from the readings kept for both; then the neighbour's coming peak gives this gauge's
+    learned_names = {m_["name"] for m_ in model["sites"].values()}
     for nm, up in NEAR.items():
+        if nm in learned_names or up not in model["sites"]:
+            continue   # learned properly by now (from its own kept readings)
         mine, theirs = arch.get(nm) or {}, arch.get(name_of(up)) or {}
         key = "near:" + nm
         cut10 = hkey(nowt - dt.timedelta(days=10))
@@ -573,7 +600,7 @@ def now():
         if pts:
             live[key] = pts
         fits = []
-        for lag in range(0, 25):
+        for lag in range(-24, 49):   # below the neighbour (later) or above it (sooner)
             xy = [(tr_[t - dt.timedelta(hours=lag)], v) for t, v in mn_.items() if (t - dt.timedelta(hours=lag)) in tr_]
             if len(xy) < 12 or max(x for x, _ in xy) - min(x for x, _ in xy) < 0.5:
                 continue
@@ -585,7 +612,10 @@ def now():
             if b > 0:
                 fits.append((lag, a, b, sd_, n, min(x for x, _ in xy), max(x for x, _ in xy)))
         # on a steady rise several lags fit about as well: the shortest of those that do
-        best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: f[0]) if fits else None
+        if fits:   # a lag that leaves few hours overlapping can fit well by chance: only those using most of them
+            nmax = max(f[4] for f in fits)
+            fits = [f for f in fits if f[4] >= 0.8 * nmax]
+        best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: abs(f[0])) if fits else None
         e = est.get(up)
         if not best or not pts or not e or e["how"] not in ("rise", "from_up"):
             continue
@@ -593,13 +623,42 @@ def now():
         sd_ = sd_ + 0.1 * max(0, e["mid"] - xhi)   # less sure the further past the heights seen together
         mid = a + b * e["mid"]
         here = pts[-1][1]
-        if mid <= here + 0.05:
+        if mid <= here + 0.05 or dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=lag) < nowt:
             continue
         sh = lambda k: (dt.datetime.fromisoformat(e[k]) + dt.timedelta(hours=lag)).isoformat()
         est[key] = {"name": nm, "now": here, "how": "from_near", "up": name_of(up), "up_h": e["mid"], "n": n, "lag": lag,
                     "lo": round(max(here, a + b * e["lo"] - 1.28 * sd_), 2), "mid": round(mid, 2), "hi": round(a + b * e["hi"] + 1.28 * sd_, 2),
-                    "t_lo": sh("t_lo"), "t_mid": sh("t_mid"), "t_hi": sh("t_hi")}
+                    "t_lo": sh("t_lo"), "t_mid": sh("t_mid"), "t_hi": sh("t_hi"), "exp": True}
         print(f"  {nm}: follows {name_of(up)} {lag} h later, height = {a:.2f} + {b:.2f} x ({n} hours, +/-{sd_:.2f} m) -> {mid:.2f}", flush=True)
+    # creeks with nothing to follow: matched by rate of rise to a similar creek's past rises (all heights pooled)
+    for nm, donor in BORROW.items():
+        if nm in learned_names or donor not in model["sites"]:
+            continue
+        a_ = arch.get(nm) or {}
+        pts = sorted((dt.datetime.strptime(k, "%Y%m%d%H").replace(tzinfo=QLD), v) for k, v in a_.items() if int(k) >= hkey(nowt - dt.timedelta(hours=60)))
+        if not pts:
+            continue
+        key = "near:" + nm
+        live[key] = pts
+        h, h3 = pts[-1][1], at(pts, 3)
+        if h3 is None or (nowt - pts[-1][0]).total_seconds() > 4 * 3600:
+            continue
+        rate = (h - h3) / 3
+        if rate < 0.007:
+            continue
+        rb = next(j for j, top in enumerate(RATE_BINS) if rate < top)
+        rows = [r for k, r in model["sites"][donor]["table"].items() if k.endswith(f"|{rb}")]
+        if not rows:
+            continue
+        tot = sum(r[0] for r in rows)
+        w = lambda i: sum(r[0] * r[i] for r in rows) / tot
+        est[key] = {"name": nm, "now": h, "rate": round(rate, 3), "how": "borrow", "donor": name_of(donor), "n": tot, "exp": True,
+                    "lo": round(h + w(1), 2), "mid": round(h + w(2), 2), "hi": round(h + w(3), 2),
+                    "t_lo": (pts[-1][0] + dt.timedelta(hours=w(4))).isoformat(), "t_mid": (pts[-1][0] + dt.timedelta(hours=w(5))).isoformat(),
+                    "t_hi": (pts[-1][0] + dt.timedelta(hours=w(6))).isoformat()}
+    # the rest of those: what the gauge is doing now (peaked, rising, or no rise), marked experimental
+    for key in [k for k in live if k.startswith("near:") and k not in est]:
+        est[key] = {**settle(key, live[key]), "exp": True}
     horizon = nowt + dt.timedelta(hours=48)
     far = {s: e for s, e in est.items() if "t_lo" in e and dt.datetime.fromisoformat(e["t_lo"]) > horizon}
     for s_, e in far.items():   # a peak more than 2 days off is too uncertain to show: say what the gauge is doing now
@@ -609,7 +668,9 @@ def now():
             for k in ("now", "mid"):
                 if k in n:
                     n[k] = round(n[k] + o, 2)
-            n["later"] = {"up": e.get("up"), "t_mid": e["t_mid"]}
+            n["later"] = {"up": e.get("up") or e.get("donor"), "t_mid": e["t_mid"]}
+            if e.get("exp"):
+                n["exp"] = True
             est[s_] = n
         else:
             del est[s_]
