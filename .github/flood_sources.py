@@ -59,3 +59,37 @@ for n, no in list(want.items()):
         print(f"  {no} {n}: {len(rows)} series; levels: " + "; ".join(" | ".join(str(y) for y in x) for x in lv[:4]))
     except Exception as e:
         print(f"  {no} {n}: {e}")
+
+# 3. The flood model's sites that came back with no records when it learned: which datasources and variables
+#    each one actually has in WMIP, and (for the 7-digit numbers, which look like the Bureau's) what Water Data Online
+#    holds under that number
+STUCK = ["422349B", "422340B", "422330A", "422314A", "422332A", "422327A", "4223059", "4223187", "4223112", "4223083",
+         "4223089", "422353B", "422358B"]
+def wmip(fn, params, version):
+    try:
+        r = requests.post(WMIP, data=json.dumps({"function": fn, "version": version, "params": params}), headers=UA, timeout=120)
+        return r.json()
+    except Exception as e:
+        return {"error_msg": str(e)}
+print("\nSites with no records at the last learning run:")
+for s in STUCK:
+    j = wmip("get_datasources_by_site", {"site_list": s}, "1")
+    ds = [d for t in (j.get("return") or {}).get("sites", []) for d in (t.get("datasources") or [])]
+    print(f"  {s}: datasources {ds or '-'} {j.get('error_msg') or ''}")
+    for d in ds or ["A"]:
+        v = wmip("get_variable_list", {"site_list": s, "datasource": d}, "1")
+        for t in (v.get("return") or {}).get("sites", []):
+            for x in t.get("variables") or []:
+                print(f"      {d}: {x.get('variable')} {x.get('name')} ({x.get('units')}) {x.get('period_start')} - {x.get('period_end')}")
+        if v.get("error_msg"):
+            print(f"      {d}: {v.get('error_msg')}")
+    if len(s) == 7 and s.isdigit():
+        try:
+            ts = kiwis(request="getTimeseriesList", station_no=s, returnfields="station_no,station_name,ts_id,ts_name,parametertype_name,coverage")
+            rows = ts[1:] if isinstance(ts, list) else []
+            for x in [x for x in rows if "Level" in str(x)][:4]:
+                print("      WDO " + " | ".join(str(y) for y in x))
+            if not rows:
+                print(f"      WDO: nothing under {s}")
+        except Exception as e:
+            print(f"      WDO: {e}")
