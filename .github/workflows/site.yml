@@ -5,7 +5,7 @@ name: Publish page
 on:
   push:
     branches: [main]
-    paths: ["index.html", "assets/**", ".github/pages.sh"]
+    paths: ["index.html", "assets/**", ".github/pages.sh", "CNAME"]
   workflow_dispatch: {}
 
 permissions:
