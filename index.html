@@ -2131,12 +2131,22 @@ function setHeading(deg){
   northArrow.hidden = !deg;
   northArrow.style.transform = `rotate(${-deg}deg)`;
 }
+// While following, keep the screen from going to sleep (the phone lets go again when the page is hidden; it's asked
+// again on return). Browsers without this just sleep as usual.
+let wakeLock = null;
+async function keepAwake(on){
+  if (!on) { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } return; }
+  if (wakeLock || !("wakeLock" in navigator) || document.hidden) return;
+  try { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); }
+  catch (e) { wakeLock = null; }
+}
 function setFollow(on, btn){
   followBtn = btn || followBtn;
   following = on;
   if (followBtn) { followBtn.classList.toggle("on", on); followBtn.title = on ? "Following you: tap to stop" : "Show my location (full screen: follow me)"; followBtn.setAttribute("aria-label", followBtn.title); }
   if (followId != null) { navigator.geolocation.clearWatch(followId); followId = null; }
   document.body.classList.toggle("following", on);
+  keepAwake(on);
   if (meMk) { if (on) { map.removeLayer(meMk); meMk = null; } }
   if (!on) { if (fCur) showMe(L.latLng(fCur.lat, fCur.lng)); lastHeadPos = null; headSm = null; fCur = null; fAnim = null; fLastFixT = 0; if (carMk) { map.removeLayer(carMk); carMk = null; } setHeading(0); return; }
   if (!navigator.geolocation) { $("tap").textContent = "This browser can't share its location."; return setFollow(false); }
