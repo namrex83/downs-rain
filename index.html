@@ -1177,6 +1177,7 @@ function estTxt(e, long){
   const lrn = e.learned ? `<br><span class="gnote2">Learned from its own misses: the last ${e.learned.floods} flood${e.learned.floods > 1 ? "s" : ""} checked here came in ${e.learned.factor < 1 ? "lower" : "higher"} than estimated, so the rise is scaled ×${e.learned.factor}${e.learned.shift_h ? ` and the timing moved ${e.learned.shift_h > 0 ? "later" : "earlier"} by ${Math.abs(e.learned.shift_h)} h` : ""}.</span>` : "";
   return `🤖 <b>AI estimate: peak ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} at ${t}</b><br>`
     + (L ? `<span class="gnote2">Flood levels here: ${["minor", "moderate", "major"].filter(k => L[k] != null).map(k => `${k} ${L[k]} m`).join(", ")}.</span><br>` : "") + `<span class="gnote2">Likely range ${e.lo.toFixed(2)}–${e.hi.toFixed(2)} m, between ${whenTxt(e.t_lo)} and ${whenTxt(e.t_hi)}; ${why}.</span>` + rain + lrn
+    + (e.wave2 ? `<br>🌊 <b>Then a 2nd wave: about ${e.wave2.mid.toFixed(2)} m${floodChip(e.name, e.wave2.mid)} around ${whenTxt(e.wave2.t_mid)}</b> <span class="gnote2">(the river's water coming down from ${e.wave2.up ? e.wave2.up.replace(/^Condamine River at /, "") : "upstream"}; range ${e.wave2.lo.toFixed(2)}–${e.wave2.hi.toFixed(2)} m)</span>` : "")
     + `<br><span class="aidisc">Disclaimer: an automated estimate learned from past floods in the Queensland Government's river records. It is not a Bureau of Meteorology forecast or warning, it can be well out (especially with more rain to come), and must not be relied on for safety or property decisions. Follow the Bureau's flood warnings and emergency services.</span>`;
 }
 // What's ahead for a gauge (in its box on the map): the Bureau's predicted peak if a flood warning gives one; which way
@@ -1619,7 +1620,8 @@ function drawRivers(fw){
     if (e.how === "rising") return `<td class="n aicol ai-quiet"><small>rising, no match</small></td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>${e.exp ? "not rising now" : "no rise"}</small></td>`;
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
-    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`; }
+    return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small>`
+      + (e.wave2 ? `<br><small>then ${e.wave2.mid.toFixed(2)}</small>${floodChip(g(r, iName), e.wave2.mid, true)}<br><small>${whenTxt(e.wave2.t_mid)}</small>` : "") + `</td>`; }
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
   const asLines = sel && cList === "lines";   // a picked catchment: as river lines (or the full table)
   $("rivers").innerHTML = asLines ? "" : head + `<tbody>${(sel ? rows : top).map(tr).join("")}</tbody>`;
@@ -1631,7 +1633,8 @@ function drawRivers(fw){
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
       + (!e ? "" : e.later ? `<div class="tsai q">AI: ${laterTxt(e)}</div>` : e.how === "rising" ? `<div class="tsai q">AI: rising, no past rise like this to match yet</div>` : e.how === "steady" ? `<div class="tsai q">AI: ${e.exp ? "not rising now" : "no rise expected"}</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
-         : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`)
+         : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}${e.wave2 ? " (1st wave)" : ""}</div>`)
+      + (e && e.wave2 ? `<div class="tsai" title="A second wave: the river's water coming down from ${e.wave2.up || "upstream"}">🌊 2nd wave ${e.wave2.mid.toFixed(2)} m${floodChip(nm, e.wave2.mid)}, ${whenTxt(e.wave2.t_mid)}</div>` : "")
       + (e && e.exp ? `<div class="tsai q">${expChip(e).trim()}</div>` : "") };
   }) : "";
   if (sel) $("riversAll").innerHTML = "";

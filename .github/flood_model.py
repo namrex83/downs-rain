@@ -451,46 +451,60 @@ def now():
                      "lo": round(h + r10, 2), "mid": round(h + r50, 2), "hi": round(h + r90, 2),
                      "t_lo": (pts[-1][0] + dt.timedelta(hours=k10)).isoformat(), "t_mid": (pts[-1][0] + dt.timedelta(hours=k50)).isoformat(),
                      "t_hi": (pts[-1][0] + dt.timedelta(hours=k90)).isoformat()}
-    # 2. peaks coming down the river (in order, so an estimate can pass on down)
+    # 2. peaks coming down the river (in order, so an estimate can pass on down). A flood can come as two waves - the
+    #    gauge's own (local creeks) and then the river's from upstream - so a gauge keeps up to two: the first as its
+    #    estimate and the other as "wave2", and each is passed on down the river.
+    def merge_wave(dn, cand):
+        cur = est.get(dn)
+        if not cur or cur["how"] not in ("rise", "from_up"):
+            est[dn] = cand
+            return
+        waves = [w for w in (cur, cur.get("wave2")) if w] + [cand]
+        waves = [{k: v for k, v in w.items() if k != "wave2"} for w in waves]
+        waves.sort(key=lambda w: w["t_mid"])
+        kept = []
+        for w in waves:   # waves within 12 hours of each other are the same wave: the higher of them
+            if kept and (dt.datetime.fromisoformat(w["t_mid"]) - dt.datetime.fromisoformat(kept[-1]["t_mid"])).total_seconds() < 12 * 3600:
+                if w["mid"] > kept[-1]["mid"]:
+                    kept[-1] = w
+            else:
+                kept.append(w)
+        first = dict(kept[0])
+        if len(kept) > 1:
+            first["wave2"] = max(kept[1:], key=lambda w: w["mid"])
+        est[dn] = first
     for p in model["pairs"]:
         up, dn = p["up"], p["dn"]
         pu, pd = live.get(up), live.get(dn)
         if not pd:
             continue
         dnow = pd[-1][1]
-        src = None
+        srcs = []
+        low_up = min(vv for tt, vv in pu) if pu else None
         if up in est and est[up]["how"] in ("rise", "from_up"):   # still rising up there, or a wave on its way: where it's heading
-            e = est[up]
-            low = min(vv for tt, vv in pu) if pu else e["now"]
-            if e["mid"] - low >= UP_RISE:
-                src = (e["mid"], e["mid"] - low, dt.datetime.fromisoformat(e["t_mid"]), "estimated")
-        if not src and pu:
+            for e in (est[up], est[up].get("wave2")):
+                if e:
+                    low = low_up if low_up is not None else e["now"]
+                    if e["mid"] - low >= UP_RISE:
+                        srcs.append((e["mid"], e["mid"] - low, dt.datetime.fromisoformat(e["t_mid"]), "estimated"))
+        if pu:   # a peak up there in the last 2 days that's still on its way down
             recent = [(v, t) for t, v in pu if (nowt - t).total_seconds() <= 48 * 3600]
             if recent:
                 v, t = max(recent)
                 low = min(vv for tt, vv in pu if tt <= t)
                 still_rising = (at(pu, 3) or v) < pu[-1][1] - 0.01
                 if v - low >= UP_RISE and not still_rising:
-                    src = (v, v - low, t, "peaked")
-        if not src and up in est:
-            e = est[up]
-            low = min(vv for tt, vv in pu) if pu else e["now"]
-            if e["mid"] - low >= UP_RISE:
-                src = (e["mid"], e["mid"] - low, dt.datetime.fromisoformat(e["t_mid"]), "estimated")
-        if not src:
-            continue
-        uv, urise, ut, kind = src
-        rise = p["a"] + p["b"] * urise + p["c"] * dnow
-        t_mid = ut + dt.timedelta(hours=p["lag"][1])
-        if t_mid < nowt or rise <= 0.1:
-            continue   # its time has passed (the gauge's own readings say what's happening now), or nothing much to come
-        cand = {"name": name_of(dn), "now": dnow, "how": "from_up",
-                "up": name_of(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
-                "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
-                "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
-                "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()}
-        if dn not in est or cand["mid"] > est[dn]["mid"]:   # two rivers meeting: the higher of the two
-            est[dn] = cand
+                    srcs.append((v, v - low, t, "peaked"))
+        for uv, urise, ut, kind in srcs:
+            rise = p["a"] + p["b"] * urise + p["c"] * dnow
+            t_mid = ut + dt.timedelta(hours=p["lag"][1])
+            if t_mid < nowt or rise <= 0.1:
+                continue   # its time has passed (the gauge's own readings say what's happening now), or nothing much to come
+            merge_wave(dn, {"name": name_of(dn), "now": dnow, "how": "from_up",
+                    "up": name_of(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
+                    "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
+                    "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
+                    "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()})
     # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), rising (with no past case to match),
     #    or no rise expected
     def settle(site, pts):
@@ -579,15 +593,22 @@ def now():
     for s_, e in est.items():
         o = off.get(s_, 0.0)
         if o:
-            for k in ("now", "lo", "mid", "hi"):
-                if k in e:
-                    e[k] = round(e[k] + o, 2)
+            for w in (e, e.get("wave2")):
+                for k in ("now", "lo", "mid", "hi"):
+                    if w and k in w:
+                        w[k] = round(w[k] + o, 2)
             e["bom_offset"] = o
         if e.get("up_site") and off.get(e["up_site"]):
             e["up_h"] = round(e["up_h"] + off[e["up_site"]], 2)
     # gauges that follow a neighbour (NEAR): fit  height here = a + b x neighbour's height (lag hours before), on the
     # Bureau's own scale, from the readings kept for both; then the neighbour's coming peak gives this gauge's
     learned_names = {m_["name"] for m_ in model["sites"].values()}
+    # the Bureau lists each river's gauges from the top down: a gauge listed after the one it follows is below it, so its
+    # peak can only come later (and one listed before, only sooner)
+    tbl = [r[0] for r in (jload(os.path.join(DATA, "flood_warn.json"), {}).get("rivers") or {}).get("rows") or [] if r]
+    pos = {}
+    for i_, n_ in enumerate(tbl):
+        pos.setdefault(n_, i_)
     for nm, up in NEAR.items():
         if nm in learned_names or up not in model["sites"]:
             continue   # learned properly by now (from its own kept readings)
@@ -600,7 +621,8 @@ def now():
         if pts:
             live[key] = pts
         fits = []
-        for lag in range(-24, 49):   # below the neighbour (later) or above it (sooner)
+        below = pos.get(nm, 0) > pos.get(name_of(up), 0)
+        for lag in (range(0, 49) if below else range(-24, 1)):   # below the neighbour: later; above it: sooner
             xy = [(tr_[t - dt.timedelta(hours=lag)], v) for t, v in mn_.items() if (t - dt.timedelta(hours=lag)) in tr_]
             if len(xy) < 12 or max(x for x, _ in xy) - min(x for x, _ in xy) < 0.5:
                 continue
@@ -677,6 +699,10 @@ def now():
             est[s_] = n
         else:
             del est[s_]
+    for e in est.values():   # a second wave more than 5 days off: too far to say
+        w = e.get("wave2")
+        if w and dt.datetime.fromisoformat(w["t_lo"]) > nowt + dt.timedelta(hours=120):
+            del e["wave2"]
     # gauges with no record to learn from yet: the readings being kept for them
     covered = {e["name"] for e in est.values()} | {m["name"] for m in model["sites"].values()}
     collecting = {n: min(a)[:8] for n, a in arch.items() if n not in covered and a}
