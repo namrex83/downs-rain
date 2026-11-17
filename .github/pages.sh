@@ -34,6 +34,8 @@ put)
     # takes up to 20 minutes) can't put back an older page that was replaced while it ran
     git fetch -q --depth 1 origin main
     rm -rf pub/assets; git archive FETCH_HEAD index.html assets | tar -x -C pub; touch pub/.nojekyll
+    # the custom domain (a CNAME file on main, e.g. namrexweather.com) goes with the page; no file on main, no domain
+    rm -f pub/CNAME; if git cat-file -e FETCH_HEAD:CNAME 2>/dev/null; then git show FETCH_HEAD:CNAME > pub/CNAME; fi
     (cd site && find data -type f -newer ../.jobstart) | while read -r f; do
       mkdir -p "pub/$(dirname "$f")"; cp "site/$f" "pub/$f"
     done
