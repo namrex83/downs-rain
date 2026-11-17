@@ -617,7 +617,10 @@ def now():
             fits = [f for f in fits if f[4] >= 0.8 * nmax]
         best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: abs(f[0])) if fits else None
         e = est.get(up)
-        if not best or not pts or not e or e["how"] not in ("rise", "from_up"):
+        if not pts or not e or e["how"] not in ("rise", "from_up"):
+            continue
+        if not best:   # a wave is coming down to the neighbour, but the two can't be compared yet: say so, without a height
+            est[key] = {**settle(key, pts), "exp": True, "nofit": True, "later": {"up": name_of(up), "t_mid": e["t_mid"]}}
             continue
         lag, a, b, sd_, n, xlo, xhi = best
         sd_ = sd_ + 0.1 * max(0, e["mid"] - xhi)   # less sure the further past the heights seen together
