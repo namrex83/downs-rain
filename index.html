@@ -167,6 +167,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
 .hailtxt{color:#b000b0}
 .addfield{flex:1 1 100%}
 /* the readings button: bright and full width so nobody misses it, with a gentle pulse when the page opens */
+.addread .arl{display:inline-flex;flex-direction:column;line-height:1.15;text-align:left;vertical-align:middle} .addread .arl small{font-size:.72rem;font-weight:500;opacity:.8}
 .addread{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font:700 1rem var(--body);color:#2a1a00;background:#fbbf24;
   border:0;border-radius:12px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(180,110,0,.35);animation:addpulse 1.6s ease-in-out 3}
 .addread:active{background:#f59e0b}
@@ -471,7 +472,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </header>
 
   <div class="controls rainOnly" id="rControls">
-    <div class="field addfield"><button class="addread" id="addRead" type="button"><span aria-hidden="true">🌧</span> Add your rain gauge reading</button></div>
+    <div class="field addfield"><button class="addread" id="addRead" type="button"><span aria-hidden="true">🌧</span> <span class="arl">Add your rain gauge reading<small>Improves local accuracy</small></span></button></div>
     <div class="field"><span class="eyebrow">View</span>
       <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vThree" aria-pressed="false">Last 3 days</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
