@@ -1,0 +1,40 @@
+name: Namrex history
+
+# Once a day: Open-Meteo's past model runs at 30 spots, scored against the rain maps, for the Namrex weights
+# (namrex.py history). Slow (Open-Meteo sends past runs slowly), so it has its own job.
+on:
+  schedule:
+    - cron: "37 1 * * *"     # 11:37am Qld, after the 9am rain map is finished
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["namrex.py"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: namrex-history
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install numpy requests
+      - name: Get the published site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh get
+      - name: Score the past runs, then the weights
+        run: python -u namrex.py history weights --force
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/pages.sh put "Namrex weights $(date -u +%Y-%m-%dT%H:%MZ)"

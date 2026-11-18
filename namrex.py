@@ -192,14 +192,14 @@ def history(force=False):
     # day d (to 10am Qld) = the hours stamped after 00 UTC the day before, up to 00 UTC on d
     fc = {}   # (model, bucket, day) -> [forecast at each spot or None]
     for mk, mid in OM_IDS.items():
-        for i0 in range(0, len(spots), 10):
-            chunk = spots[i0:i0 + 10]
+        for i0 in range(0, len(spots), 3):   # a few spots at a time: Open-Meteo is slow with big requests
+            chunk = spots[i0:i0 + 3]
             params = {"latitude": ",".join(str(a) for a, _ in chunk), "longitude": ",".join(str(b) for _, b in chunk),
                       "hourly": ",".join(vars_), "models": mid, "start_date": q0, "end_date": days[-1], "timezone": "GMT"}
             j = None
             for attempt in range(3):
                 try:
-                    r = requests.get("https://previous-runs-api.open-meteo.com/v1/forecast", params=params, timeout=90)
+                    r = requests.get("https://previous-runs-api.open-meteo.com/v1/forecast", params=params, timeout=180)
                     if r.status_code == 400:
                         print(f"  {mk}: not available ({r.text[:120]})", flush=True)
                         break
@@ -210,7 +210,8 @@ def history(force=False):
                     print(f"  {mk}: {e}", flush=True)
                     time.sleep(5 * (attempt + 1))
             if j is None:
-                break
+                print(f"  {mk}: gave up on spots {i0}+", flush=True)
+                continue
             locs = j if isinstance(j, list) else [j]
             for si, loc in enumerate(locs):
                 h = loc.get("hourly") or {}
@@ -320,7 +321,7 @@ def weights():
 
 
 if __name__ == "__main__":
-    steps = sys.argv[1:] or ["archive", "score", "history", "weights"]
+    steps = [a for a in sys.argv[1:] if not a.startswith("--")] or ["archive", "score", "weights"]   # history: its own daily job
     for s in steps:
         try:
             {"archive": archive, "score": score, "history": lambda: history("--force" in sys.argv), "weights": weights}[s]()
