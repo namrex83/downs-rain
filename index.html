@@ -2722,7 +2722,7 @@ function fReadTap(){
   const [a, b] = fSumN ? fSpan() : [+$("fDay").value, +$("fDay").value + 1];
   const when = `10am ${span(addDays(F.days[a], -1), F.days[b - 1]).replace(" – ", " – 10am ")}${fSumN ? ` (${b - a} day${b - a === 1 ? "" : "s"}${b - a < fSumN ? ", all this model run covers" : ""})` : ""}`;
   setPin(v == null ? "Outside" : `${fmt(v)} mm`);
-  $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}${F.used ? `, median of ${[...new Set(F.used.slice(a, b).map(u => u.map(m => F_NAME[m]).join(", ")))].join("; then ")}` : ""}.`;
+  $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}${F.used ? `, ${fModel === "namrex" ? "Namrex AI blend of" : "median of"} ${[...new Set(F.used.slice(a, b).map(u => u.map(m => F_NAME[m]).join(", ")))].join("; then ")}` : ""}.`;
   fChart();
 }
 // Rain chart at the pin: each model's running total, day by day, for as far as it goes (like the multi-model
@@ -2743,13 +2743,22 @@ function fetchSoon(url, ms = 12000){
   const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
   return fetch(url, {signal: c.signal}).finally(() => clearTimeout(t));
 }
-async function omHourly(lat, lon){
+const omPending = {};
+function omHourly(lat, lon){   // one request per spot at a time (the page asks early, and the chart may ask again meanwhile)
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-  if (H_CACHE[key]) return H_CACHE[key];
+  if (H_CACHE[key]) return Promise.resolve(H_CACHE[key]);
+  try { const c = JSON.parse(localStorage.getItem("om:" + key) || "null");   // kept on the phone for an hour
+    if (c && Date.now() - c.t < 36e5) return Promise.resolve(H_CACHE[key] = c.v); } catch(e){}
+  return omPending[key] || (omPending[key] = omHourly2(lat, lon, key).finally(() => { delete omPending[key]; }));
+}
+async function omHourly2(lat, lon, key){
   const ask = async ids => {
-    const r = await fetchSoon(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
-      + `&models=${ids.join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`);
-    return r.ok ? r.json() : null;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
+      + `&models=${ids.join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`;
+    for (const ms of [12000, 25000]) {   // Open-Meteo is sometimes slow: a second, longer try
+      try { const r = await fetchSoon(url, ms); if (r.ok) return r.json(); if (r.status === 400) return null; } catch(e){}
+    }
+    return null;
   };
   let ids = [...Object.values(H_IDS), ...Object.keys(OM_MODELS)];
   let j = await ask(ids);
@@ -2772,7 +2781,9 @@ async function omHourly(lat, lon){
         if (have.length) series.bom_access_global = tt.slice(have[0], have[have.length - 1] + 1).map((x, k) => [x, v[have[0] + k] || 0]); }
     } catch(e){}
   }
-  return H_CACHE[key] = {series};
+  H_CACHE[key] = {series};
+  try { localStorage.setItem("om:" + key, JSON.stringify({t: Date.now(), v: H_CACHE[key]})); } catch(e){}
+  return H_CACHE[key];
 }
 async function omDays(lat, lon){
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
@@ -2832,7 +2843,10 @@ async function fChart(){
     if (Object.keys(H.series).length) { FC = {hourly: anchorToMaps(H.series, at), pinned, bom: bomNear(at)}; fChartDraw(); return; }
   } catch(e){}
   if (!still()) return;
-  return fChartDaily(at, pinned, still);
+  await fChartDaily(at, pinned, still);
+  // the other models didn't come: try again in 30 seconds (twice), as long as the same spot is still showing
+  fChart.retries = (fChart.pin === pinned ? fChart.retries || 0 : 0); fChart.pin = pinned;
+  if (fChart.retries < 2) { fChart.retries++; setTimeout(() => { if (still() && !(FC && FC.hourly)) fChart(); }, 30000); }
 }
 function hourlyGaveUp(){   // the hourly chart had nothing reaching the end of the days picked: the daily chart instead
   const pinned = FC.pinned, at = pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]);
@@ -3138,17 +3152,23 @@ function fChartDraw(){
   const poly = (pts, attrs) => `<polyline points="${(cum ? [[L0, Y(0)], ...pts] : pts).map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke-linejoin="round" ${attrs}/>`;
   const order = lines.map((l, k) => k).sort((a, b) => (lines[a].main ? 1 : 0) - (lines[b].main ? 1 : 0));   // the page's own three on top
   const med = days.map((d, i) => [i, medOf(d)]).filter(x => x[1] != null);
+  // Namrex AI: the site's three models weighted by recent skill (as on the map)
+  const namOf = d => { const ks = lines.map((l, k) => k).filter(k => lines[k].main && lines[k].m && vals[k][d] != null); if (!ks.length) return null;
+    const w = namWeights(ks.map(k => lines[k].m), leadOf(Date.parse(d + "T00:00:00Z") / 1000), "map"); return ks.reduce((a, k) => a + w[lines[k].m] * vals[k][d], 0); };
+  const nam = days.map((d, i) => [i, namOf(d)]).filter(x => x[1] != null);
   if (cum) {
     for (const k of order){
       const l = lines[k], pts = days.filter(d => vals[k][d] != null).map(d => [X(days.indexOf(d)), Y(vals[k][d])]);
       g += poly(pts, `stroke="${l.col}" stroke-width="${l.m === fModel ? 3 : l.main ? 2 : 1.4}"${l.main ? "" : ' stroke-opacity=".85"'}`);
     }
     if (med.length) g += poly(med.map(([i, v]) => [X(i), Y(v)]), `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
+    if (nam.length) g += poly(nam.map(([i, v]) => [X(i), Y(v)]), `stroke="${NAM_COL}" stroke-width="2.6"`);
   } else {   // Daily: each model its own bar for the day, side by side; the median a dashed line with its figure
     const slot = (W0 - L0 - R0) / days.length, gw = slot * .86, w1 = gw / lines.length;
     days.forEach((d, i) => { const x0 = X(i) - gw / 2;
       lines.forEach((l, k) => { const v = vals[k][d]; if (v == null || v <= 0) return;
         g += `<rect x="${(x0 + k * w1 + w1 * .1).toFixed(1)}" y="${Y(v).toFixed(1)}" width="${Math.max(.8, w1 * .8).toFixed(1)}" height="${Math.max(.6, Y(0) - Y(v)).toFixed(1)}" fill="${l.col}"${both ? ' fill-opacity=".45"' : ""}/>`; });
+      const nv = namOf(d); if (nv != null && !both) g += `<line x1="${x0.toFixed(1)}" x2="${(x0 + gw).toFixed(1)}" y1="${Y(nv).toFixed(1)}" y2="${Y(nv).toFixed(1)}" stroke="${NAM_COL}" stroke-width="2.2"/>`;
       const m = medOf(d); if (m == null || both) return;
       g += `<line x1="${x0.toFixed(1)}" x2="${(x0 + gw).toFixed(1)}" y1="${Y(m).toFixed(1)}" y2="${Y(m).toFixed(1)}" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/>`;
       if (m >= 0.2 && days.length <= 9 && !both) g += `<text x="${X(i).toFixed(1)}" y="${(Y(m) - 3).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="currentColor" stroke="var(--panel)" stroke-width="3" paint-order="stroke">${fmt(m)}</text>`;
@@ -3163,6 +3183,8 @@ function fChartDraw(){
       const pl = (pts, at) => `<polyline points="${pts.map(([j, v]) => `${XC(j).toFixed(1)},${YC(v).toFixed(1)}`).join(" ")}" fill="none" stroke-linejoin="round" ${at}/>`;
       lines.forEach((l, k) => { g += pl(run[k], `stroke="${l.col}" stroke-width="1.4" stroke-opacity=".8"`); });
       g += pl(cm, `stroke="currentColor" stroke-width="2.2" stroke-dasharray="5 4"`);
+      const cn = [[0, 0]]; { let c = 0; days.forEach((d, i) => { c += namOf(d) ?? 0; cn.push([i + 1, c]); }); }
+      g += pl(cn, `stroke="${NAM_COL}" stroke-width="2.6"`);
     }
   }
   g += `<g class="fcur" visibility="hidden"><line y1="${T0}" y2="${H0 - B0}" stroke="currentColor" stroke-opacity="${cum ? ".55" : "0"}" stroke-width="1"/></g>`;
@@ -3172,8 +3194,8 @@ function fChartDraw(){
   $("fTap").classList.add("merged");
   const last = med.length ? med[med.length - 1][1] : null;
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
-    <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${Object.keys(vals[k]).length ? fmt(both ? Object.values(vals[k]).reduce((x, y) => x + y, 0) : Math.max(...Object.values(vals[k]))) : "–"}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : both ? med.reduce((x, y) => x + y[1], 0) : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
-    <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). Dashed = median." : cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="bars" aria-pressed="${!cum && !both}">Daily</button><button data-c="both" aria-pressed="${both}">Both</button></div></div>`;
+    <div class="ck">${lines.map((l, k) => `<span title="${l.name}, ${l.pts.length} days"><i style="background:${l.col}"></i>${FC_SHORT[l.name] || l.name} <b>${Object.keys(vals[k]).length ? fmt(both ? Object.values(vals[k]).reduce((x, y) => x + y, 0) : Math.max(...Object.values(vals[k]))) : "–"}</b></span>`).join("")}${last != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>Median <b>${fmt(cum ? last : both ? med.reduce((x, y) => x + y[1], 0) : Math.max(...med.map(x => x[1])))}</b></span>` : ""}${nam.length ? `<span>${namLogo(11, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(cum ? nam[nam.length - 1][1] : both ? nam.reduce((x, y) => x + y[1], 0) : Math.max(...nam.map(x => x[1])))}</b></span>` : ""}${omNote ? `<span style="grid-column:1/-1">${omNote.trim()}</span>` : ""}</div>
+    <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). Dashed = median; gold = Namrex AI." : cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="bars" aria-pressed="${!cum && !both}">Daily</button><button data-c="both" aria-pressed="${both}">Both</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   // touch / hover readout
   const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
@@ -4294,6 +4316,7 @@ $("sHour").oninput = () => { sLoop(false); sHourLabel(); sDraw(); };
 // which copy of the page this is (when GitHub published it), to spot an old saved copy on a phone
 try { const d = new Date(document.lastModified); if (!isNaN(d)) $("pagever").textContent = "Page version: " + d.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}) + " · pull down at the top to refresh"; } catch(e){}
 init(); setTab(tab, true);
+omHourly(SPOT.ll[0], SPOT.ll[1]).catch(() => {});   // start on the chart's seven models straight away (Open-Meteo can be slow)
 
 // Pull down from the top of the page to reload it (the home-screen app has no refresh button). The reload asks
 // for a fresh copy (a new address each time), so a page saved on the phone isn't shown again.
