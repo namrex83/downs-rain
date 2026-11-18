@@ -2752,6 +2752,19 @@ function omHourly(lat, lon){   // one request per spot at a time (the page asks 
   return omPending[key] || (omPending[key] = omHourly2(lat, lon, key).finally(() => { delete omPending[key]; }));
 }
 async function omHourly2(lat, lon, key){
+  // first the copy kept on this site (om_points.py, a point every 0.25 degrees across the Downs and SEQ): no waiting
+  if (lat <= -25.4 && lat >= -29.35 && lon >= 149.4 && lon <= 153.6) {
+    const sn = (v, a, b) => Math.min(b, Math.max(a, Math.round(v * 4) / 4));
+    const la = sn(lat, -29.25, -25.5), lo = sn(lon, 149.5, 153.5);
+    try {
+      const j = await getJSON(`data/om/${la.toFixed(2)}_${lo.toFixed(2)}.json`);
+      if (j && j.m && Date.now() / 1000 - j.made < 18 * 3600) {
+        const series = {};
+        for (const [m, [a, v]] of Object.entries(j.m)) series[m] = v.map((x, k) => [j.t0 + (a + k) * 3600, x / 10]);
+        if (Object.keys(series).length >= 4) return H_CACHE[key] = {series, kept: true};
+      }
+    } catch(e){}
+  }
   const ask = async ids => {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation`
       + `&models=${ids.join(",")}&forecast_days=16&past_days=1&timezone=GMT&timeformat=unixtime`;
