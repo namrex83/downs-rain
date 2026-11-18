@@ -963,7 +963,7 @@ async function stormDay(){
   return null;
 }
 
-async function show(){ if (tab !== "rain") return; await draw(); await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); fitMap(); }
+async function show(){ if (tab !== "rain") return; if (await draw() === false) return; await drawHail(); if (tab !== "rain") { if (overlay) map.removeLayer(overlay); if (hailLayer) map.removeLayer(hailLayer); gaugeLayer.clearLayers(); return; } readTap(); refreshDots(); fitMap(); }
 
 // Catchments (assets/catchments.json, traced from terrain data): the chosen one's outline on the map, and the average
 // rain over it for the view shown, with the volume that is (1 mm over 1 km² = 1 ML). The choice is remembered.
@@ -1791,13 +1791,20 @@ async function draw(){
   const day = week ? "week" : fort ? "fortnight" : season ? "season" : $("day").value, silo = !week && !season && isSilo(day);
   $("dayField").hidden = week || season; $("weekField").hidden = !week || three;
   gaugeLayer.clearLayers(); $("stats").innerHTML = ""; $("gauges").innerHTML = ""; $("notes").textContent = "";
-  try { meta = past ? await buildWeek(latestWeek ? latestEnd : $("weekSel").value, N)
+  // only the newest request is drawn: a slower one started earlier (e.g. the 7 days, loading while the page switched
+  // to Daily) is dropped when it arrives
+  const myDraw = draw.n = (draw.n || 0) + 1;
+  let got;
+  try { got = past ? await buildWeek(latestWeek ? latestEnd : $("weekSel").value, N)
                : await getJSON(silo ? `data/silo/${day}.json` : `data/${day}.json`);
-        if (week && latestWeek) meta = await addToday(meta); }   // the latest 3 or 7 days also take in the rain since 9am today
+        if (week && latestWeek) got = await addToday(got); }   // the latest 3 or 7 days also take in the rain since 9am today
   catch(e){
+    if (myDraw !== draw.n) return;
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
     if (day === "today" && idx.days.length) { $("day").value = idx.days[idx.days.length-1]; return draw(); }
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : season ? "That total isn't available yet." : "That day's map isn't available yet."}</span>`; return; }
+  if (myDraw !== draw.n) return false;   // a newer view was asked for meanwhile
+  meta = got;
   const fitKey = three ? "three" : week ? "week" : fort ? "fortnight" : season ? "season" : null;
   if (fitKey && meta && meta.grid) { fitBreaks(meta.grid, fitKey); legend(); }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
