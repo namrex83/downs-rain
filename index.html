@@ -844,21 +844,23 @@ function townsForZoom(){
     show ? layer.addTo(map) : map.removeLayer(layer);
   declutter();
 }
-function declutter(){
+function declutter(){   // measure every label in one go, then hide the overlapping ones (reading and writing in turn was slow)
+  const els = [];
+  for (const layer of [regionTowns, bigTowns, smallTowns]) layer.eachLayer(m => { const el = m.getElement(); if (el) { el.style.visibility = ""; els.push(el); } });
   const kept = [...document.querySelectorAll(".glabel")].map(el => el.getBoundingClientRect());
+  const rects = els.map(el => { const sp = el.querySelector("span"); return sp ? sp.getBoundingClientRect() : null; });
   const hits = (a, b) => a.left < b.right + 3 && b.left < a.right + 3 && a.top < b.bottom + 2 && b.top < a.bottom + 2;
-  for (const layer of [regionTowns, bigTowns, smallTowns]) layer.eachLayer(m => {
-    const el = m.getElement(); if (!el) return;
-    el.style.visibility = "";
-    const r = el.querySelector("span").getBoundingClientRect();
-    if (kept.some(k => hits(r, k))) el.style.visibility = "hidden"; else kept.push(r);
-  });
+  const hide = [];
+  rects.forEach((r, i) => { if (!r) return; if (kept.some(k => hits(r, k))) hide.push(els[i]); else kept.push(r); });
+  for (const el of hide) el.style.visibility = "hidden";
 }
 map.on("zoomend baselayerchange", townsForZoom); townsForZoom();
 
 const fmt = v => v == null || isNaN(v) ? "–" : (v >= 10 ? Math.round(v) : v.toFixed(1));
 // Rain days are named by the date they end on (9am that morning); labels show both days, e.g. "Tue 27 – Wed 28 Oct"
-const part = (d, o) => new Date(d + "T00:00:00Z").toLocaleDateString("en-AU", {...o, timeZone:"UTC"});
+const PART_FMT = {};   // one formatter per set of options (making a new one for every date was slow on phones)
+const part = (d, o) => { const k = JSON.stringify(o); const f = PART_FMT[k] || (PART_FMT[k] = new Intl.DateTimeFormat("en-AU", {...o, timeZone: "UTC"}));
+  return f.format(new Date(d + "T00:00:00Z")); };
 const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const wd = d => `${part(d, {weekday:"short"})} ${part(d, {day:"numeric"})}`;
 const span = (a, b) => `${wd(a)}${a.slice(0, 7) === b.slice(0, 7) ? "" : " " + part(a, {month:"short"})} – ${wd(b)} ${part(b, {month:"short"})}`;
@@ -989,13 +991,21 @@ function catchMask(c, m){   // the tap-to-read cells whose centres fall inside t
   if (catchMasks[key]) return catchMasks[key];
   const [s, w, n, e] = m.bounds, W = m.grid_w, H = m.grid_h, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
   const xs = c.outline.map(p => p[0]), ys = c.outline.map(p => p[1]);
-  const lo0 = Math.min(...xs), lo1 = Math.max(...xs), la0 = Math.min(...ys), la1 = Math.max(...ys), out = [];
+  const la0 = Math.min(...ys), la1 = Math.max(...ys), out = [], ring = c.outline, nv = ring.length;
+  // row by row: where the outline crosses this latitude, then the cells between each pair of crossings (the same
+  // cells as testing each one, far quicker)
   for (let r = 0; r < H; r++){
     const lat = 360 / Math.PI * Math.atan(Math.exp(merc(n) - (r + .5) / H * (merc(n) - merc(s)))) - 90;
     if (lat < la0 || lat > la1) continue;
-    for (let k = 0; k < W; k++){
-      const lon = w + (k + .5) / W * (e - w);
-      if (lon >= lo0 && lon <= lo1 && inRing(lon, lat, c.outline)) out.push(r * W + k);
+    const xs2 = [];
+    for (let i = 0, j = nv - 1; i < nv; j = i++){
+      const yi = ring[i][1], yj = ring[j][1];
+      if ((yi > lat) !== (yj > lat)) xs2.push((ring[j][0] - ring[i][0]) * (lat - yi) / (yj - yi) + ring[i][0]);
+    }
+    xs2.sort((a, b) => a - b);
+    for (let q = 0; q + 1 < xs2.length; q += 2){
+      const k0 = Math.max(0, Math.ceil((xs2[q] - w) / (e - w) * W - .5)), k1 = Math.min(W - 1, Math.ceil((xs2[q + 1] - w) / (e - w) * W - .5) - 1);
+      for (let k = k0; k <= k1; k++) out.push(r * W + k);
     }
   }
   return (catchMasks[key] = out);
@@ -1053,11 +1063,14 @@ function tubeLines(){
   // lines can leave a creek stopping short of its river, or running over it. The join is a short straight piece from the
   // creek's last bend to the nearest point on the other line.
   const bigger = st => tube.filter(o => o !== st && (o.main || (!st.main && o.lines.flat().length > st.lines.flat().length)));
+  const box = new Map();   // each line's extent, so lines far away are skipped quickly
+  for (const o of tube) for (const ol of o.lines) { let a = 90, b = -90, c = 180, d = -180; for (const [la, lo] of ol) { if (la < a) a = la; if (la > b) b = la; if (lo < c) c = lo; if (lo > d) d = lo; } box.set(ol, [a - .08, b + .08, c - .08, d + .08]); }
   for (const st of tube){
     if (st.main) continue;
     const others = bigger(st);
     const near = p => { let best = [Infinity, null];
-      for (const o of others) for (const ol of o.lines) for (let i = 0; i < ol.length - 1; i++){ const r = segD(p, ol[i], ol[i + 1]); if (r[0] < best[0]) best = r; }
+      for (const o of others) for (const ol of o.lines){ const bx = box.get(ol); if (p[0] < bx[0] || p[0] > bx[1] || p[1] < bx[2] || p[1] > bx[3]) continue;
+        for (let i = 0; i < ol.length - 1; i++){ const r = segD(p, ol[i], ol[i + 1]); if (r[0] < best[0]) best = r; } }
       return best; };
     for (const ln of st.lines){
       // the end nearer the bigger line is the creek's mouth: joined from up to about 6 km; the other end only if it's
@@ -2632,7 +2645,7 @@ function namWeights(models, lead, kind){
 }
 async function namrexForecast(){
   await loadSkill();
-  const av = await avgForecast(), mm10 = [], wUsed = [];
+  const av = await avgForecast({noMedian: true}), mm10 = [], wUsed = [];
   av.days.forEach((d, i) => {
     const p = av.parts[i], ms = Object.keys(p), w = namWeights(ms, leadOf(Date.parse(d + "T00:00:00Z") / 1000), "map");
     const n = p[ms[0]].length, out = new Array(n);
@@ -2646,7 +2659,14 @@ async function namrexForecast(){
 // total over the span is worked out first and the median taken of those totals. Days only one model reaches are
 // left out. Each day records which models went into it.
 const median = a => { const v = a.filter(x => x != null).sort((x, y) => x - y), n = v.length; return !n ? 0 : n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2; };
-async function avgForecast(){
+// the middle value of 2 or 3 grids at one point, without making a new list for every point
+function med3(gs, c){
+  let a = gs[0][c], b = gs[1] ? gs[1][c] : null, d = gs[2] ? gs[2][c] : null;
+  if (a == null) { a = b; b = d; d = null; } if (b == null) { b = d; d = null; }
+  if (a == null) return 0; if (b == null) return a; if (d == null) return (a + b) / 2;
+  return a > b ? (b > d ? b : a > d ? d : a) : (a > d ? a : b > d ? d : b);
+}
+async function avgForecast(opt = {}){
   const ms = {};
   for (const m of Object.keys(F_FILE)) { try { ms[m] = F_ALL[m] || (F_ALL[m] = await getJSON(F_FILE[m])); } catch(e){} }
   const have = Object.keys(ms).filter(m => ms[m]); if (have.length < 2) throw new Error("not enough models");
@@ -2663,7 +2683,7 @@ async function avgForecast(){
     const ok = grids.map((g, i) => g ? have[i] : null).filter(Boolean);
     if (ok.length < 2) continue;
     const gs = grids.filter(Boolean), med = new Array(n);
-    for (let c = 0; c < n; c++) med[c] = Math.round(median(gs.map(g => g[c])));
+    if (!opt.noMedian) for (let c = 0; c < n; c++) med[c] = Math.round(med3(gs, c));
     mm10.push(med); used.push(ok); keepDays.push(d); parts.push(Object.fromEntries(ok.map((m, i) => [m, gs[i]])));
   }
   const runs = have.map(m => ms[m].run).sort();
@@ -2679,7 +2699,7 @@ function fVals(){
   if (F.parts) {   // Median: each model's own total over the span (the models that reach every day of it), then their median
     const ms = Object.keys(F.parts[a]).filter(m => F.parts.slice(a, b).every(p => p[m]));
     const tot = ms.map(m => { const t = new Array(out.length).fill(0); for (let d = a; d < b; d++) F.parts[d][m].forEach((v, k) => t[k] += v || 0); return t; });
-    if (tot.length) { for (let k = 0; k < out.length; k++) out[k] = median(tot.map(t => t[k])); return out; }
+    if (tot.length) { for (let k = 0; k < out.length; k++) out[k] = med3(tot, k); return out; }
   }
   for (let d = a; d < b; d++) F.mm10[d].forEach((v, k) => out[k] += v);
   return out;
@@ -2700,20 +2720,32 @@ function fDraw(){
   const W = Math.min(1200, Math.round(450 * (e - w) / 9)),   // the same detail whatever size the forecast area is
         H = Math.round(W * (merc(n) - merc(s)) / ((e - w) * Math.PI / 180));
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H);
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), px = new Uint32Array(img.data.buffer);
+  // each colour as one number (little-endian RGBA), and the steps in mm x 10 to compare with the grid's numbers
+  const col = ramp.map(([r, g, b]) => (225 << 24 | b << 16 | g << 8 | r) >>> 0), br = idx.breaks.map(b => b * 10), nb = br.length;
+  const nr = F.lats.length, nc = F.lons.length, lat0 = F.lats[0], dlat = F.lats[0] - F.lats[1], lon0 = F.lons[0], dlon = F.lons[1] - F.lons[0];
+  const cx = new Int32Array(W), fx = new Float32Array(W);
+  for (let x = 0; x < W; x++){ const g = (w + (x + .5) / W * (e - w) - lon0) / dlon; const c = Math.max(0, Math.min(Math.floor(g), nc - 2)); cx[x] = c; fx[x] = Math.min(1, Math.max(0, g - c)); }
   for (let y = 0; y < H; y++){
     const my = merc(n) - (y + .5) / H * (merc(n) - merc(s));
     const lat = (2 * Math.atan(Math.exp(my)) - Math.PI/2) * 180 / Math.PI;
+    const gy = (lat0 - lat) / dlat; if (gy < 0 || gy > nr - 1) continue;
+    const r = Math.min(Math.floor(gy), nr - 2), dy = gy - r, o0 = r * nc, o1 = o0 + nc, row = y * W;
     for (let x = 0; x < W; x++){
-      const v = fSample(vals, lat, w + (x + .5) / W * (e - w));
-      let k = -1; idx.breaks.forEach((b, i) => { if (v != null && v >= b) k = i; });
-      if (k < 0) continue;
-      const o = (y*W + x) * 4; img.data[o] = ramp[k][0]; img.data[o+1] = ramp[k][1]; img.data[o+2] = ramp[k][2]; img.data[o+3] = 225;
+      const c = cx[x], dx = fx[x];
+      const v = (vals[o0 + c] * (1 - dx) + vals[o0 + c + 1] * dx) * (1 - dy) + (vals[o1 + c] * (1 - dx) + vals[o1 + c + 1] * dx) * dy;
+      if (!(v >= br[0])) continue;
+      let k = 0; while (k + 1 < nb && v >= br[k + 1]) k++;
+      px[row + x] = col[k];
     }
   }
   ctx.putImageData(img, 0, 0);
-  if (fOverlay) map.removeLayer(fOverlay);
-  fOverlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}); if (tab === "fc") fOverlay.addTo(map);   // only if still on this tab (the drawing may finish after a switch)
+  const myDraw = fDraw.n = (fDraw.n || 0) + 1;
+  // handed to the map as an image file (much quicker on phones than turning it into a long text address)
+  const place = url => { if (myDraw !== fDraw.n) { if (url.startsWith("blob:")) URL.revokeObjectURL(url); return; }
+    if (fOverlay) { map.removeLayer(fOverlay); const old = fOverlay._url; if (old && old.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(old), 2000); }
+    fOverlay = L.imageOverlay(url, [[s, w], [n, e]], {opacity: OVERLAY_OPACITY, interactive: false}); if (tab === "fc") fOverlay.addTo(map); };   // only if still on this tab
+  if (cv.toBlob) cv.toBlob(bl => place(bl ? URL.createObjectURL(bl) : cv.toDataURL())); else place(cv.toDataURL());
   fReadTap();
 }
 function fReadTap(){
