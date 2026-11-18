@@ -57,7 +57,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     pts = [(la, lo) for la in LATS for lo in LONS]
     ids = list(H_IDS.values()) + OM_MODELS
-    made, wrote = int(time.time()), 0
+    made, wrote, with_bom = int(time.time()), 0, 0
     for i0 in range(0, len(pts), CHUNK):
         chunk = pts[i0:i0 + CHUNK]
         locs = fetch(chunk, ids)
@@ -93,11 +93,12 @@ def main():
                         m["bom_access_global"] = (x[0] + off, x[1])
             if not m:
                 continue
+            with_bom += "bom_access_global" in m
             with open(os.path.join(OUT, f"{la:.2f}_{lo:.2f}.json"), "w") as f:
                 json.dump({"made": made, "t0": t[0], "m": {k: [a, v] for k, (a, v) in m.items()}}, f, separators=(",", ":"))
             wrote += 1
         time.sleep(1)
-    print(f"Wrote {wrote} of {len(pts)} points to {OUT}", flush=True)
+    print(f"Wrote {wrote} of {len(pts)} points to {OUT} ({with_bom} with ACCESS-G)", flush=True)
 
 
 main()

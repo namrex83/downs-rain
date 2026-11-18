@@ -2761,7 +2761,20 @@ async function omHourly2(lat, lon, key){
       if (j && j.m && Date.now() / 1000 - j.made < 18 * 3600) {
         const series = {};
         for (const [m, [a, v]] of Object.entries(j.m)) series[m] = v.map((x, k) => [j.t0 + (a + k) * 3600, x / 10]);
-        if (Object.keys(series).length >= 4) return H_CACHE[key] = {series, kept: true};
+        if (Object.keys(series).length >= 4) {
+          H_CACHE[key] = {series, kept: true};
+          if (!series.bom_access_global) {   // the Bureau's model, if the kept copy hasn't got it: fetched in the background, added when it comes
+            fetchSoon(`https://api.open-meteo.com/v1/bom?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=precipitation&forecast_days=10&past_days=1&timezone=GMT&timeformat=unixtime`, 20000)
+              .then(r => r.ok ? r.json() : null).then(j2 => {
+                if (!j2) return; const tt = j2.hourly.time, v = j2.hourly.precipitation, have = tt.map((x, i) => v[i] == null ? -1 : i).filter(i => i >= 0);
+                if (!have.length) return;
+                series.bom_access_global = tt.slice(have[0], have[have.length - 1] + 1).map((x, k) => [x, v[have[0] + k] || 0]);
+                if (tab === "fc" && FC && FC.hourly) { const at = FC.pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]);   // redraw with it, in place
+                  if (Math.abs(at.lat - lat) < .01 && Math.abs(at.lng - lon) < .01) { FC = {...FC, hourly: anchorToMaps(series, at)}; fChartDraw(); } }
+              }).catch(() => {});
+          }
+          return H_CACHE[key];
+        }
       }
     } catch(e){}
   }
