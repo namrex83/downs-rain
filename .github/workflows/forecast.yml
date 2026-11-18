@@ -62,6 +62,11 @@ jobs:
         continue-on-error: true          # a problem here shouldn't stop the other maps going out
         run: python bom_fc.py
 
+      - name: Namrex forecast (score the models, work out their weights)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python -u namrex.py
+
       - name: Publish
         env:
           GITHUB_TOKEN: ${{ github.token }}
