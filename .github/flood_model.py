@@ -452,6 +452,47 @@ def now():
                      "lo": round(h + r10, 2), "mid": round(h + r50, 2), "hi": round(h + r90, 2),
                      "t_lo": (pts[-1][0] + dt.timedelta(hours=k10)).isoformat(), "t_mid": (pts[-1][0] + dt.timedelta(hours=k50)).isoformat(),
                      "t_hi": (pts[-1][0] + dt.timedelta(hours=k90)).isoformat()}
+    # travel time from the neighbour to each gauge: learned from the peaks the two have both had (the kept readings),
+    # else a first guess from the distance between them (flood waves on the Downs move about 1-1.5 km an hour)
+    gpos = (jload(os.path.join(DATA, "river_map.json"), {}) or {}).get("gauges") or {}
+    travel = jload(TRAVEL, {})
+    cut10 = hkey(nowt - dt.timedelta(days=10))
+    def kept(name):   # the last 10 days of a gauge's kept Bureau readings, {datetime: height}
+        return {dt.datetime.strptime(k, "%Y%m%d%H"): v for k, v in (arch.get(name) or {}).items() if int(k) >= cut10}
+
+    def peaks(ser):
+        """Times of clear peaks in an hourly series {datetime: height}: highest within a day either side, a rise of
+        0.3 m+ over the 3 days before, and a fall of 5 cm+ after."""
+        ts = sorted(ser)
+        out = []
+        for t in ts:
+            v = ser[t]
+            near = [ser[u] for u in ts if abs((u - t).total_seconds()) <= 24 * 3600]
+            before = [ser[u] for u in ts if 0 < (t - u).total_seconds() <= 72 * 3600]
+            after = [ser[u] for u in ts if 0 < (u - t).total_seconds() <= 48 * 3600]
+            if v >= max(near) and before and v - min(before) >= 0.3 and after and min(after) <= v - 0.05:
+                if not out or (t - out[-1]).total_seconds() > 24 * 3600:
+                    out.append(t)
+        return out
+
+    def learn_travel(up_name, dn_name, below=True):
+        """Record the gaps between peaks at up_name and the next peak at dn_name (kept readings); the median of the
+        last 5 (hours, + if dn_name is below) and how many there are."""
+        sign = 1 if below else -1
+        rec = travel.setdefault(f"{up_name}>{dn_name}", {})
+        pd_ = peaks(kept(dn_name))
+        for tu in peaks(kept(up_name)):
+            for tm in pd_:
+                lag_h = (tm - tu).total_seconds() / 3600
+                if 0 <= sign * lag_h <= (96 if below else 48):
+                    rec[tu.strftime("%Y%m%d%H")] = round(lag_h, 1)
+                    break
+        if not rec:
+            travel.pop(f"{up_name}>{dn_name}", None)
+            return None, 0
+        seen = [rec[k] for k in sorted(rec)][-5:]
+        return sorted(seen)[len(seen) // 2], len(seen)
+
     # 2. peaks coming down the river (in order, so an estimate can pass on down). A flood can come as two waves - the
     #    gauge's own (local creeks) and then the river's from upstream - so a gauge keeps up to two: the first as its
     #    estimate and the other as "wave2", and each is passed on down the river.
@@ -496,16 +537,22 @@ def now():
                 still_rising = (at(pu, 3) or v) < pu[-1][1] - 0.01
                 if v - low >= UP_RISE and not still_rising:
                     srcs.append((v, v - low, t, "peaked"))
+        obs, nobs = learn_travel(name_of(up), name_of(dn))
+        lag_mid = p["lag"][1]
+        if obs is not None:   # this flood's (and recent floods') own travel times count for more the more of them there are
+            lag_mid = (2 * p["lag"][1] + nobs * obs) / (2 + nobs)
+        shift = lag_mid - p["lag"][1]
         for uv, urise, ut, kind in srcs:
             rise = p["a"] + p["b"] * urise + p["c"] * dnow
-            t_mid = ut + dt.timedelta(hours=p["lag"][1])
+            t_mid = ut + dt.timedelta(hours=lag_mid)
             if t_mid < nowt or rise <= 0.1:
                 continue   # its time has passed (the gauge's own readings say what's happening now), or nothing much to come
             merge_wave(dn, {"name": name_of(dn), "now": dnow, "how": "from_up",
                     "up": name_of(up), "up_h": round(uv, 2), "up_site": up, "up_kind": kind, "n": p["n"],
                     "lo": round(dnow + max(0, rise - 1.28 * p["sd"]), 2), "mid": round(dnow + rise, 2), "hi": round(dnow + rise + 1.28 * p["sd"], 2),
-                    "t_lo": (ut + dt.timedelta(hours=p["lag"][0])).isoformat(), "t_mid": t_mid.isoformat(),
-                    "t_hi": (ut + dt.timedelta(hours=p["lag"][2])).isoformat()})
+                    "t_lo": (ut + dt.timedelta(hours=p["lag"][0] + shift)).isoformat(), "t_mid": t_mid.isoformat(),
+                    "t_hi": (ut + dt.timedelta(hours=p["lag"][2] + shift)).isoformat(),
+                    "travel_h": round(lag_mid), "travel_seen": nobs})
     # 3. the rest: just peaked (a rise of 0.3 m+ in the last 60 hours, now falling), rising (with no past case to match),
     #    or no rise expected
     def settle(site, pts):
@@ -613,26 +660,6 @@ def now():
     pos = {}
     for i_, n_ in enumerate(tbl):
         pos.setdefault(n_, i_)
-    # travel time from the neighbour to each gauge: learned from the peaks the two have both had (the kept readings),
-    # else a first guess from the distance between them (flood waves on the Downs move about 1-1.5 km an hour)
-    gpos = (jload(os.path.join(DATA, "river_map.json"), {}) or {}).get("gauges") or {}
-    travel = jload(TRAVEL, {})
-
-    def peaks(ser):
-        """Times of clear peaks in an hourly series {datetime: height}: highest within a day either side, a rise of
-        0.3 m+ over the 3 days before, and a fall of 5 cm+ after."""
-        ts = sorted(ser)
-        out = []
-        for t in ts:
-            v = ser[t]
-            near = [ser[u] for u in ts if abs((u - t).total_seconds()) <= 24 * 3600]
-            before = [ser[u] for u in ts if 0 < (t - u).total_seconds() <= 72 * 3600]
-            after = [ser[u] for u in ts if 0 < (u - t).total_seconds() <= 48 * 3600]
-            if v >= max(near) and before and v - min(before) >= 0.3 and after and min(after) <= v - 0.05:
-                if not out or (t - out[-1]).total_seconds() > 24 * 3600:
-                    out.append(t)
-        return out
-
     for nm, up in NEAR.items():
         if nm in learned_names or up not in model["sites"]:
             continue   # learned properly by now (from its own kept readings)
@@ -647,21 +674,11 @@ def now():
         fits = []
         below = pos.get(nm, 0) > pos.get(name_of(up), 0)
         sign = 1 if below else -1
-        # learn: each peak at the neighbour matched with the next peak here (the one before, for a gauge above it)
-        tk = f"{name_of(up)}>{nm}"
-        rec = travel.setdefault(tk, {})
-        for tu in peaks(tr_):
-            for tm in peaks(mn_):
-                lag_h = (tm - tu).total_seconds() / 3600
-                if 0 <= sign * lag_h <= (96 if below else 48):
-                    rec[tu.strftime("%Y%m%d%H")] = round(lag_h, 1)
-                    break
-        if not rec:
-            travel.pop(tk, None)
+        trav_seen, n_seen = learn_travel(name_of(up), nm, below)
         g1, g2 = gpos.get(nm), gpos.get(name_of(up))
         guess = sign * max(2, round(math.hypot((g1[0] - g2[0]) * 111, (g1[1] - g2[1]) * 99) * 0.8)) if g1 and g2 else sign * 6
-        lags_seen = sorted(rec.values())[-5:]
-        trav = sorted(lags_seen)[len(lags_seen) // 2] if lags_seen else guess
+        lags_seen = n_seen
+        trav = trav_seen if trav_seen is not None else guess
         win = max(6, abs(trav) * 0.5)
         for lag in (range(0, 73) if below else range(-48, 1)):   # below the neighbour: later; above it: sooner
             if abs(lag - trav) > win:
