@@ -390,7 +390,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
 .mapkey{position:absolute;left:0;right:0;bottom:0;z-index:800;display:flex;align-items:flex-end;gap:3px;padding:2px 6px 1px;
   background:rgba(255,255,255,.85);pointer-events:none}
 .nambtn[aria-pressed="false"]{color:#a8740a;font-weight:700}
-.nambtn{display:inline-flex;align-items:center;gap:5px} .namlogo{vertical-align:-.25em;flex:none;display:inline-block!important;width:auto!important;height:1.15em!important} .nambtn .namlogo{height:18px!important} .namlogo.nk{margin-right:3px;vertical-align:-.2em}
+.nambtn{display:inline-flex;align-items:center;gap:4px} .namlogo{vertical-align:-.15em;flex:none;display:inline-block!important;width:auto!important;height:.95em!important} .nambtn .namlogo{height:13px!important} .namlogo.nk{margin-right:3px;vertical-align:-.2em}
 .namtbl{margin:6px 0 4px} .namtbl td, .namtbl th{font-size:.8rem}
 .mapkey .mk{display:flex;flex:1;min-width:0}
 .mapkey .mk div{flex:1;min-width:0}
@@ -2605,13 +2605,16 @@ const F_NAME = {gfs: "GFS", ecmwf: "ECMWF", aifs: "ECMWF AI", avg: "Median", nam
 // the Namrex AI logo: a gold disc, a blue raindrop with an N, and a white AI sparkle
 let namLogoN = 0;
 const namLogo = (px, cls = "namlogo") => { const k = ++namLogoN;
+  if (px < 18)   // small: just the gold disc and the blue raindrop, flat colours (the N and the sparkle are lost at this size)
+    return `<svg class="${cls}" width="${px}" height="${px}" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#e0a92a"/>`
+      + `<path d="M16 5C16 5 8.5 13.6 8.5 18.6a7.5 7.5 0 0 0 15 0C23.5 13.6 16 5 16 5z" fill="#1f4f94"/></svg>`;
   return `<svg class="${cls}" width="${px}" height="${px}" viewBox="0 0 32 32" aria-hidden="true"><defs>`
   + `<linearGradient id="ng${k}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd76a"/><stop offset="1" stop-color="#c9900c"/></linearGradient>`
   + `<linearGradient id="nd${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f6fd0"/><stop offset="1" stop-color="#123a73"/></linearGradient></defs>`
   + `<circle cx="16" cy="16" r="15" fill="url(#ng${k})"/><path d="M15 5.5C15 5.5 8 13.6 8 18.3a7 7 0 0 0 14 0C22 13.6 15 5.5 15 5.5z" fill="url(#nd${k})"/>`
   + `<path d="M11.6 21.6v-6.2l4.8 6.2v-6.2" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
   + `<path d="M24.2 4.2l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z" fill="#fff"/></svg>`; };
-document.getElementById("namBtn").innerHTML = namLogo(18) + "Namrex AI";
+document.getElementById("namBtn").innerHTML = namLogo(13) + "Namrex AI";
 // Namrex: the models blended by how well each has done lately over the Downs (data/skill.json, from namrex.py), with
 // separate weights for 1-2, 2-4 and 4+ days ahead. Until there are scores, all models count the same.
 let SKILL;
@@ -2978,7 +2981,7 @@ function fChartDrawBars(){
   $("fTap").classList.add("merged");
   const sum = m => tot[m].some(v => v == null) ? null : tot[m].reduce((a, b) => a + b, 0);
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
-    <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span><span>${namLogo(14, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(nam.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
+    <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span><span>${namLogo(11, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(nam.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
     <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). " : "Each day's rain, 10am to 10am. "}Dashed = median; gold = Namrex AI (models weighted by recent skill); green = BOM (days end at midnight). ${anySev ? `Red dot: severe storms possible within ${SEV_KM} km that day (see the Storms tab). ` : ""}Key: totals over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– stops sooner)" : ""}. Tap a day for numbers.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), tip = $("fChart").querySelector(".ctip");
@@ -2986,7 +2989,7 @@ function fChartDrawBars(){
     const r = svg.getBoundingClientRect(), xx = (ev.clientX - r.left) / r.width * W0, k = Math.max(0, Math.min(nD - 1, Math.floor((xx - L0) / slot)));
     const d = qDate(t0 + (k + 1) * 86400 - 1), rows = shown.map(m => [m, tot[m][k]]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]), b = bomDay(k);
     const sc = Object.entries(stormCatAt(qDate(t0 + k * 86400 + 1), spot[0], spot[1])).filter(([, c]) => c >= 3);
-    tip.innerHTML = `<b>10am ${part(qDate(t0 + k * 86400 + 1), {weekday: "short", day: "numeric"})} to 10am ${part(d, {weekday: "short", day: "numeric"})}:</b>${nam[k] != null ? ` <span style="color:${NAM_COL};white-space:nowrap">${namLogo(12, "namlogo nk")}Namrex AI</span> <b>${fmt(nam[k])} mm</b> ·` : ""}${med[k] != null ? ` median ${fmt(med[k])} ·` : ""} `
+    tip.innerHTML = `<b>10am ${part(qDate(t0 + k * 86400 + 1), {weekday: "short", day: "numeric"})} to 10am ${part(d, {weekday: "short", day: "numeric"})}:</b>${nam[k] != null ? ` <span style="color:${NAM_COL};white-space:nowrap">${namLogo(10, "namlogo nk")}Namrex AI</span> <b>${fmt(nam[k])} mm</b> ·` : ""}${med[k] != null ? ` median ${fmt(med[k])} ·` : ""} `
       + rows.map(([m, v]) => `<span style="white-space:nowrap"><i style="background:${hCol(m)}"></i>${hName(m)} ${fmt(v)}</span> `).join("")
       + (b ? `<br><span style="white-space:nowrap"><i style="background:${BOM_COL}"></i><b>BOM ${bom.name}</b></span> ${part(b.d, {weekday: "short"})}: ${fmt(b.min)}${b.max != null && b.max !== b.min ? `–${fmt(b.max)}` : ""} mm, ${b.chance ?? "?"}% chance` : "")
       + (sc.length ? `<br><span style="color:#dc2626">●</span> <b>Severe storms possible within ${SEV_KM} km ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</b> (${sc.map(([m, c]) => `${SM_NAME[m] || m} ${CAT_NAME[c]}`).join(", ")}): see the Storms tab.` : "");
@@ -3194,10 +3197,10 @@ function fChartDraw(){
 function namInfo(){
   const pct = w => Object.entries(w).sort((a, b) => b[1] - a[1]).map(([m, x]) => `${F_NAME[m] || m} ${Math.round(x * 100)}%`).join(", ");
   const sk = SKILL && SKILL.map, lab = {A: "1–2 days ahead", B: "2–4 days ahead", C: "4+ days ahead"};
-  if (!sk || !Object.keys(sk).length) return namLogo(22) + " <b>Namrex AI</b>: the models blended by how well each has done lately over the Downs. There are no scores yet, so for now all three count the same; the weights start moving as rain days are checked against the radar and gauges.";
+  if (!sk || !Object.keys(sk).length) return namLogo(16) + " <b>Namrex AI</b>: the models blended by how well each has done lately over the Downs. There are no scores yet, so for now all three count the same; the weights start moving as rain days are checked against the radar and gauges.";
   const rows = ["A", "B", "C"].filter(b => sk[b]).map(b => `<tr><td>${lab[b]}</td><td>${pct(sk[b].w)}</td><td class="n">${sk[b].n}</td></tr>`).join("");
   const ch = SKILL.chart && (SKILL.chart.A || SKILL.chart.B);
-  return `${namLogo(22)} <b>Namrex AI</b>: GFS, ECMWF and ECMWF AI blended by how close each has been to the rain that actually fell over the Downs and SEQ (the gauge-corrected radar maps) on the last ${SKILL.window} days' rain days, with more weight on the ones getting it right. Rechecked every day.`
+  return `${namLogo(16)} <b>Namrex AI</b>: GFS, ECMWF and ECMWF AI blended by how close each has been to the rain that actually fell over the Downs and SEQ (the gauge-corrected radar maps) on the last ${SKILL.window} days' rain days, with more weight on the ones getting it right. Rechecked every day.`
     + `<table class="slim namtbl"><thead><tr><th>Forecast for</th><th>Weights now</th><th class="n">Rain days</th></tr></thead><tbody>${rows}</tbody></table>`
     + (ch ? `<span class="gnote2">Chart (all seven models, 1–2 days ahead): ${Object.entries(ch.w).sort((a, b) => b[1] - a[1]).map(([m, x]) => `${hName(m)} ${Math.round(x * 100)}%`).join(", ")}.</span>` : "");
 }
