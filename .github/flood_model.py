@@ -84,7 +84,8 @@ PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"),
 STATE = "state"       # the radar job's working state (kept between its runs)
 BOM_ARCH = os.path.join(STATE, "bom_archive.json")   # every Condamine gauge's readings from the Bureau's table, kept from now on
 LOG = os.path.join(STATE, "flood_log.json")          # the estimates given, to check against what the river then did
-LEARN = os.path.join(STATE, "flood_learn.json")      # how far off they were, per gauge
+LEARN = os.path.join(STATE, "flood_learn.json")
+TRAVEL = os.path.join(STATE, "flood_travel.json")    # travel times learned from peaks seen at both gauges      # how far off they were, per gauge
 CONDAMINE_LAST = "Undulla Creek at Tara Lagoon"      # the end of the Condamine part of the Bureau's river table
 # the catchments (assets/catchments.json, rain in data/catch_wet.json) whose rain reaches each gauge
 RAIN_CATCH = {"Kings Creek": ["kings"], "Dalrymple Creek": ["dalrymple"], "Swan Creek": ["swan"], "Sandy Creek": ["sandy"],
@@ -612,6 +613,26 @@ def now():
     pos = {}
     for i_, n_ in enumerate(tbl):
         pos.setdefault(n_, i_)
+    # travel time from the neighbour to each gauge: learned from the peaks the two have both had (the kept readings),
+    # else a first guess from the distance between them (flood waves on the Downs move about 1-1.5 km an hour)
+    gpos = (jload(os.path.join(DATA, "river_map.json"), {}) or {}).get("gauges") or {}
+    travel = jload(TRAVEL, {})
+
+    def peaks(ser):
+        """Times of clear peaks in an hourly series {datetime: height}: highest within a day either side, a rise of
+        0.3 m+ over the 3 days before, and a fall of 5 cm+ after."""
+        ts = sorted(ser)
+        out = []
+        for t in ts:
+            v = ser[t]
+            near = [ser[u] for u in ts if abs((u - t).total_seconds()) <= 24 * 3600]
+            before = [ser[u] for u in ts if 0 < (t - u).total_seconds() <= 72 * 3600]
+            after = [ser[u] for u in ts if 0 < (u - t).total_seconds() <= 48 * 3600]
+            if v >= max(near) and before and v - min(before) >= 0.3 and after and min(after) <= v - 0.05:
+                if not out or (t - out[-1]).total_seconds() > 24 * 3600:
+                    out.append(t)
+        return out
+
     for nm, up in NEAR.items():
         if nm in learned_names or up not in model["sites"]:
             continue   # learned properly by now (from its own kept readings)
@@ -625,7 +646,26 @@ def now():
             live[key] = pts
         fits = []
         below = pos.get(nm, 0) > pos.get(name_of(up), 0)
-        for lag in (range(0, 49) if below else range(-24, 1)):   # below the neighbour: later; above it: sooner
+        sign = 1 if below else -1
+        # learn: each peak at the neighbour matched with the next peak here (the one before, for a gauge above it)
+        tk = f"{name_of(up)}>{nm}"
+        rec = travel.setdefault(tk, {})
+        for tu in peaks(tr_):
+            for tm in peaks(mn_):
+                lag_h = (tm - tu).total_seconds() / 3600
+                if 0 <= sign * lag_h <= (96 if below else 48):
+                    rec[tu.strftime("%Y%m%d%H")] = round(lag_h, 1)
+                    break
+        if not rec:
+            travel.pop(tk, None)
+        g1, g2 = gpos.get(nm), gpos.get(name_of(up))
+        guess = sign * max(2, round(math.hypot((g1[0] - g2[0]) * 111, (g1[1] - g2[1]) * 99) * 0.8)) if g1 and g2 else sign * 6
+        lags_seen = sorted(rec.values())[-5:]
+        trav = sorted(lags_seen)[len(lags_seen) // 2] if lags_seen else guess
+        win = max(6, abs(trav) * 0.5)
+        for lag in (range(0, 73) if below else range(-48, 1)):   # below the neighbour: later; above it: sooner
+            if abs(lag - trav) > win:
+                continue   # only travel times near the one learned (or guessed)
             xy = [(tr_[t - dt.timedelta(hours=lag)], v) for t, v in mn_.items() if (t - dt.timedelta(hours=lag)) in tr_]
             if len(xy) < 12 or max(x for x, _ in xy) - min(x for x, _ in xy) < 0.5:
                 continue
@@ -636,11 +676,11 @@ def now():
             sd_ = math.sqrt(sum((y - a - b * x) ** 2 for x, y in xy) / max(1, n - 2))
             if b > 0:
                 fits.append((lag, a, b, sd_, n, min(x for x, _ in xy), max(x for x, _ in xy)))
-        # on a steady rise several lags fit about as well: the shortest of those that do
+        # several lags can fit about as well: the one nearest the learned travel time
         if fits:   # a lag that leaves few hours overlapping can fit well by chance: only those using most of them
             nmax = max(f[4] for f in fits)
             fits = [f for f in fits if f[4] >= 0.8 * nmax]
-        best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: abs(f[0])) if fits else None
+        best = min((f for f in fits if f[3] <= min(g[3] for g in fits) * 1.1 + 0.01), key=lambda f: abs(f[0] - trav)) if fits else None
         e = est.get(up)
         # the neighbour has just peaked but its wave hasn't got here yet: take its peak (sure of, as it's been)
         if e and e["how"] == "peaked" and best and dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=best[0]) > nowt:
@@ -649,7 +689,8 @@ def now():
         elif not pts or not e or e["how"] not in ("rise", "from_up"):
             continue
         if not best:   # a wave is coming down to the neighbour, but the two can't be compared yet: say so, without a height
-            est[key] = {**settle(key, pts), "exp": True, "nofit": True, "later": {"up": name_of(up), "t_mid": e["t_mid"]}}
+            est[key] = {**settle(key, pts), "exp": True, "nofit": True, "later": {"up": name_of(up), "t_mid": (dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=trav)).isoformat(),
+                                                                   "travel_h": trav, "travel_learned": bool(lags_seen)}}
             continue
         lag, a, b, sd_, n, xlo, xhi = best
         sd_ = sd_ + 0.1 * max(0, e["mid"] - xhi)   # less sure the further past the heights seen together
@@ -662,6 +703,12 @@ def now():
                     "lo": round(max(here, a + b * e["lo"] - 1.28 * sd_), 2), "mid": round(mid, 2), "hi": round(a + b * e["hi"] + 1.28 * sd_, 2),
                     "t_lo": sh("t_lo"), "t_mid": sh("t_mid"), "t_hi": sh("t_hi"), "exp": True}
         print(f"  {nm}: follows {name_of(up)} {lag} h later, height = {a:.2f} + {b:.2f} x ({n} hours, +/-{sd_:.2f} m) -> {mid:.2f}", flush=True)
+    try:
+        json.dump(travel, open(TRAVEL, "w"), separators=(",", ":"))
+    except OSError:
+        pass
+    if travel:
+        print("  travel times learned: " + ", ".join(f"{k} {sorted(v.values())}" for k, v in travel.items()), flush=True)
     # creeks with nothing to follow: matched by rate of rise to a similar creek's past rises (all heights pooled)
     for nm, donor in BORROW.items():
         if nm in learned_names or donor not in model["sites"]:

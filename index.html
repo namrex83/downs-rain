@@ -1163,7 +1163,8 @@ function floodWord(name, h){
 const SHORT_FLOOD = {"below minor": "&lt;minor", "minor": "minor", "moderate": "mod", "major": "major"};
 const floodChip = (name, h, short) => { const f = floodWord(name, h); return f ? `${short ? "<br>" : " "}<span class="fchip ${f.c}">${short ? SHORT_FLOOD[f.t] : f.t}</span>` : ""; };
 // a wave due from upstream more than 2 days off (too far to put a height on), or a rise with no past case like it
-const laterTxt = e => e.nofit ? `rise expected: wave from ${(e.later.up || "upstream").replace(/^Condamine River at /, "")} due about ${whenTxt(e.later.t_mid)}, height once there are enough readings to compare` : e.later ? `wave from ${(e.later.up || "upstream").replace(/^Condamine River at /, "")} due ${whenTxt(e.later.t_mid)}, too far off to put a height on` : "";
+const travTxt = l => l && l.travel_h != null ? ` (${Math.abs(Math.round(l.travel_h))} h ${l.travel_h >= 0 ? "after" : "before"} it, ${l.travel_learned ? "learned from past peaks" : "first guess from the distance"})` : "";
+const laterTxt = e => e.nofit ? `rise expected: wave from ${(e.later.up || "upstream").replace(/^Condamine River at /, "")} due about ${whenTxt(e.later.t_mid)}${travTxt(e.later)}, height once there are enough readings to compare` : e.later ? `wave from ${(e.later.up || "upstream").replace(/^Condamine River at /, "")} due ${whenTxt(e.later.t_mid)}, too far off to put a height on` : "";
 const expChip = e => e && e.exp ? ` <span class="expchip" title="Experimental: this gauge has no long record of its own; it's estimated from a neighbouring gauge or a similar creek, and will firm up as it sees more floods">🧪 experimental</span>` : "";
 function estTxt(e, long){
   if (e.exp && !estTxt.inner) { estTxt.inner = true; try { return estTxt(e, long).replace("🤖", "🤖" + expChip(e)); } finally { estTxt.inner = false; } }
