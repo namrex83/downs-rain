@@ -1,0 +1,23 @@
+name: Warrill sources
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [".github/warrill_sources.py"]
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: List the sites
+        run: python -u .github/warrill_sources.py
