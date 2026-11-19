@@ -39,6 +39,9 @@ SITES = {
     "422340B": "Condamine River at Talgai Weir HG", "422341A": "Condamine River at Brosnans Barn",
     "422317C": "Glengallan Creek at Rocky Ridge", "422359B": "Oakey Creek at Jondaryan", "422360A": "Oakey Creek at Dalmeny",
     "422361A": "Oakey Creek at Bowenville Reserve",
+    # Warrill Creek (Bremer River, SEQ)
+    "143116A": "Warrill Creek at Toohills Crossing", "143117A": "Warrill Creek at Kalbar Weir HG", "143118A": "Warrill Creek at Kalbar Weir TW",
+    "143105A": "Warrill Creek at Churchbank Weir Alert", "143108A": "Warrill Creek at Amberley DRDMW",
     # matched later (.github/flood_sources.py): the same gauge, or one beside it, in the government records
     "422329A": "Condamine River at Pratten", "422330A": "Oakey Creek at Oakey (Weir Park)", "422395A": "Sandy Creek at Leslie Dam TW",
     "422315B": "Sandy Creek at Leslie Dam HG", "422314A": "Condamine River at Ranges Bridge", "422332A": "Gowrie Creek at Oakey",
@@ -66,7 +69,10 @@ NEAR = {"Condamine River at Ranges Bridge": "422333A",   # Ranges Bridge (record
         "Condamine River at Chinchilla Weir TW": "422336A", "Condamine River at Condamine": "422344A",
         "Charleys Creek at Greenswamp Rd": "422343A", "Charleys Creek at Beruna": "422343A", "Charleys Creek at Seven Oaks": "422343A",
         "Charleys Creek at Burncluith Bridge": "422343A", "Kings Creek at Clifton": "422334A", "Condamine River at Tipton Bridge": "422316A",
-        "Condamine River at Warra-Kogan Rd Bridge": "422336A"}
+        "Condamine River at Warra-Kogan Rd Bridge": "422336A",
+        # Warrill Creek gauges with no record of their own: the government gauge beside them
+        "Warrill Creek at Kents Lagoon": "143118A", "Warrill Creek at Harrisville": "143105A", "Warrill Creek at Willowbank": "143108A",
+        "Warrill Creek at Amberley": "143108A"}
 # creeks with no gauge with AI on them: a rise is matched to a similar Downs creek's past rises (by how fast it's rising
 # only, as the heights are on another board) - experimental
 BORROW = {**{n: "422359B" for n in ["Myall Creek at Quinalow Peranga Rd", "Myall Creek at Clydesdale", "Myall Creek at Moffatt",
@@ -80,15 +86,17 @@ BORROW = {**{n: "422359B" for n in ["Myall Creek at Quinalow Peranga Rd", "Myall
 PAIRS = [("422341A", "422394A"), ("422394A", "422310C"), ("422310C", "422329A"), ("422329A", "422355A"), ("422355A", "4223059"),
          ("4223059", "422323A"), ("422310C", "422323A"), ("422326A", "422332A"), ("422330A", "422359B"), ("422323A", "422353B"), ("422323A", "422347B"),
          ("422347B", "422349B"), ("422349B", "422345A"), ("422323A", "422316A"), ("422316A", "422333A"), ("422333A", "422336A"),
-         ("422333A", "422314A"), ("422336A", "422344A"), ("422344A", "4223187"), ("422344A", "422325A"), ("422360A", "422359B"), ("422359B", "422361A"), ("422361A", "422350A")]
+         ("422333A", "422314A"), ("422336A", "422344A"), ("422344A", "4223187"), ("422344A", "422325A"), ("422360A", "422359B"), ("422359B", "422361A"), ("422361A", "422350A"),
+         ("143116A", "143117A"), ("143117A", "143118A"), ("143116A", "143118A"), ("143118A", "143105A"), ("143105A", "143108A")]   # Warrill Creek
 STATE = "state"       # the radar job's working state (kept between its runs)
 BOM_ARCH = os.path.join(STATE, "bom_archive.json")   # every Condamine gauge's readings from the Bureau's table, kept from now on
 LOG = os.path.join(STATE, "flood_log.json")          # the estimates given, to check against what the river then did
 LEARN = os.path.join(STATE, "flood_learn.json")
 TRAVEL = os.path.join(STATE, "flood_travel.json")    # travel times learned from peaks seen at both gauges      # how far off they were, per gauge
 CONDAMINE_LAST = "Undulla Creek at Tara Lagoon"      # the end of the Condamine part of the Bureau's river table
+OTHER_RIVERS = ("Warrill Creek",)                    # rivers beyond the Condamine with AI too
 # the catchments (assets/catchments.json, rain in data/catch_wet.json) whose rain reaches each gauge
-RAIN_CATCH = {"Kings Creek": ["kings"], "Dalrymple Creek": ["dalrymple"], "Swan Creek": ["swan"], "Sandy Creek": ["sandy"],
+RAIN_CATCH = {"Warrill Creek": ["bremer"], "Kings Creek": ["kings"], "Dalrymple Creek": ["dalrymple"], "Swan Creek": ["swan"], "Sandy Creek": ["sandy"],
               "Gowrie Creek": ["northbranch"], "Oakey Creek": ["northbranch"], "Hodgson Creek": ["hodgson"], "Thanes Creek": ["hodgson"],
               "Charleys Creek": ["charleys"], "Emu Creek": ["condamine_tum"], "Glengallan Creek": ["condamine_tum"],
               "Canal Creek": ["condamine_tum"], "Spring Creek": ["condamine_tum"], "Myall Creek": ["myall"], "Jandowae Creek": ["jandowae"], "Jimbour Creek": ["jimbour"]}
@@ -326,7 +334,12 @@ def bom_readings(t_end):
     out, days = {}, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     if iT is None or iH is None:
         return out
+    done_condamine = False
     for r in fw.get("rows") or []:
+        if done_condamine and not (r and str(r[iN]).startswith(OTHER_RIVERS)):
+            continue   # past the Condamine: only the other rivers with AI (Warrill Creek)
+        if r and r[iN] == CONDAMINE_LAST:
+            done_condamine = True
         try:
             name, h = r[iN], float(r[iH])
             m = re.match(r"(\d{1,2})\.(\d{2})\s*([AP]M)\s+(\w{3})", r[iT] or "")
@@ -341,8 +354,6 @@ def bom_readings(t_end):
                     if t <= t_end + dt.timedelta(minutes=10) and (name not in out or t > out[name][0]):
                         out[name] = (t, h)
                         break
-        if r and r[iN] == CONDAMINE_LAST:
-            break
     return out
 
 
