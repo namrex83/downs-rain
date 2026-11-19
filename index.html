@@ -280,6 +280,16 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 .rdlocbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:6px 10px;cursor:pointer}
 #pickBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:3500;background:var(--accent);color:#fff;font:600 .95rem var(--body);padding:10px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,30,60,.35);display:flex;gap:12px;align-items:center;white-space:nowrap}
 #pickBar[hidden]{display:none}
+#contactBtn{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:2500;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:4px 9px;font:600 .7rem var(--body);box-shadow:0 2px 8px rgba(0,30,60,.16);cursor:pointer;opacity:.9}
+#contactBtn:hover{opacity:1}
+body{padding-bottom:40px}
+body:has(#map.full) #contactBtn{display:none}
+#contactDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
+#contactDlg::backdrop{background:rgba(10,30,50,.45)}
+#contactDlg h3{margin:0 0 6px;font:700 1.1rem var(--body)}
+#contactDlg label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
+#contactDlg input,#contactDlg textarea{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);width:100%;box-sizing:border-box}
+#contactDlg textarea{min-height:110px;resize:vertical}
 #pickBar button{background:#fff;color:var(--accent);border:0;border-radius:999px;padding:4px 10px;font:600 .85rem var(--body)}
 .linkbtn{background:none;border:0;color:var(--accent);font:600 .85rem var(--body);padding:6px 0;cursor:pointer}
 .rdbtns{display:flex;justify-content:flex-end;gap:16px;align-items:center;margin-top:8px}
@@ -661,6 +671,18 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. For a new gauge, tap <b>I'm at the gauge</b> or <b>Pick on map</b> under it so we know where it is.</p>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send</button></div>
       <button type="button" class="linkbtn rdowner" id="readOwner">Site owner: send straight to GitHub</button>
+    </form>
+  </dialog>
+  <button type="button" id="contactBtn" aria-haspopup="dialog">✉ Contact</button>
+  <dialog id="contactDlg" aria-labelledby="contactTitle">
+    <form method="dialog" id="contactForm">
+      <h3 id="contactTitle">Contact Namrex Weather</h3>
+      <p class="note" style="margin:0 0 10px">Ideas, something not working, or a feature you'd like? Send a message.</p>
+      <label>Message <textarea id="contactMsg" required maxlength="4000"></textarea></label>
+      <label>Your name <input id="contactName" maxlength="60" autocomplete="name"></label>
+      <label>Email or phone (if you'd like a reply) <input id="contactReply" maxlength="100" autocomplete="email"></label>
+      <input type="checkbox" id="contactBot" tabindex="-1" autocomplete="off" hidden>
+      <div class="rdbtns"><button type="button" class="linkbtn" id="contactCancel">Cancel</button><button type="submit" class="primary" id="contactSend">Send</button></div>
     </form>
   </dialog>
   <div id="pickBar" hidden>Tap the map where the gauge is <button type="button" id="pickCancel">Cancel</button></div>
@@ -2014,6 +2036,27 @@ $("readForm").onsubmit = async e => {
   } catch(err){
     alert("Sorry, the readings couldn't be sent just now. Please try again in a minute.");
   } finally { $("readSend").disabled = false; $("readSend").textContent = "Send"; }
+};
+// Contact box (bottom right): sent to the owner by email through Web3Forms, like gauge readings.
+$("contactBtn").onclick = () => { try { $("contactName").value ||= localStorage.getItem("readWho") || ""; } catch(e){} $("contactDlg").showModal(); };
+$("contactCancel").onclick = () => $("contactDlg").close();
+$("contactForm").onsubmit = async e => {
+  e.preventDefault();
+  if ($("contactBot").checked) return;
+  const msg = $("contactMsg").value.trim(), who = $("contactName").value.trim(), reply = $("contactReply").value.trim();
+  if (!msg) return;
+  $("contactSend").disabled = true; $("contactSend").textContent = "Sending…";
+  try {
+    const res = await fetch("https://api.web3forms.com/submit", {method: "POST", headers: {"Content-Type": "application/json", Accept: "application/json"},
+      body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: `Namrex Weather message${who ? ` from ${who}` : ""}`, from_name: "Namrex Weather site",
+        message: `${msg}\n\nFrom: ${who || "(no name given)"}\nReply to: ${reply || "(none given)"}\nPage: ${location.href}`})});
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message || "not sent");
+    alert("Thanks! Your message has been sent.");
+    $("contactMsg").value = ""; $("contactDlg").close();
+  } catch(err){
+    alert("Sorry, the message couldn't be sent just now. Please try again in a minute.");
+  } finally { $("contactSend").disabled = false; $("contactSend").textContent = "Send"; }
 };
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
 // listed in the table by name, but their positions are never sent to the page, so they get no dot. Values show when zoomed in, or tap a dot.
