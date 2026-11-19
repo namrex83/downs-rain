@@ -1185,6 +1185,7 @@ function estTxt(e, long){
   if (e.how === "steady" && e.exp) return `🤖 <b>AI: not rising now</b> <span class="gnote2">(from this gauge's own recent readings; it has no long record yet to say what's coming)</span>`;
   if (e.how === "rising") return `🤖 <b>AI: rising, but no past rise like this to match yet</b> <span class="gnote2">(no estimate until it matches its past floods or a peak comes down from upstream)</span>`;
   if (e.how === "steady") return `🤖 <b>AI: no rise expected in the next 48 hours</b> <span class="gnote2">(matched to this gauge's past behaviour; it isn't rising and no flood is on its way from upstream)</span>`;
+  if (e.how === "crest") return `🤖 <b>AI: at or near its peak now, about ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)}</b> <span class="gnote2">(its estimated peak time has come and it's levelled off; it'll say "peaked" once it starts to fall)</span>`;
   if (e.how === "peaked") return `🤖 <b>AI: peaked at ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} on ${whenTxt(e.t_mid)}</b> and now falling <span class="gnote2">(from the gauge's own readings)</span>`;
   const t = new Date(e.t_mid).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).replace(",", "");
   if (!long) return `AI est.: ${e.mid.toFixed(2)} m${floodChip(e.name, e.mid)} ${whenTxt(e.t_mid)}`;
@@ -1639,6 +1640,7 @@ function drawRivers(fw){
     if (e.later) return `<td class="n aicol ai-quiet"><small>${e.nofit ? "rise expected" : "wave due"}<br>${whenTxt(e.later.t_mid)}</small></td>`;
     if (e.how === "rising") return `<td class="n aicol ai-quiet"><small>rising, no match</small></td>`;
     if (e.how === "steady") return `<td class="n aicol ai-quiet"><small>${e.exp ? "not rising now" : "no rise"}</small></td>`;
+    if (e.how === "crest") return `<td class="n aicol"><small>at peak now</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}</td>`;
     if (e.how === "peaked") return `<td class="n aicol ai-quiet"><small>peaked</small><br>${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small></td>`;
     return `<td class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">${e.mid.toFixed(2)}${floodChip(g(r, iName), e.mid, true)}<br><small>${whenTxt(e.t_mid)}</small>`
       + (e.wave2 ? `<br><small>then ${e.wave2.mid.toFixed(2)}</small>${floodChip(g(r, iName), e.wave2.mid, true)}<br><small>${whenTxt(e.wave2.t_mid)}</small>` : "") + `</td>`; }
@@ -1653,6 +1655,7 @@ function drawRivers(fw){
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
       + (!e ? "" : e.later ? `<div class="tsai q">AI: ${laterTxt(e)}</div>` : e.how === "rising" ? `<div class="tsai q">AI: rising, no past rise like this to match yet</div>` : e.how === "steady" ? `<div class="tsai q">AI: ${e.exp ? "not rising now" : "no rise expected"}</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
+         : e.how === "crest" ? `<div class="tsai">🤖 At or near its peak now, about ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}</div>`
          : `<div class="tsai" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">🤖 AI peak ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}${e.wave2 ? " (1st wave)" : ""}</div>`)
       + (e && e.wave2 ? `<div class="tsai" title="A second wave: the river's water coming down from ${e.wave2.up || "upstream"}">🌊 2nd wave ${e.wave2.mid.toFixed(2)} m${floodChip(nm, e.wave2.mid)}, ${whenTxt(e.wave2.t_mid)}</div>` : "")
       + (e && e.exp ? `<div class="tsai q">${expChip(e).trim()}</div>` : "") };

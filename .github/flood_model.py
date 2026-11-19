@@ -631,6 +631,36 @@ def now():
         if not last or (nowt - dt.datetime.fromisoformat(last["t"])).total_seconds() >= 3 * 3600:
             keep.append({"site": s_, "how": e["how"], "t": nowt.isoformat(), "now": e["now"], "mid": e["mid"], "t_mid": e["t_mid"],
                          "rain_next": e.get("rain_next")})
+    # a peak whose time has gone by (after the learned shift, or the river being slower than expected): if the gauge
+    # is still rising, the peak is still to come (moved to a few hours ahead); otherwise it's peaked (or steady),
+    # from its own readings; a second wave behind it takes its place
+    for s_, e in list(est.items()):
+        if e["how"] not in ("rise", "from_up") or dt.datetime.fromisoformat(e["t_mid"]) >= nowt - dt.timedelta(hours=1):
+            continue
+        rain = {k: e[k] for k in ("rain_past", "rain_next") if k in e}
+        w2 = e.get("wave2")
+        if w2 and dt.datetime.fromisoformat(w2["t_mid"]) >= nowt - dt.timedelta(hours=1):
+            est[s_] = {**w2, **rain}
+            continue
+        pts = live.get(s_)
+        st = settle(s_, pts) if pts else None
+        if st and st["how"] == "rising":
+            gap = nowt + dt.timedelta(hours=3) - dt.datetime.fromisoformat(e["t_mid"])
+            for k in ("t_lo", "t_mid", "t_hi"):
+                if k in e:
+                    e[k] = (dt.datetime.fromisoformat(e[k]) + gap).isoformat()
+            e["now"] = st["now"]
+            e["late"] = True
+            e.pop("wave2", None)
+        elif st and st["how"] == "steady" and (at(pts, 6) is None or st["now"] - at(pts, 6) >= -0.01):
+            # not falling yet: it's at (or very near) its peak now
+            t = nowt.isoformat()
+            est[s_] = {"name": e["name"], "now": st["now"], "how": "crest", "mid": round(st["now"], 2), "lo": round(st["now"], 2),
+                       "hi": round(st["now"] + 0.1, 2), "t_lo": t, "t_mid": t, "t_hi": t, **rain}
+        elif st:
+            est[s_] = {**st, **rain}
+        else:
+            del est[s_]
     json.dump(keep[-3000:], open(LOG, "w"), separators=(",", ":"))
     json.dump(learn, open(LEARN, "w"), separators=(",", ":"))
     # onto the Bureau's scale: where its board reads differently from these records (a different gauge board at the
@@ -705,6 +735,8 @@ def now():
             e = {**e, "lo": e["mid"], "hi": e["mid"], "t_lo": (tp - dt.timedelta(hours=6)).isoformat(), "t_hi": (tp + dt.timedelta(hours=6)).isoformat()}
         elif not pts or not e or e["how"] not in ("rise", "from_up"):
             continue
+        if not best and dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=trav) < nowt - dt.timedelta(hours=2):
+            continue   # that wave's time here has gone by: just what the gauge is doing (below)
         if not best:   # a wave is coming down to the neighbour, but the two can't be compared yet: say so, without a height
             est[key] = {**settle(key, pts), "exp": True, "nofit": True, "later": {"up": name_of(up), "t_mid": (dt.datetime.fromisoformat(e["t_mid"]) + dt.timedelta(hours=trav)).isoformat(),
                                                                    "travel_h": trav, "travel_learned": bool(lags_seen)}}
