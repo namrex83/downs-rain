@@ -283,7 +283,7 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #contactBtn{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:2500;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:4px 9px;font:600 .7rem var(--body);box-shadow:0 2px 8px rgba(0,30,60,.16);cursor:pointer;opacity:.9}
 #contactBtn:hover{opacity:1}
 body{padding-bottom:40px}
-body:has(#map.full) #contactBtn{display:none}
+body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 #contactDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #contactDlg::backdrop{background:rgba(10,30,50,.45)}
 #contactDlg h3{margin:0 0 6px;font:700 1.1rem var(--body)}
