@@ -284,27 +284,37 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #contactBtn:hover{opacity:1;background:rgba(255,255,255,.18)}
 @media (min-width:601px){ body>.wrap>header,body header{padding-top:calc(28px + env(safe-area-inset-top,0px))} #contactBtn{top:calc(5px + env(safe-area-inset-top,0px));right:16px} }
 body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
-#calDlg{border:0;border-radius:16px;padding:14px 14px 10px;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
+#calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
 .calhead{display:flex;justify-content:space-between;align-items:center}
 .calhead h3{margin:0;font:700 1.1rem var(--body)}
 .calhead .linkbtn{font-size:1.1rem;padding:2px 6px}
-.calwhere{margin:2px 0 8px;font-size:.85rem;color:var(--ink-2)}
+.calwhere{margin:0 0 4px;font-size:.85rem;color:var(--ink-2)}
 .calnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .calnav b{font:700 1rem var(--body)}
 .calnav button{border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;width:36px;height:32px;font:600 1.2rem var(--body);cursor:pointer}
 .calnav button:disabled{opacity:.3;cursor:default}
-.caltot{margin:2px 0 8px;font-size:.85rem;color:var(--ink-2);text-align:center;min-height:1.2em}
+.caltot{margin:2px 0 6px;font-size:.85rem;color:var(--ink-2);text-align:center;min-height:1.2em}
 .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
 .calgrid .wd{font:600 .62rem var(--body);color:var(--ink-3);text-align:center;text-transform:uppercase;letter-spacing:.05em}
-.calgrid button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;min-height:58px;padding:3px 0 2px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);font:600 .72rem var(--body);cursor:pointer}
+.calgrid button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;min-height:50px;padding:3px 0 2px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);font:600 .72rem var(--body);cursor:pointer}
 .calgrid button:disabled{opacity:.35;cursor:default;background:none}
 .calgrid button.today{border-color:var(--accent)}
 .calgrid button.on{outline:2px solid var(--accent)}
 .calgrid .dn{align-self:flex-start;padding-left:5px;line-height:1}
-.calgrid .dot{display:block;border-radius:50%;margin:auto 0 0}
+.calgrid .dot{display:block;border-radius:50%;margin:auto 0 0;box-shadow:inset 0 0 0 1px rgba(0,30,60,.22)}
 .calgrid .mm{font:600 .62rem var(--mono);color:var(--ink-2);line-height:1.1}
 .calnote{font-size:.72rem;margin:8px 0 0}
+.calgrid button.sel{background:color-mix(in srgb,var(--accent) 16%,var(--bg,#fff));border-color:var(--accent)}
+.calgrid button.sel.end{outline:2px solid var(--accent);outline-offset:-1px}
+.calsel{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;min-height:38px;font-size:.85rem;color:var(--ink-2)}
+.calsel:empty{display:none}
+.calsel>span:last-child{display:flex;align-items:center;gap:10px;flex:none}
+.calsel .primary{background:var(--accent);color:var(--accent-ink,#fff);border:0;border-radius:999px;padding:7px 12px;font:600 .8rem var(--body);cursor:pointer;white-space:nowrap}
+.calsel .linkbtn{white-space:nowrap}
+.calkey{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:8px;font-size:.72rem;color:var(--ink-2)}
+.calkey span{display:inline-flex;align-items:center;gap:4px}
+.calkey i{display:inline-block;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,30,60,.22)}
 #vCal{white-space:nowrap}
 @media (max-width:600px){ #vCal .cl{display:none} #vCal{font-size:1.05rem;padding:0 9px} }
 #contactDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
@@ -714,7 +724,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="calnav"><button type="button" id="calPrev" aria-label="Previous month">‹</button><b id="calMonth"></b><button type="button" id="calNext" aria-label="Next month">›</button></div>
     <p class="caltot" id="calTot"></p>
     <div class="calgrid" id="calGrid"></div>
-    <p class="note calnote">Each day is the 24 hours to 9am that morning: gauge-corrected radar, or SILO's gauge map before the radar record. Tap a day to see its map. Tap the map first to choose another spot.</p>
+    <div class="calsel" id="calSel"></div>
+    <div class="calkey" id="calKey"></div>
+    <p class="note calnote">Tap a day, then another day to pick the days between them (across months too), and <b>Show on map</b>. Each day is the 24 hours to 9am that morning: gauge-corrected radar, or SILO's gauge map before the radar record. To see another spot, close this and tap the map first.</p>
   </dialog>
   <div id="pickBar" hidden>Tap the map where the gauge is <button type="button" id="pickCancel">Cancel</button></div>
   <section class="panel radarOnly" hidden>
@@ -1821,7 +1833,7 @@ async function drawHail(){
   if (hailLayer) { map.removeLayer(hailLayer); hailLayer = null; }
   hail = null; $("hailKey").innerHTML = "";
   if (view === "season" || view === "fortnight" || !meta) return;
-  const days = view === "week" || view === "three" ? [...(meta.days || []).filter(d => !isSilo(d)), ...(meta.today ? ["today"] : [])] : isSilo($("day").value) ? [] : [$("day").value];
+  const days = multiView() ? [...(meta.days || []).filter(d => !isSilo(d)), ...(meta.today ? ["today"] : [])] : isSilo($("day").value) ? [] : [$("day").value];
   const hs = (await Promise.all(days.map(hailJSON))).filter(Boolean);
   if (!hs.length || tab !== "rain") return;
   const W = hs[0].grid_w, H = hs[0].grid_h, cells = new Uint8Array(W * H);
@@ -1829,7 +1841,7 @@ async function drawHail(){
     for (let k = 0; k < W * H; k++){ const v = h.cells.charCodeAt(k) - 48; if (v > cells[k]) cells[k] = v; }
   if (!cells.some(v => v)) return;
   hail = {cells, W, H, bounds: hs[0].bounds};
-  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">radar echo at the top of its scale${view === "week" ? " over the 7 days" : view === "three" ? " over the 3 days" : ""}${meta.today ? " and today so far" : ""}: possible = one scan, likely = two or more${hailOn ? "" : " · turned off above"}</span>`;
+  $("hailKey").innerHTML = `<span><i class="hk1"></i>Possible hail</span><span><i class="hk2"></i>Likely hail</span><span class="hknote">radar echo at the top of its scale${view === "week" ? " over the 7 days" : multiView() ? ` over the ${periodTxt()}` : ""}${meta.today ? " and today so far" : ""}: possible = one scan, likely = two or more${hailOn ? "" : " · turned off above"}</span>`;
   if (!hailOn) return;
   const f = 4, cv = document.createElement("canvas"); cv.width = W * f; cv.height = H * f;
   const ctx = cv.getContext("2d"), stripes = hailPattern(ctx, "rgba(214,0,214,.95)");
@@ -1849,8 +1861,8 @@ function hailAt(lat, lon){
   return hail.cells[Math.floor(fy * hail.H) * hail.W + Math.floor(fx * hail.W)];
 }
 async function draw(){
-  const three = view === "three", week = view === "week" || three, fort = view === "fortnight", season = view === "season" || fort;   // fort: the last 14 days, built like the season; three: the last 3 days, built like the week
-  const N = three ? 3 : 7, latestWeek = three || !$("weekSel").value || $("weekSel").value === "latest";
+  const rng = view === "range" && RANGE, three = view === "three" || !!rng, week = view === "week" || three, fort = view === "fortnight", season = view === "season" || fort;   // fort: the last 14 days, built like the season; three: the last 3 days, built like the week
+  const N = rng ? rng.n : three ? 3 : 7, latestWeek = three || !$("weekSel").value || $("weekSel").value === "latest";
   const ad = allDays(), latestEnd = ad[ad.length - 1];
   // an earlier week, or the latest one when SILO can fill a day the radar missed: added up here
   const past = three || (week && (!latestWeek || [...Array(7)].some((_, i) => isSilo(addDays(latestEnd, -i)))));
@@ -1861,9 +1873,9 @@ async function draw(){
   // to Daily) is dropped when it arrives
   const myDraw = draw.n = (draw.n || 0) + 1;
   let got;
-  try { got = past ? await buildWeek(latestWeek ? latestEnd : $("weekSel").value, N)
+  try { got = past ? await buildWeek(rng ? rng.end : latestWeek ? latestEnd : $("weekSel").value, N)
                : await getJSON(silo ? `data/silo/${day}.json` : `data/${day}.json`);
-        if (week && latestWeek) got = await addToday(got); }   // the latest 3 or 7 days also take in the rain since 9am today
+        if (rng ? rng.today : week && latestWeek) got = await addToday(got); }   // the latest 3 or 7 days also take in the rain since 9am today
   catch(e){
     if (myDraw !== draw.n) return;
     // just after 9am the running total restarts and can be missing briefly: show the finished day instead
@@ -1871,7 +1883,7 @@ async function draw(){
     meta = null; if(overlay) map.removeLayer(overlay); $("tap").innerHTML = `<span class="err">${week ? "The 7-day total appears after the next finished day." : season ? "That total isn't available yet." : "That day's map isn't available yet."}</span>`; return; }
   if (myDraw !== draw.n) return false;   // a newer view was asked for meanwhile
   meta = got;
-  const fitKey = three ? "three" : week ? "week" : fort ? "fortnight" : season ? "season" : null;
+  const fitKey = rng ? "range" : three ? "three" : week ? "week" : fort ? "fortnight" : season ? "season" : null;
   if (fitKey && meta && meta.grid) { fitBreaks(meta.grid, fitKey); legend(); }
   const today = day === "today", prov = today && meta.provisional;   // prov: running total corrected with the gauges so far
   $("mRaw").disabled = (today && !prov) || silo || season; $("mCorr").disabled = (today && !prov) || silo || season;
@@ -2070,7 +2082,10 @@ $("readForm").onsubmit = async e => {
 };
 // Rain calendar: every finished day's rain at one spot (the pin, else your location, else Dalby), from small
 // tiles of the day maps (data/cal, made by .github/calendar.py), so a whole season loads from one ~10 KB file.
-let CAL = null, calAt = null, calVals = null, calToday = null;
+let CAL = null, calAt = null, calVals = null, calToday = null, calSel = [];
+let RANGE = null;   // the days picked in the calendar, shown on the map: {end: last finished day, n: finished days, today: also the rain since 9am}
+const multiView = () => view === "week" || view === "three" || view === "range";
+const periodTxt = () => view === "range" && RANGE ? `${RANGE.n + (RANGE.today ? 1 : 0)} days` : view === "three" ? "3 days" : "7 days";
 const calTiles = {};
 function calSpot(){
   const ll = tapAt ? [tapAt.lat, tapAt.lng] : MYLL || [-27.182, 151.262];
@@ -2112,13 +2127,40 @@ function calDraw(){
     have++; tot += v; if (v >= 1) wet++;
     const sz = v < 1 ? 0 : Math.round(7 + Math.min(19, Math.sqrt(v - 1) * 3.6));
     const dot = sz ? `<i class="dot" style="width:${sz}px;height:${sz}px;background:${calColour(v)}"></i><span class="mm">${fmt(v)}</span>` : `<span class="mm" style="margin-top:auto;color:var(--ink-3)">${v >= 0.1 ? fmt(v) : "0"}</span>`;
-    html += `<button type="button" data-d="${isT ? "today" : d}" class="${isT ? "today" : ""}${(isT ? sel === "today" : sel === d) ? " on" : ""}" aria-label="${rainDay(d)}: ${fmt(v)} mm${isT ? " so far" : ""}"><span class="dn">${i}</span>${dot}</button>`;
+    const inSel = calSel.length && d >= calSel[0] && d <= calSel[calSel.length - 1], isEnd = calSel.includes(d);
+    html += `<button type="button" data-d="${d}" class="${isT ? "today" : ""}${!calSel.length && (isT ? sel === "today" : sel === d) ? " on" : ""}${inSel ? " sel" : ""}${isEnd ? " end" : ""}" aria-label="${rainDay(d)}: ${fmt(v)} mm${isT ? " so far" : ""}"><span class="dn">${i}</span>${dot}</button>`;
   }
   $("calGrid").innerHTML = html;
   $("calTot").innerHTML = have ? `<b>${fmt(tot)} mm</b> in ${part(first, {month: "long"})}${calToday && calToday.startsWith(m) ? " so far" : ""} · ${wet} day${wet === 1 ? "" : "s"} of 1 mm or more` : "No rain maps for this month";
   [...$("calGrid").querySelectorAll("button[data-d]")].forEach(b => b.onclick = () => {
-    $("calDlg").close(); $("day").value = b.dataset.d; setView("day");
+    const d = b.dataset.d;
+    calSel = calSel.length === 1 && d !== calSel[0] ? [calSel[0], d].sort() : [d];
+    calDraw();
   });
+  calSelBar();
+}
+function calSelBar(){
+  if (!calSel.length){ $("calSel").innerHTML = ""; return; }
+  const [a, b] = [calSel[0], calSel[calSel.length - 1]];
+  let tot = 0, n = 0, wet = 0;
+  for (let d = a; d <= b; d = addDays(d, 1)){ const v = calVals && calVals[d]; if (v != null){ tot += v; n++; if (v >= 1) wet++; } }
+  const nm = a === b ? rainDay(a) : span(addDays(a, -1), b), soFar = b === calToday ? " so far" : "";
+  $("calSel").innerHTML = `<span><b>${fmt(tot)} mm</b>${soFar} · ${a === b ? nm : `${nm} (${n} days${wet ? `, ${wet} wet` : ""})`}</span>
+    <span><button type="button" class="linkbtn" id="calClear">Clear</button> <button type="button" class="primary" id="calShow">Show on map</button></span>`;
+  $("calClear").onclick = () => { calSel = []; calDraw(); };
+  $("calShow").onclick = () => calShowSel(a, b);
+}
+function calShowSel(a, b){
+  $("calDlg").close();
+  const today = b === calToday, end = today ? addDays(b, -1) : b, n = Math.round((Date.parse(end) - Date.parse(a)) / 864e5) + 1;
+  if (a === b || n < 1){ $("day").value = today ? "today" : a; setView("day"); return; }   // one day: its own map
+  RANGE = {end, n, today}; setView("range");
+}
+function calKey(){
+  const ex = [1, 5, 15, 30, 60];
+  $("calKey").innerHTML = `<span>Dot = rain that day:</span>` + ex.map(v => { const sz = Math.round((7 + Math.min(19, Math.sqrt(v - 1) * 3.6)) * 0.7);
+    return `<span><i style="width:${sz}px;height:${sz}px;background:${calColour(v)}"></i>${v}${v === 60 ? "+" : ""}</span>`; }).join("") +
+    `<span>mm · no dot: under 1 mm · blank: no map · blue outline: today</span>`;
 }
 async function calOpen(){
   const sp = calSpot();
@@ -2129,7 +2171,7 @@ async function calOpen(){
   if (!calVals){ $("calTot").textContent = "No rain calendar for this spot yet."; return; }
   const sel = view === "day" && $("day").value !== "today" ? $("day").value : (calToday || Object.keys(calVals).sort().pop());
   calAt = (sel || new Date().toISOString()).slice(0, 7);
-  calDraw();
+  calKey(); calDraw();
 }
 $("vCal").onclick = calOpen;
 $("calClose").onclick = () => $("calDlg").close();
@@ -2267,7 +2309,7 @@ function readTap(){
   if (!meta) return;
   const where = `${tapAt.lat.toFixed(2)}°, ${tapAt.lng.toFixed(2)}°`;
   const hz = hailAt(tapAt.lat, tapAt.lng);
-  $("tap").innerHTML = (hz ? `<b class="hailtxt">${hz === 2 ? "Likely" : "Possible"} hail core</b> seen here by the radar. ` : "") + (v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${view==="week"||view==="three"?` over the ${view==="three"?3:7} days${meta.today?" plus today so far":""}`:view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`);
+  $("tap").innerHTML = (hz ? `<b class="hailtxt">${hz === 2 ? "Likely" : "Possible"} hail core</b> seen here by the radar. ` : "") + (v == null ? `No radar data at ${where}.` : `About <b>${fmt(v)} mm</b> at ${where}${multiView()?` over the ${periodTxt()}${meta.today?" plus today so far":""}`:view==="season"||view==="fortnight"?` since 9am ${part(addDays(meta.from, -1), {day:"numeric", month:"short"})}`:$("day").value==="today"?" since 9am":""}${view==="day"&&isSilo($("day").value)?" (SILO gauge map)":view==="day"&&$("day").value==="today"&&meta.provisional&&mode!=="raw"?" (provisional, gauge-corrected)":(view==="day"&&$("day").value==="today")||(mode==="raw"&&view!=="season"&&view!=="fortnight")?" (radar only)":""}.`);
 }
 function setPin(label){
   if (!pin) pin = L.marker(tapAt, {interactive:false, keyboard:false, zIndexOffset:1000,
@@ -2551,13 +2593,13 @@ let rw = innerWidth, rh = innerHeight;   // phones: refit on a width change only
 addEventListener("resize", () => { if (innerWidth !== rw || (innerWidth > 600 && innerHeight !== rh)) { rw = innerWidth; rh = innerHeight; fitMap(); } });
 $("mCorr").onclick = () => { mode="corr"; $("mCorr").setAttribute("aria-pressed","true"); $("mRaw").setAttribute("aria-pressed","false"); show(); };
 $("mRaw").onclick = () => { mode="raw"; $("mRaw").setAttribute("aria-pressed","true"); $("mCorr").setAttribute("aria-pressed","false"); show(); };
-const setView = v => { view = v; $("vDay").setAttribute("aria-pressed", v==="day"); $("vThree").setAttribute("aria-pressed", v==="three"); $("vWeek").setAttribute("aria-pressed", v==="week"); $("vFort").setAttribute("aria-pressed", v==="fortnight"); $("vSeason").setAttribute("aria-pressed", v==="season"); legend(); show(); };
+const setView = v => { view = v; $("vCal").setAttribute("aria-pressed", v==="range"); $("vDay").setAttribute("aria-pressed", v==="day"); $("vThree").setAttribute("aria-pressed", v==="three"); $("vWeek").setAttribute("aria-pressed", v==="week"); $("vFort").setAttribute("aria-pressed", v==="fortnight"); $("vSeason").setAttribute("aria-pressed", v==="season"); legend(); show(); };
 $("vDay").onclick = () => setView("day");
 $("vWeek").onclick = () => setView("week");
 $("vThree").onclick = () => setView("three");
 // while the page is open, pick up the latest running total (the radar job refreshes it about hourly while it rains)
 setInterval(() => { if (document.visibilityState === "visible" && tab === "rain" && idx &&
-  (view === "three" || (view === "week" && (!$("weekSel").value || $("weekSel").value === "latest")) || (view === "day" && $("day").value === "today"))) show(); }, 15 * 60 * 1000);
+  (view === "three" || (view === "range" && RANGE && RANGE.today) || (view === "week" && (!$("weekSel").value || $("weekSel").value === "latest")) || (view === "day" && $("day").value === "today"))) show(); }, 15 * 60 * 1000);
 $("vSeason").onclick = () => setView("season");
 $("vFort").onclick = () => setView("fortnight");
 
