@@ -302,6 +302,9 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .calgrid button.today{border-color:var(--accent)}
 .calgrid button.on{outline:2px solid var(--accent)}
 .calgrid .dn{align-self:flex-start;padding-left:5px;line-height:1}
+.calgrid button{position:relative}
+.calgrid .hb{position:absolute;top:2px;right:3px;font-size:.72rem;line-height:1}
+.calgrid .hb.poss{opacity:.45}
 .calgrid .dot{display:block;border-radius:50%;margin:auto 0 0;box-shadow:inset 0 0 0 1px rgba(0,30,60,.22)}
 .calgrid .mm{font:600 .62rem var(--mono);color:var(--ink-2);line-height:1.1}
 .calnote{font-size:.72rem;margin:8px 0 0}
@@ -2082,7 +2085,7 @@ $("readForm").onsubmit = async e => {
 };
 // Rain calendar: every finished day's rain at one spot (the pin, else your location, else Dalby), from small
 // tiles of the day maps (data/cal, made by .github/calendar.py), so a whole season loads from one ~10 KB file.
-let CAL = null, calAt = null, calVals = null, calToday = null, calSel = [];
+let CAL = null, calAt = null, calVals = null, calToday = null, calSel = [], calHail = {};
 let RANGE = null;   // the days picked in the calendar, shown on the map: {end: last finished day, n: finished days, today: also the rain since 9am}
 const multiView = () => view === "week" || view === "three" || view === "range";
 const periodTxt = () => view === "range" && RANGE ? `${RANGE.n + (RANGE.today ? 1 : 0)} days` : view === "three" ? "3 days" : "7 days";
@@ -2104,6 +2107,15 @@ async function calLoad(ll){
   const t = await (calTiles[key] || (calTiles[key] = getJSON(`data/cal/${key}.json`).catch(e => { delete calTiles[key]; throw e; })));
   const k = (y - ty * T) * tw + (x - tx * T), out = {};
   t.days.forEach((d, i) => { const v = t.v[i][k]; out[d] = v < 0 ? null : v / 10; });
+  calHail = {};   // the radar saw a hail core within about 6 km: 1 possible, 2 likely
+  for (const [i, str] of Object.entries(t.h || {})){ const h = +str[k]; if (h) calHail[t.days[+i]] = h; }
+  try {   // today so far
+    const ht = await getJSON("data/hail/today.json"), R = 3;
+    if (ht && ht.cells && ht.grid_w === W && ht.grid_h === H){ let m = 0;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++){ const yy = y + dy, xx = x + dx;
+        if (dx*dx + dy*dy > R*R || yy < 0 || yy >= H || xx < 0 || xx >= W) continue; m = Math.max(m, ht.cells.charCodeAt(yy * W + xx) - 48); }
+      if (m > 0 && ht.date) calHail[ht.date] = Math.min(2, m); }
+  } catch(e){}
   try {   // the rain day running now, so far
     const td = await getJSON("data/today.json");
     if (td.grid && td.grid_w === W && td.grid_h === H){ const v = td.grid[y * W + x]; calToday = td.date; out[td.date] = v < 0 ? null : v / 10; }
@@ -2120,18 +2132,19 @@ function calDraw(){
   const nDays = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate();
   const sel = view === "day" ? $("day").value : null;
   let html = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<span class="wd">${d}</span>`).join("") + "<span></span>".repeat(lead);
-  let tot = 0, wet = 0, have = 0;
+  let tot = 0, wet = 0, have = 0, hd = 0;
   for (let i = 1; i <= nDays; i++){
     const d = `${m}-${String(i).padStart(2, "0")}`, v = calVals ? calVals[d] : undefined, isT = d === calToday;
     if (v == null){ html += `<button type="button" disabled><span class="dn">${i}</span></button>`; continue; }
-    have++; tot += v; if (v >= 1) wet++;
+    have++; tot += v; if (v >= 1) wet++; if (calHail[d]) hd++;
     const sz = v < 1 ? 0 : Math.round(7 + Math.min(19, Math.sqrt(v - 1) * 3.6));
     const dot = sz ? `<i class="dot" style="width:${sz}px;height:${sz}px;background:${calColour(v)}"></i><span class="mm">${fmt(v)}</span>` : `<span class="mm" style="margin-top:auto;color:var(--ink-3)">${v >= 0.1 ? fmt(v) : "0"}</span>`;
     const inSel = calSel.length && d >= calSel[0] && d <= calSel[calSel.length - 1], isEnd = calSel.includes(d);
-    html += `<button type="button" data-d="${d}" class="${isT ? "today" : ""}${!calSel.length && (isT ? sel === "today" : sel === d) ? " on" : ""}${inSel ? " sel" : ""}${isEnd ? " end" : ""}" aria-label="${rainDay(d)}: ${fmt(v)} mm${isT ? " so far" : ""}"><span class="dn">${i}</span>${dot}</button>`;
+    const hz = calHail[d], hb = hz ? `<span class="hb${hz === 1 ? " poss" : ""}" title="${hz === 2 ? "Likely" : "Possible"} hail nearby">🧊</span>` : "";
+    html += `<button type="button" data-d="${d}" class="${isT ? "today" : ""}${!calSel.length && (isT ? sel === "today" : sel === d) ? " on" : ""}${inSel ? " sel" : ""}${isEnd ? " end" : ""}" aria-label="${rainDay(d)}: ${fmt(v)} mm${isT ? " so far" : ""}${hz ? `, ${hz === 2 ? "likely" : "possible"} hail nearby` : ""}"><span class="dn">${i}</span>${hb}${dot}</button>`;
   }
   $("calGrid").innerHTML = html;
-  $("calTot").innerHTML = have ? `<b>${fmt(tot)} mm</b> in ${part(first, {month: "long"})}${calToday && calToday.startsWith(m) ? " so far" : ""} · ${wet} day${wet === 1 ? "" : "s"} of 1 mm or more` : "No rain maps for this month";
+  $("calTot").innerHTML = have ? `<b>${fmt(tot)} mm</b> in ${part(first, {month: "long"})}${calToday && calToday.startsWith(m) ? " so far" : ""} · ${wet} day${wet === 1 ? "" : "s"} of 1 mm or more${hd ? ` · 🧊 ${hd} hail day${hd === 1 ? "" : "s"}` : ""}` : "No rain maps for this month";
   [...$("calGrid").querySelectorAll("button[data-d]")].forEach(b => b.onclick = () => {
     const d = b.dataset.d;
     calSel = calSel.length === 1 && d !== calSel[0] ? [calSel[0], d].sort() : [d];
@@ -2142,10 +2155,10 @@ function calDraw(){
 function calSelBar(){
   if (!calSel.length){ $("calSel").innerHTML = ""; return; }
   const [a, b] = [calSel[0], calSel[calSel.length - 1]];
-  let tot = 0, n = 0, wet = 0;
-  for (let d = a; d <= b; d = addDays(d, 1)){ const v = calVals && calVals[d]; if (v != null){ tot += v; n++; if (v >= 1) wet++; } }
+  let tot = 0, n = 0, wet = 0, hd = 0;
+  for (let d = a; d <= b; d = addDays(d, 1)){ const v = calVals && calVals[d]; if (calHail[d]) hd++; if (v != null){ tot += v; n++; if (v >= 1) wet++; } }
   const nm = a === b ? rainDay(a) : span(addDays(a, -1), b), soFar = b === calToday ? " so far" : "";
-  $("calSel").innerHTML = `<span><b>${fmt(tot)} mm</b>${soFar} · ${a === b ? nm : `${nm} (${n} days${wet ? `, ${wet} wet` : ""})`}</span>
+  $("calSel").innerHTML = `<span><b>${fmt(tot)} mm</b>${soFar} · ${a === b ? nm : `${nm} (${n} days${wet ? `, ${wet} wet` : ""})`}${hd ? (a === b ? " · 🧊 hail nearby" : ` · 🧊 ${hd}`) : ""}</span>
     <span><button type="button" class="linkbtn" id="calClear">Clear</button> <button type="button" class="primary" id="calShow">Show on map</button></span>`;
   $("calClear").onclick = () => { calSel = []; calDraw(); };
   $("calShow").onclick = () => calShowSel(a, b);
@@ -2160,7 +2173,7 @@ function calKey(){
   const ex = [1, 5, 15, 30, 60];
   $("calKey").innerHTML = `<span>Dot = rain that day:</span>` + ex.map(v => { const sz = Math.round((7 + Math.min(19, Math.sqrt(v - 1) * 3.6)) * 0.7);
     return `<span><i style="width:${sz}px;height:${sz}px;background:${calColour(v)}"></i>${v}${v === 60 ? "+" : ""}</span>`; }).join("") +
-    `<span>mm · no dot: under 1 mm · blank: no map · blue outline: today</span>`;
+    `<span>mm · no dot: under 1 mm · blank: no map · blue outline: today</span><span>🧊 the radar saw a hail core within about 6 km (faded: possible, solid: likely)</span>`;
 }
 async function calOpen(){
   const sp = calSpot();
