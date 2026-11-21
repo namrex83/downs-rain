@@ -9,6 +9,11 @@ point, data/om/<lat>_<lon>.json:
 
 The page reads the file for the point nearest where you've tapped (or Toowoomba), and only asks Open-Meteo itself for
 spots outside this area or when a file is missing.
+
+It also writes data/om_frac.json, when in each forecast day (10am to 10am Queensland time) the rain falls at every
+point: {"days": [...], "lats": [...], "lons": [...], "f": [[8 numbers per point, point by point] per day]}, the share
+(in %) of the day's rain in each 3 hours from 10am, from the average of all the models. The page multiplies a day's
+rain map by these to play the day on the map in 3-hour steps.
 """
 import json
 import os
@@ -58,6 +63,7 @@ def main():
     pts = [(la, lo) for la in LATS for lo in LONS]
     ids = list(H_IDS.values()) + OM_MODELS
     made, wrote, with_bom = int(time.time()), 0, 0
+    hourly = {}   # (lat, lon) -> {unix time (end of hour): [mm from each model]}
     for i0 in range(0, len(pts), CHUNK):
         chunk = pts[i0:i0 + CHUNK]
         locs = fetch(chunk, ids)
@@ -94,11 +100,44 @@ def main():
             if not m:
                 continue
             with_bom += "bom_access_global" in m
+            hs = hourly.setdefault((la, lo), {})
+            for k, (a, v) in m.items():
+                for i, x in enumerate(v):
+                    hs.setdefault(t[0] + (a + i) * 3600, []).append(x / 10)
             with open(os.path.join(OUT, f"{la:.2f}_{lo:.2f}.json"), "w") as f:
                 json.dump({"made": made, "t0": t[0], "m": {k: [a, v] for k, (a, v) in m.items()}}, f, separators=(",", ":"))
             wrote += 1
         time.sleep(1)
     print(f"Wrote {wrote} of {len(pts)} points to {OUT} ({with_bom} with ACCESS-G)", flush=True)
+    write_frac(pts, hourly, made)
+
+
+def write_frac(pts, hourly, made, ndays=10):
+    """The share of each forecast day's rain in each 3 hours, at every point (see the top of this file)."""
+    if not hourly:
+        return
+    first = (made // 86400 + 1) * 86400   # the end of the forecast day running now (10am Queensland = 00 UTC)
+    ends = [first + 86400 * i for i in range(ndays)]
+    days = [time.strftime("%Y-%m-%d", time.gmtime(e)) for e in ends]
+    f = []
+    for e in ends:
+        row = []
+        for p in pts:
+            hs = hourly.get(p, {})
+            blocks = []
+            for b in range(8):
+                s0 = e - 86400 + b * 10800
+                vals = [sum(hs[t]) / len(hs[t]) for t in range(s0 + 3600, s0 + 10801, 3600) if hs.get(t)]
+                blocks.append(sum(vals) if len(vals) == 3 else None)
+            if None in blocks or sum(blocks) < 0.05:   # no hourly figures, or dry: spread evenly
+                row += [13, 12, 13, 12, 13, 12, 13, 12]
+                continue
+            tot = sum(blocks)
+            row += [round(100 * x / tot) for x in blocks]
+        f.append(row)
+    with open(os.path.join("data", "om_frac.json"), "w") as fh:
+        json.dump({"made": made, "days": days, "lats": LATS, "lons": LONS, "f": f}, fh, separators=(",", ":"))
+    print(f"Wrote data/om_frac.json: {len(days)} days", flush=True)
 
 
 main()

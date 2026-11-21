@@ -284,6 +284,18 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #contactBtn:hover{opacity:1;background:rgba(255,255,255,.18)}
 @media (min-width:601px){ body>.wrap>header,body header{padding-top:calc(28px + env(safe-area-inset-top,0px))} #contactBtn{top:calc(5px + env(safe-area-inset-top,0px));right:16px} }
 body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
+.timing{padding:10px 12px}
+.timing .tmhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.timing .tmhead b{font:700 .95rem var(--body)}
+.timing .tmhead span{font-size:.75rem;color:var(--ink-3)}
+.timing .tmsum{font-size:.88rem;margin:2px 0 6px;color:var(--ink)}
+.timing svg{display:block;width:100%;height:auto;touch-action:manipulation}
+.timing svg text{font:600 10px var(--body);fill:var(--ink-2)}
+.timing svg .blk{cursor:pointer}
+.timing .tmbtns{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:.8rem;color:var(--ink-2)}
+.timing .tmbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:5px 11px;cursor:pointer}
+.timing .tmbtns button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink,#fff)}
+.timing .tmkey{font-size:.7rem;color:var(--ink-3);margin-top:5px}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
 .calhead{display:flex;justify-content:space-between;align-items:center}
@@ -625,7 +637,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
        rounded, flowing outlines; the blur is set to the picture's pixel size on screen as the map zooms -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rsmooth" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
     <feGaussianBlur id="rsmoothBlur" stdDeviation="1.5"/><feComponentTransfer><feFuncA type="linear" slope="2.6" intercept="-0.45"/></feComponentTransfer></filter></svg>
-  <div id="mapRow"><div id="map"></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
+  <div id="mapRow"><div id="map"></div><div class="fcOnly" hidden><div class="tap timing" id="fTiming" hidden></div></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
   <div class="rTimeline radarOnly" id="rTimeline" hidden>
@@ -2938,7 +2950,7 @@ async function avgForecast(opt = {}){
 let fSumN = 9, fStart = 0;   // opens on the 9-day total
 const fSpan = () => [fStart, Math.min(F.days.length, fStart + fSumN)];
 function fVals(){
-  if (!fSumN) return F.mm10[+$("fDay").value];
+  if (!fSumN) { const v = F.mm10[+$("fDay").value], fr = frameFrac(); return fr ? v.map((x, k) => fr[k] < 0 ? 0 : x * fr[k] / 100) : v; }
   const [a, b] = fSpan(), out = new Array(F.mm10[a].length).fill(0);
   if (F.parts) {   // Median: each model's own total over the span (the models that reach every day of it), then their median
     const ms = Object.keys(F.parts[a]).filter(m => F.parts.slice(a, b).every(p => p[m]));
@@ -2999,6 +3011,7 @@ function fReadTap(){
   const [a, b] = fSumN ? fSpan() : [+$("fDay").value, +$("fDay").value + 1];
   const when = `10am ${span(addDays(F.days[a], -1), F.days[b - 1]).replace(" – ", " – 10am ")}${fSumN ? ` (${b - a} day${b - a === 1 ? "" : "s"}${b - a < fSumN ? ", all this model run covers" : ""})` : ""}`;
   setPin(v == null ? "Outside" : `${fmt(v)} mm`);
+  const fl = frameLabel(); if (fl) { $("fTap").innerHTML = v == null ? `No forecast at ${where}.` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${fl} (Namrex AI timing: the day's rain shared out by when the models have it).`; fChart(); return; }
   $("fTap").innerHTML = v == null ? `No forecast at ${where} (outside the forecast area).` : `Forecast <b>${fmt(v)} mm</b> at ${where}, ${when}${F.used ? `, ${fModel === "namrex" ? "Namrex AI blend of" : "median of"} ${[...new Set(F.used.slice(a, b).map(u => u.map(m => F_NAME[m]).join(", ")))].join("; then ")}` : ""}.`;
   fChart();
 }
@@ -3433,6 +3446,7 @@ function fChartDrawHourly(){
   fitMap();
 }
 function fChartDraw(){
+  fTiming();
   if (!FC) return;
   if (FC.hourly) { if (fChartDrawHourly() === false) hourlyGaveUp(); return; }
   const {lines, omNote, pinned} = FC, cum = fcMode === "cum";
@@ -4571,6 +4585,123 @@ tpBind("fTp", k => {
   const n = F.days.length - fStart, cur = Math.max(0, +$("fDay").value - fStart);
   $("fDay").value = String(fStart + tpMove(k, cur, n)); fDraw();
 });
+// Rain timing (Daily): when in the chosen forecast day the rain is likely at the chart's spot, hour by hour (Namrex
+// AI: GFS, ECMWF and ECMWF AI weighted as on the map), how many of the models have rain in each 3 hours, and the
+// hours GFS flags for storms. The 3-hour blocks can be shown on the map: the day's rain shared out by when the
+// models have it at each point (data/om_frac.json, made by om_points.py).
+let fFrame = null, fFrameDay = null, fPlay = null, FRAC, STJ;
+const FR_CLOCK = ["10am", "1pm", "4pm", "7pm", "10pm", "1am", "4am", "7am", "10am"];
+const fDayNow = () => F && !fSumN ? F.days[+$("fDay").value] : null;
+function frameLabel(){ const d = fDayNow(); return d && fFrame != null && fFrameDay === d && FRAC ? `${FR_CLOCK[fFrame]}–${FR_CLOCK[fFrame + 1]} ${wd(fFrame < 5 ? addDays(d, -1) : d)} ${part(fFrame < 5 ? addDays(d, -1) : d, {month: "short"})}` : ""; }
+let FRMAP = null;   // for the current model grid: where each of its points is in om_frac.json (-1: outside)
+function frameFrac(){
+  const d = fDayNow(); if (!d || fFrame == null || fFrameDay !== d || !FRAC) return null;
+  const di = FRAC.days.indexOf(d); if (di < 0) return null;
+  if (!FRMAP || FRMAP.F !== F){
+    const nc = FRAC.lons.length, idx = new Int32Array(F.lats.length * F.lons.length); let k = 0;
+    for (const la of F.lats) for (const lo of F.lons){
+      const r = FRAC.lats.findIndex(x => Math.abs(x - la) < 0.01), c = FRAC.lons.findIndex(x => Math.abs(x - lo) < 0.01);
+      idx[k++] = r < 0 || c < 0 ? -1 : (r * nc + c) * 8; }
+    FRMAP = {F, idx};
+  }
+  const f = FRAC.f[di], out = new Array(FRMAP.idx.length);
+  for (let k = 0; k < out.length; k++){ const o = FRMAP.idx[k]; out[k] = o < 0 ? -1 : f[o + fFrame]; }
+  return out;
+}
+function fSetFrame(b){
+  fFrame = b; fFrameDay = b == null ? null : fDayNow();
+  fDraw(); fTiming();
+}
+function fStopPlay(){ if (fPlay) { clearInterval(fPlay); fPlay = null; } }
+function timingData(d){
+  const H = FC && FC.hourly; if (!H) return null;
+  const end = Date.parse(d + "T00:00:00Z") / 1000, start = end - 86400, hr = {};
+  for (const [m, ser] of Object.entries(H)){
+    if (!ser || !ser.length || ser[0][0] > start + 3600 || ser[ser.length - 1][0] < end) continue;   // must cover the whole day
+    const a = new Array(24).fill(0);
+    for (const [t, mm] of ser) if (t > start && t <= end) a[Math.min(23, Math.max(0, Math.round((t - start) / 3600) - 1))] += mm || 0;
+    hr[m] = a;
+  }
+  const ms = Object.keys(hr); if (!ms.length) return null;
+  const nm = NAM_MODELS.filter(m => hr[m] && F_ALL[m] && F_ALL[m].days.includes(d));
+  let nam;
+  if (nm.length >= 2){ const w = namWeights(nm, leadOf(end), "map"); nam = hr[nm[0]].map((_, i) => nm.reduce((a, m) => a + w[m] * hr[m][i], 0)); }
+  else nam = hr[ms[0]].map((_, i) => ms.reduce((a, m) => a + hr[m][i], 0) / ms.length);
+  const chance = [...Array(8)].map((_, b) => ms.filter(m => hr[m][b*3] + hr[m][b*3+1] + hr[m][b*3+2] >= 0.5).length);
+  return {start, end, nam, chance, n: ms.length, blend: nm.length >= 2};
+}
+function stormHours(st, at, start, end){   // GFS storm category each hour at the nearest point: 2 organised storms, 3+ severe
+  if (!st || !st.times) return null;
+  let r = 0, c = 0, bd = 1e9;
+  st.lats.forEach((la, i) => st.lons.forEach((lo, j) => { const d = Math.hypot(la - at.lat, lo - at.lng); if (d < bd) { bd = d; r = i; c = j; } }));
+  if (bd > 0.5) return null;
+  const k = r * st.lons.length + c, out = new Array(24).fill(0); let any = false;
+  st.times.forEach((t, ti) => { if (t <= start || t > end) return;
+    const v = category(st.li[ti][k], st.cape[ti][k], st.shear[ti][k], st.cin ? st.cin[ti][k] : null), i = Math.min(23, Math.round((t - start) / 3600) - 1);
+    out[i] = Math.max(out[i], v); if (v) any = true; });
+  return any ? out : null;
+}
+async function fTiming(){
+  const box = $("fTiming"), d = fDayNow();
+  if (tab !== "fc" || !d) { box.hidden = true; fStopPlay(); return; }
+  if (fFrameDay && fFrameDay !== d) { fFrame = null; fFrameDay = null; fStopPlay(); }
+  const td = timingData(d);
+  if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
+  if (FRAC === undefined) { FRAC = null; try { FRAC = await getJSON("data/om_frac.json"); } catch(e){} }
+  if (STJ === undefined) { STJ = null; try { STJ = await getJSON("data/storms.json"); } catch(e){} }
+  if (fDayNow() !== d) return;
+  const at = FC.pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), where = FC.pinned ? "the pin" : SPOT.name;
+  const {nam, n} = td, top = Math.max(1, ...nam), half = Math.ceil(n / 2);
+  const past = Math.max(0, Math.min(24, Math.floor((Date.now() / 1000 - td.start) / 3600)));   // hours of this day already gone
+  const chance = td.chance.map((c, b) => (b + 1) * 3 <= past ? 0 : c);   // blocks already over don't count
+  const left = nam.map((v, i) => i < past ? 0 : v), tot = left.reduce((a, x) => a + x, 0);
+  const storm = stormHours(STJ, at, td.start, td.end);
+  const hrClock = i => { const h = (10 + i) % 24; return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };   // the start of hour i
+  // the summary
+  const maxC = Math.max(...chance), best = chance.indexOf(maxC), likely = chance.map((c, b) => c >= half ? b : -1).filter(b => b >= 0);
+  const runs = []; for (const b of likely) { const r = runs[runs.length - 1]; if (r && r[1] === b - 1) r[1] = b; else runs.push([b, b]); }
+  const inLikely = i => likely.includes(Math.floor(i / 3)), pk = left.map((v, i) => inLikely(i) ? v : -1), peak = pk.indexOf(Math.max(...pk));
+  const amt = `about ${fmt(tot)} mm${past ? " in the rest of the day" : " for the day"}`;
+  let sum;
+  if (past >= 24) sum = "This day is over.";
+  else if (maxC <= 1 && tot < 0.3) sum = `Looks dry${past ? " for the rest of the day" : ""}: ${maxC ? "only one model has" : "none of the models have"} rain here.`;
+  else if (likely.length) {
+    sum = `Most likely <b>${runs.slice(0, 2).map(([a, b]) => `${FR_CLOCK[a]}–${FR_CLOCK[b + 1]}`).join("</b> and <b>")}</b>${left[peak] >= 0.3 ? `, heaviest around ${hrClock(peak)}` : ""} (${amt}). ${maxC >= Math.max(2, n - 1) ? "Models agree well." : "Models partly agree."}`;
+  } else sum = `Low confidence: only ${maxC} of ${n} models have rain, mostly ${FR_CLOCK[best]}–${FR_CLOCK[best + 1]} (${amt}).`;
+  if (storm){ const sv = storm.map((v, i) => v >= 3 ? i : -1).filter(i => i >= 0), og = storm.map((v, i) => v >= 2 ? i : -1).filter(i => i >= 0);
+    const hs = sv.length ? sv : og; if (hs.length) sum += ` <b style="color:#c62828">${sv.length ? "Severe storm" : "Storm"} risk ${hrClock(hs[0])}–${hrClock(hs[hs.length - 1] + 1)}</b> (GFS).`; }
+  // the strip
+  const Wd = 480, bw = Wd / 24, y0 = 14, bh = 56, cy = y0 + bh + 6, ch = 20;
+  let g = "";
+  for (let i = 9; i < 19; i++) g += `<rect x="${i * bw}" y="${y0 - 4}" width="${bw}" height="${bh + 4}" fill="rgba(40,60,110,.09)"/>`;   // 7pm to 5am
+  if (past) g += `<rect x="0" y="${y0 - 4}" width="${past * bw}" height="${bh + ch + 10}" fill="var(--panel)" fill-opacity=".6" pointer-events="none"/><text pointer-events="none" x="${Math.max(2, past * bw - 3)}" y="${y0 + 10}" text-anchor="${past > 2 ? "end" : "start"}">now</text><line x1="${past * bw}" x2="${past * bw}" y1="${y0 - 4}" y2="${y0 + bh}" stroke="var(--ink-3)" stroke-dasharray="2 2"/>`;
+  if (storm) storm.forEach((v, i) => { if (v >= 2) g += `<rect x="${i * bw + 1}" y="2" width="${bw - 2}" height="5" rx="2" fill="${v >= 3 ? "#d32f2f" : "#f5a623"}"/>`; });
+  nam.forEach((v, i) => { if (v < 0.05) return; const h = Math.max(2, v / top * bh);
+    g += `<rect x="${i * bw + 2}" y="${y0 + bh - h}" width="${bw - 4}" height="${h}" rx="2" fill="var(--accent)"><title>${hrClock(i)}: ${fmt(v)} mm</title></rect>`; });
+  g += `<line x1="0" x2="${Wd}" y1="${y0 + bh}" y2="${y0 + bh}" stroke="var(--line)"/>`;
+  g += `<text x="${Wd - 2}" y="${y0 + 8}" text-anchor="end">${fmt(top)} mm/h</text>`;
+  chance.forEach((c, b) => { const x = b * bw * 3, on = fFrame === b && fFrameDay === d;
+    g += `<g class="blk" data-b="${b}"><rect x="${x + 1}" y="${cy}" width="${bw * 3 - 2}" height="${ch}" rx="4" fill="var(--accent)" fill-opacity="${c ? 0.12 + 0.75 * c / n : 0.04}" ${on ? `stroke="var(--ink)" stroke-width="2"` : ""}/>`
+       + `<text x="${x + bw * 1.5}" y="${cy + 14}" text-anchor="middle" style="fill:${c / n > 0.55 ? "#fff" : "var(--ink-2)"}">${c}/${n}</text></g>`; });
+  if (past) { const m = g.match(/<rect x="0" y="[^"]+" width="[^"]+" height="[^"]+" fill="var\(--panel\)"[^>]*\/><text[^>]*>now<\/text><line[^>]*\/>/); if (m) { g = g.replace(m[0], "") + m[0]; } }
+  FR_CLOCK.forEach((t, b) => g += `<text x="${Math.min(Wd - 12, Math.max(12, b * bw * 3))}" y="${cy + ch + 13}" text-anchor="middle">${t}</text>`);
+  const canMap = FRAC && FRAC.days.includes(d);
+  box.hidden = false;
+  box.innerHTML = `<div class="tmhead"><b>Rain timing at ${where}</b><span>${wd(addDays(d, -1))} 10am – ${wd(d)} ${part(d, {month: "short"})} 10am</span></div>
+    <p class="tmsum">${sum}</p>
+    <svg viewBox="0 0 ${Wd} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
+    ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span>or tap a 3-hour block</span>`}</div>` : ""}
+    <div class="tmkey">Bars: Namrex AI rain each hour${td.blend ? "" : " (average of the models)"} · blocks: how many of the ${n} models have rain (0.5 mm+) in those 3 hours · night shaded${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
+  if (canMap) {
+    box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
+    $("tmPlay").onclick = () => {
+      if (fPlay) { fStopPlay(); fTiming(); return; }
+      fPlay = setInterval(() => { if (tab !== "fc" || fDayNow() !== d) { fStopPlay(); return; } fSetFrame(fFrame == null || fFrameDay !== d ? 0 : (fFrame + 1) % 8); }, 1300);
+      fSetFrame(fFrame == null || fFrameDay !== d ? 0 : fFrame);
+    };
+    if ($("tmAll")) $("tmAll").onclick = () => { fStopPlay(); fSetFrame(null); };
+  }
+}
 function fSetSum(n, quiet){
   // ECMWF's main model only reaches 10 days, so on the 15-day total its button is taken off
   // (and if it was the one showing, the ECMWF AI model shows instead)
