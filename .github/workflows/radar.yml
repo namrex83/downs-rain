@@ -1537,6 +1537,10 @@ jobs:
         if: steps.gate.outputs.go == 'true'
         run: python silo.py season || echo "Season total skipped"
 
+      - name: Rain calendar
+        if: steps.gate.outputs.go == 'true'
+        run: timeout 120 python .github/calendar.py || echo "Calendar skipped"
+
       - name: Flood peak estimates
         if: steps.gate.outputs.go == 'true'
         run: timeout 120 python .github/flood_model.py now || echo "Flood estimates skipped"

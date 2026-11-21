@@ -284,6 +284,29 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #contactBtn:hover{opacity:1;background:rgba(255,255,255,.18)}
 @media (min-width:601px){ body>.wrap>header,body header{padding-top:calc(28px + env(safe-area-inset-top,0px))} #contactBtn{top:calc(5px + env(safe-area-inset-top,0px));right:16px} }
 body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
+#calDlg{border:0;border-radius:16px;padding:14px 14px 10px;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
+#calDlg::backdrop{background:rgba(10,30,50,.45)}
+.calhead{display:flex;justify-content:space-between;align-items:center}
+.calhead h3{margin:0;font:700 1.1rem var(--body)}
+.calhead .linkbtn{font-size:1.1rem;padding:2px 6px}
+.calwhere{margin:2px 0 8px;font-size:.85rem;color:var(--ink-2)}
+.calnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.calnav b{font:700 1rem var(--body)}
+.calnav button{border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;width:36px;height:32px;font:600 1.2rem var(--body);cursor:pointer}
+.calnav button:disabled{opacity:.3;cursor:default}
+.caltot{margin:2px 0 8px;font-size:.85rem;color:var(--ink-2);text-align:center;min-height:1.2em}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.calgrid .wd{font:600 .62rem var(--body);color:var(--ink-3);text-align:center;text-transform:uppercase;letter-spacing:.05em}
+.calgrid button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;min-height:58px;padding:3px 0 2px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);font:600 .72rem var(--body);cursor:pointer}
+.calgrid button:disabled{opacity:.35;cursor:default;background:none}
+.calgrid button.today{border-color:var(--accent)}
+.calgrid button.on{outline:2px solid var(--accent)}
+.calgrid .dn{align-self:flex-start;padding-left:5px;line-height:1}
+.calgrid .dot{display:block;border-radius:50%;margin:auto 0 0}
+.calgrid .mm{font:600 .62rem var(--mono);color:var(--ink-2);line-height:1.1}
+.calnote{font-size:.72rem;margin:8px 0 0}
+#vCal{white-space:nowrap}
+@media (max-width:600px){ #vCal .cl{display:none} #vCal{font-size:1.05rem;padding:0 9px} }
 #contactDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #contactDlg::backdrop{background:rgba(10,30,50,.45)}
 #contactDlg h3{margin:0 0 6px;font:700 1.1rem var(--body)}
@@ -498,7 +521,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <div class="controls rainOnly" id="rControls">
     <div class="field addfield"><button class="addread" id="addRead" type="button"><span aria-hidden="true">🌧</span> <span class="arl">Add your rain gauge reading<small>Improves local accuracy</small></span></button></div>
     <div class="field"><span class="eyebrow">View</span>
-      <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vThree" aria-pressed="false">Last 3 days</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button></div></div>
+      <div class="seg"><button id="vDay" aria-pressed="false">Daily</button><button id="vThree" aria-pressed="false">Last 3 days</button><button id="vWeek" aria-pressed="true">Last 7 days</button><button id="vFort" aria-pressed="false">Last 14 days</button><button id="vSeason" aria-pressed="false">Season</button><button id="vCal" aria-pressed="false" aria-haspopup="dialog" title="Rain calendar" aria-label="Rain calendar">📅<span class="cl"> Calendar</span></button></div></div>
     <div class="field" id="dayField" hidden><label for="day">Rain day · 9am to 9am</label><select id="day"></select></div>
     <div class="field" id="weekField"><label for="weekSel">7 days · 9am to 9am</label><select id="weekSel"></select></div>
     <div class="field morefield"><button type="button" class="morebtn" id="rMoreBtn" aria-expanded="false">More options ▾</button></div>
@@ -684,6 +707,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <input type="checkbox" id="contactBot" tabindex="-1" autocomplete="off" hidden>
       <div class="rdbtns"><button type="button" class="linkbtn" id="contactCancel">Cancel</button><button type="submit" class="primary" id="contactSend">Send</button></div>
     </form>
+  </dialog>
+  <dialog id="calDlg" aria-labelledby="calTitle">
+    <div class="calhead"><h3 id="calTitle">Rain calendar</h3><button type="button" class="linkbtn" id="calClose" aria-label="Close">✕</button></div>
+    <p class="calwhere" id="calWhere"></p>
+    <div class="calnav"><button type="button" id="calPrev" aria-label="Previous month">‹</button><b id="calMonth"></b><button type="button" id="calNext" aria-label="Next month">›</button></div>
+    <p class="caltot" id="calTot"></p>
+    <div class="calgrid" id="calGrid"></div>
+    <p class="note calnote">Each day is the 24 hours to 9am that morning: gauge-corrected radar, or SILO's gauge map before the radar record. Tap a day to see its map. Tap the map first to choose another spot.</p>
   </dialog>
   <div id="pickBar" hidden>Tap the map where the gauge is <button type="button" id="pickCancel">Cancel</button></div>
   <section class="panel radarOnly" hidden>
@@ -2037,6 +2068,74 @@ $("readForm").onsubmit = async e => {
     alert("Sorry, the readings couldn't be sent just now. Please try again in a minute.");
   } finally { $("readSend").disabled = false; $("readSend").textContent = "Send"; }
 };
+// Rain calendar: every finished day's rain at one spot (the pin, else your location, else Dalby), from small
+// tiles of the day maps (data/cal, made by .github/calendar.py), so a whole season loads from one ~10 KB file.
+let CAL = null, calAt = null, calVals = null, calToday = null;
+const calTiles = {};
+function calSpot(){
+  const ll = tapAt ? [tapAt.lat, tapAt.lng] : MYLL || [-27.182, 151.262];
+  let best = null, bd = 1e9;
+  for (const k of ["big", "small"]) for (const [n, la, lo] of TOWNS[k] || []){ const d = Math.hypot(la - ll[0], (lo - ll[1]) * Math.cos(ll[0] * Math.PI / 180)); if (d < bd){ bd = d; best = n; } }
+  const near = best ? (bd < 0.04 ? best : `near ${best}`) : `${ll[0].toFixed(2)}°, ${ll[1].toFixed(2)}°`;
+  return {ll, name: tapAt ? `the pin (${near})` : MYLL ? `your location (${near})` : "Dalby"};
+}
+async function calLoad(ll){
+  CAL = CAL || await getJSON("data/cal/index.json");
+  const {tile: T, w: W, h: H, bounds: [s, w, n, e]} = CAL, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const fx = (ll[1] - w) / (e - w), fy = (merc(n) - merc(ll[0])) / (merc(n) - merc(s));
+  if (fx < 0 || fx >= 1 || fy < 0 || fy >= 1) return null;
+  const x = Math.floor(fx * W), y = Math.floor(fy * H), tx = Math.floor(x / T), ty = Math.floor(y / T), tw = Math.min(T, W - tx * T);
+  const key = `${ty}_${tx}`;
+  const t = await (calTiles[key] || (calTiles[key] = getJSON(`data/cal/${key}.json`).catch(e => { delete calTiles[key]; throw e; })));
+  const k = (y - ty * T) * tw + (x - tx * T), out = {};
+  t.days.forEach((d, i) => { const v = t.v[i][k]; out[d] = v < 0 ? null : v / 10; });
+  try {   // the rain day running now, so far
+    const td = await getJSON("data/today.json");
+    if (td.grid && td.grid_w === W && td.grid_h === H){ const v = td.grid[y * W + x]; calToday = td.date; out[td.date] = v < 0 ? null : v / 10; }
+  } catch(e){}
+  return out;
+}
+const calColour = mm => { const b = (idx && idx.breaks) || [1], r = (idx && idx.ramp) || ["#1414ff"]; let c = r[0]; b.forEach((x, i) => { if (mm >= x) c = r[i]; }); return c; };
+function calDraw(){
+  const m = calAt, first = m + "-01", ds = Object.keys(calVals || {}).sort();
+  const minM = ds.length ? ds[0].slice(0, 7) : m, maxM = (calToday || ds[ds.length - 1] || m).slice(0, 7);
+  $("calMonth").textContent = part(first, {month: "long", year: "numeric"});
+  $("calPrev").disabled = m <= minM; $("calNext").disabled = m >= maxM;
+  const lead = (new Date(first + "T00:00:00Z").getUTCDay() + 6) % 7;   // weeks start on Monday
+  const nDays = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate();
+  const sel = view === "day" ? $("day").value : null;
+  let html = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<span class="wd">${d}</span>`).join("") + "<span></span>".repeat(lead);
+  let tot = 0, wet = 0, have = 0;
+  for (let i = 1; i <= nDays; i++){
+    const d = `${m}-${String(i).padStart(2, "0")}`, v = calVals ? calVals[d] : undefined, isT = d === calToday;
+    if (v == null){ html += `<button type="button" disabled><span class="dn">${i}</span></button>`; continue; }
+    have++; tot += v; if (v >= 1) wet++;
+    const sz = v < 1 ? 0 : Math.round(7 + Math.min(19, Math.sqrt(v - 1) * 3.6));
+    const dot = sz ? `<i class="dot" style="width:${sz}px;height:${sz}px;background:${calColour(v)}"></i><span class="mm">${fmt(v)}</span>` : `<span class="mm" style="margin-top:auto;color:var(--ink-3)">${v >= 0.1 ? fmt(v) : "0"}</span>`;
+    html += `<button type="button" data-d="${isT ? "today" : d}" class="${isT ? "today" : ""}${(isT ? sel === "today" : sel === d) ? " on" : ""}" aria-label="${rainDay(d)}: ${fmt(v)} mm${isT ? " so far" : ""}"><span class="dn">${i}</span>${dot}</button>`;
+  }
+  $("calGrid").innerHTML = html;
+  $("calTot").innerHTML = have ? `<b>${fmt(tot)} mm</b> in ${part(first, {month: "long"})}${calToday && calToday.startsWith(m) ? " so far" : ""} · ${wet} day${wet === 1 ? "" : "s"} of 1 mm or more` : "No rain maps for this month";
+  [...$("calGrid").querySelectorAll("button[data-d]")].forEach(b => b.onclick = () => {
+    $("calDlg").close(); $("day").value = b.dataset.d; setView("day");
+  });
+}
+async function calOpen(){
+  const sp = calSpot();
+  $("calWhere").textContent = `Rain at ${sp.name}`;
+  $("calGrid").innerHTML = ""; $("calTot").textContent = "Loading…";
+  if (!$("calDlg").open) $("calDlg").showModal();
+  try { calVals = await calLoad(sp.ll); } catch(e){ calVals = null; }
+  if (!calVals){ $("calTot").textContent = "No rain calendar for this spot yet."; return; }
+  const sel = view === "day" && $("day").value !== "today" ? $("day").value : (calToday || Object.keys(calVals).sort().pop());
+  calAt = (sel || new Date().toISOString()).slice(0, 7);
+  calDraw();
+}
+$("vCal").onclick = calOpen;
+$("calClose").onclick = () => $("calDlg").close();
+$("calDlg").addEventListener("click", e => { const r = $("calDlg").getBoundingClientRect(); if (e.target === $("calDlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("calDlg").close(); });   // tap outside to close
+const calStep = n => { const [y, mo] = calAt.split("-").map(Number), t = new Date(Date.UTC(y, mo - 1 + n, 1)); calAt = t.toISOString().slice(0, 7); calDraw(); };
+$("calPrev").onclick = () => calStep(-1); $("calNext").onclick = () => calStep(1);
 // Contact box (bottom right): sent to the owner by email through Web3Forms, like gauge readings.
 $("contactBtn").onclick = () => { try { $("contactName").value ||= localStorage.getItem("readWho") || ""; } catch(e){} $("contactDlg").showModal(); };
 $("contactCancel").onclick = () => $("contactDlg").close();
