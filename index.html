@@ -2035,7 +2035,7 @@ $("addRead").onclick = async () => {
   const opts = [...(qh >= 9 ? [[addDays(today, 1), "since 9am today (so far)"]] : []), [today, "to 9am today"], [addDays(today, -1), "to 9am yesterday"]];
   for (let k = 2; k <= 6; k++) opts.push([addDays(today, -k), `to 9am ${part(addDays(today, -k), {weekday: "long"})}`]);
   $("readDay").innerHTML = opts.map(([d, txt]) => `<option value="${d}">${rainDay(d)} · rain ${txt}</option>`).join("");
-  $("readDay").value = today;
+  $("readDay").value = qh >= 12 ? addDays(today, 1) : today;   // from midday, most people are reporting today's rain (since 9am)
   $("readRows").innerHTML = "";
   const names = await gaugeNames();
   if (!$("readList")) { const dl = document.createElement("datalist"); dl.id = "readList"; document.body.appendChild(dl); }
