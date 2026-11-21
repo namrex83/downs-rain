@@ -270,6 +270,8 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #readDlg{border:0;border-radius:16px;padding:18px;max-width:420px;width:calc(100% - 32px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #readDlg::backdrop{background:rgba(10,30,50,.45)}
 #readDlg h3{margin:0 0 12px;font:700 1.1rem var(--body)}
+#readDlg .rdspan{margin:-4px 0 10px;font-size:.82rem;color:var(--ink);background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:8px;padding:6px 9px}
+#readDlg .rdspan.warn{background:#fff4d6;color:#7a4b00}
 #readDlg .rdday{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--ink-2);margin-bottom:10px}
 #readDlg select{font:inherit;font-size:16px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);width:100%}
 #readDlg input{font:inherit;font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#fff);color:var(--ink);min-width:0}
@@ -712,7 +714,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <dialog id="readDlg" aria-labelledby="readTitle">
     <form method="dialog" id="readForm">
       <h3 id="readTitle">Add gauge readings</h3>
-      <label class="rdday">Which rain? (gauges are read at 9am) <select id="readDay" required></select></label>
+      <label class="rdday">Which rain? Pick the 24 hours your reading covers <select id="readDay" required></select></label>
+      <p class="rdspan" id="readSpan"></p>
       <div id="readRows"></div>
       <button type="button" class="linkbtn" id="readMore">＋ another gauge</button>
       <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
@@ -2036,6 +2039,7 @@ $("addRead").onclick = async () => {
   for (let k = 2; k <= 6; k++) opts.push([addDays(today, -k), `to 9am ${part(addDays(today, -k), {weekday: "long"})}`]);
   $("readDay").innerHTML = opts.map(([d, txt]) => `<option value="${d}">${rainDay(d)} · rain ${txt}</option>`).join("");
   $("readDay").value = qh >= 12 ? addDays(today, 1) : today;   // from midday, most people are reporting today's rain (since 9am)
+  readSpanTxt();
   $("readRows").innerHTML = "";
   const names = await gaugeNames();
   if (!$("readList")) { const dl = document.createElement("datalist"); dl.id = "readList"; document.body.appendChild(dl); }
@@ -2068,8 +2072,57 @@ function readIssue(){
   try { localStorage.setItem("readMine", JSON.stringify([...new Set(all.filter(([n]) => n).map(([n]) => n))].slice(0, 12))); } catch(e){}
   return {day, rows, pins, who, body, url: `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`};
 }
-$("readOwner").onclick = () => {
+// spells out the hours the chosen rain day covers, e.g. "9am Sat 21 Nov until now (10:09pm Sat)"
+function readSpanTxt(msg){
+  const d = $("readDay").value, run = d === runningEnd(), now = new Date(Date.now() + 36e6);
+  const nowTxt = `${now.getUTCHours() % 12 || 12}:${String(now.getUTCMinutes()).padStart(2, "0")}${now.getUTCHours() < 12 ? "am" : "pm"}`;
+  $("readSpan").className = "rdspan" + (msg ? " warn" : "");
+  $("readSpan").innerHTML = msg || `Your reading should be the rain from <b>9am ${wd(addDays(d, -1))} ${part(addDays(d, -1), {month: "short"})}</b> to <b>${run ? `now (${nowTxt})` : `9am ${wd(d)} ${part(d, {month: "short"})}`}</b>.`;
+}
+$("readDay").onchange = () => readSpanTxt();
+// Before sending: does the radar agree with the day picked? For each gauge whose spot the page knows (a new gauge's
+// pin, or a gauge added before, from gauge_positions.json), the raw radar there on the chosen day and the day next
+// to it. A real reading on a day the radar had (almost) nothing, with rain the day before or after, or the
+// reverse, is most likely on the wrong day: ask before sending, and offer the other day.
+let PUBPOS;
+async function radarAt(d, lat, lon){
+  let j;
+  try { j = d === runningEnd() ? await getJSON("data/today.json") : idx && idx.days.includes(d) ? await dayJSON(d) : null; } catch(e){ j = null; }
+  if (!j || !j.grid) return null;
+  const g = j.grid_raw || j.grid, [s, w, n, e] = j.bounds, merc = a => Math.log(Math.tan(Math.PI/4 + a*Math.PI/360));
+  const x = Math.floor((lon - w) / (e - w) * j.grid_w), y = Math.floor((merc(n) - merc(lat)) / (merc(n) - merc(s)) * j.grid_h);
+  let m = null;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){ const yy = y + dy, xx = x + dx;
+    if (yy < 0 || xx < 0 || yy >= j.grid_h || xx >= j.grid_w) continue; const v = g[yy * j.grid_w + xx]; if (v >= 0) m = Math.max(m || 0, v / 10); }
+  return m;
+}
+async function radarCheck(r){
+  if (PUBPOS === undefined) { try { PUBPOS = await (await fetch(`https://raw.githubusercontent.com/${REPO}/main/gauge_positions.json` + bust())).json(); } catch(e){ PUBPOS = {}; } }
+  const pub = Object.fromEntries(Object.entries(PUBPOS || {}).map(([k, v]) => [gaugeKey(k), v]));
+  const day = r.day, others = [addDays(day, 1), addDays(day, -1)].filter(d => [...$("readDay").options].some(o => o.value === d));
+  const rowsAll = [...$("readRows").children].map(x => [x.children[0].value.trim(), +x.children[1].value, x.loc]);
+  for (const [name, mm, loc] of rowsAll){
+    if (!name || isNaN(mm)) continue;
+    const ll = loc || pub[gaugeKey(name)]; if (!ll) continue;
+    const here = await radarAt(day, ll[0], ll[1]); if (here == null) continue;
+    for (const o of others){
+      const there = await radarAt(o, ll[0], ll[1]); if (there == null) continue;
+      const wet = mm >= 2 && here <= Math.max(1, mm * 0.25) && there >= mm * 0.5;   // rain on a day the radar had none
+      const dry = mm < 0.5 && here >= 10 && there <= 1;                           // nothing on a day the radar had plenty
+      if (!wet && !dry) continue;
+      const lab = d => d === runningEnd() ? `9am ${wd(addDays(d, -1))} to now` : `9am ${wd(addDays(d, -1))} to 9am ${wd(d)}`;
+      const ok = confirm(`${name}: ${mm} mm for ${lab(day)}?\n\nThe radar shows about ${fmt(here)} mm there for that day, but about ${fmt(there)} mm for ${lab(o)}. It may be on the wrong day.\n\nOK: send it for ${lab(day)} anyway\nCancel: change it to ${lab(o)}`);
+      if (ok) break;
+      $("readDay").value = o;
+      readSpanTxt(`Changed to the rain ${lab(o)}, where the radar saw rain at ${name}. Check the day, then press Send.`);
+      return false;
+    }
+  }
+  return true;
+}
+$("readOwner").onclick = async () => {
   const r = readIssue(); if (!r) return;
+  if (!(await radarCheck(r))) return;
   const win = window.open(r.url, "_blank"); if (win) win.opener = null; else location.href = r.url;
   $("readDlg").close();
 };
@@ -2077,6 +2130,10 @@ $("readForm").onsubmit = async e => {
   e.preventDefault();
   if ($("readBot").checked) return;   // filled in by a spam robot
   const r = readIssue(); if (!r) return;
+  $("readSend").disabled = true;
+  const go = await radarCheck(r).catch(() => true);
+  $("readSend").disabled = false;
+  if (!go) return;
   try { localStorage.setItem("readWho", r.who); } catch(_){}
   if (!WEB3FORMS_KEY) { alert("Sending readings by email isn't switched on yet. Please send them to Namrex Weather Co. another way for now."); return; }
   $("readSend").disabled = true; $("readSend").textContent = "Sending…";
