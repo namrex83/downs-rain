@@ -216,7 +216,10 @@ def run():
             break
         print(f"{model}: no lifted index returned, trying the next model", flush=True)
     else:
-        sys.exit("Could not get storm data from any model")
+        # Open-Meteo busy or over its limit (GitHub's shared machines often are): keep the last storm maps and
+        # finish quietly; the next run, a few hours on, picks up the new model run
+        print("::warning::Could not get storm data from any model just now (Open-Meteo busy); keeping the last storm maps", flush=True)
+        sys.exit(0)
 
     times = results[0]["hourly"]["time"]
     nt = len(times)
