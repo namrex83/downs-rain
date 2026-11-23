@@ -318,6 +318,10 @@ body.mapfull.agrotab .agrofs:not(:empty){display:block}
 .agrofs .fssw button i{width:11px;height:11px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
 .agrofs .fssw button.off{opacity:.35;text-decoration:line-through}
 .agrofs .fsop{text-transform:none;letter-spacing:normal;font-size:.7rem;color:#1c2621;display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:500} .agrofs .fsop input{flex:1;accent-color:#1f6fbf}
+.unitsw{display:inline-flex;border:1px solid #1f6fbf;border-radius:999px;overflow:hidden;vertical-align:middle;margin-left:4px}
+.unitsw button{border:0!important;margin:0!important;border-radius:0!important;background:none;color:#1f6fbf;padding:1px 8px!important;font:600 .7rem var(--body);cursor:pointer}
+.unitsw button[aria-pressed=true]{background:#1f6fbf;color:#fff}
+body.extrastab .pin, body.extrastab .pinlabel{display:none}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -4522,7 +4526,7 @@ function setTab(t, first){
   if (t === "outlook" && tab !== "outlook") aMode = "links";   // Extras always opens on Outlooks
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
-  document.body.classList.toggle("fcwide", t === "fc");
+  document.body.classList.toggle("fcwide", t === "fc"); document.body.classList.toggle("extrastab", t === "outlook");
   $("disclaimer").innerHTML = "<b>Disclaimer:</b> " + DISCLAIMER[t] + " " + DISCLAIMER_END;
   $("tRain").setAttribute("aria-pressed", t === "rain"); $("tCatch").setAttribute("aria-pressed", t === "catch"); $("tStorm").setAttribute("aria-pressed", t === "storms"); $("tFc").setAttribute("aria-pressed", t === "fc"); $("tRadar").setAttribute("aria-pressed", t === "radar"); $("tWind").setAttribute("aria-pressed", t === "wind"); $("tTemp").setAttribute("aria-pressed", t === "temp"); $("tSoil").setAttribute("aria-pressed", t === "soil"); $("tOut").setAttribute("aria-pressed", t === "outlook");
   const only = {rain: "rainOnly", catch: "catchOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly", temp: "tempOnly", soil: "soilOnly"}[t];
@@ -4942,8 +4946,8 @@ function agroOpacity(){
 const esc2 = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 function legendHTML(lg, a, ai){
   const safeCol = c => /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : "";
-  const unit = mCol(lg) >= 0 ? ` <button type="button" data-mm="${ai}">${a.mm ? "Show in m" : "Convert to mm"}</button>` : "";
-  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")} <span>· tap a colour to hide or show it</span>${a.hide.length ? ` <button type="button" data-all="${ai}">Show all</button>` : ""}${unit}${a.mm ? `<span><br>mm worked out from the file's metres, which are rounded to the nearest 10 mm</span>` : ""}</caption>${legRows(a).map((r, i) => {
+  const unit = mCol(lg) >= 0 ? ` <span class="unitsw"><button type="button" data-mm="${ai}" data-u="m" aria-pressed="${!a.mm}">m</button><button type="button" data-mm="${ai}" data-u="mm" aria-pressed="${!!a.mm}">mm</button></span>` : "";
+  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")} <span>· tap a colour to hide or show it</span>${a.hide.length ? ` <button type="button" data-all="${ai}">Show all</button>` : ""}${unit}${a.mm ? `<span><br>Worked out from the file's metres, which are rounded to the nearest 10 mm ("under 5" = rounded to 0.00 m)</span>` : ""}</caption>${legRows(a).map((r, i) => {
     const sw = r.map(c => safeCol(c.col)).find(Boolean), off = sw && a.hide.includes(sw);
     return `<tr${i && sw ? ` data-a="${ai}" data-c="${sw}" class="${off ? "off" : ""}"` : ""}>${r.map(c => { const col = safeCol(c.col);
     return i ? `<td${col ? ` style="background:${col};width:18px"` : ""}>${col ? "" : esc2(c.t)}</td>` : `<th>${esc2(c.t)}</th>`; }).join("")}</tr>`; }).join("")}</table>`;
@@ -4962,20 +4966,28 @@ function agroFsDraw(){
   const short = r => { const t = r.map(c => c.t).filter(Boolean); return t[0] || ""; };
   box.innerHTML = `<button type="button" class="fshead" aria-expanded="${agroFsOpen}">🗺 Layer colours ${agroFsOpen ? "▾" : "▸"}</button>` + (agroFsOpen ? shown.map(a => {
     const ai = AGRO.indexOf(a), rows = legRows(a).slice(1), hasM = mCol(a.stats.legend) >= 0;
-    return `<div class="fsname">${esc2(a.stats.legend.name || a.name)}${hasM ? ` ${a.mm ? "(mm)" : "(m)"}` : ""}${a.hide.length ? ` <button type="button" data-all="${ai}">All</button>` : ""}${hasM ? ` <button type="button" data-mm="${ai}">${a.mm ? "m" : "mm"}</button>` : ""}</div><div class="fssw">${rows.map(r => {
+    return `<div class="fsname">${esc2(a.stats.legend.name || a.name)}${a.hide.length ? ` <button type="button" data-all="${ai}">All</button>` : ""}${hasM ? ` <span class="unitsw"><button type="button" data-mm="${ai}" data-u="m" aria-pressed="${!a.mm}">m</button><button type="button" data-mm="${ai}" data-u="mm" aria-pressed="${!!a.mm}">mm</button></span>` : ""}</div><div class="fssw">${rows.map(r => {
       const sw = r.map(c => /^#[0-9a-f]{6}$/i.test(c.col) ? c.col.toLowerCase() : "").find(Boolean); if (!sw) return "";
       return `<button type="button" data-a="${ai}" data-c="${sw}" class="${a.hide.includes(sw) ? "off" : ""}" title="${esc2(r.map(c => c.t).filter(Boolean).join(" · "))}"><i style="background:${sw}"></i>${esc2(short(r))}</button>`; }).join("")}</div>`; }).join("")
     + `<label class="fsop">See-through <input type="range" min="0.2" max="1" step="0.05" value="${$("agroOp").value}"></label>` : "");
   box.querySelector(".fshead").onclick = () => { agroFsOpen = !agroFsOpen; try { localStorage.setItem("agroFsOpen", agroFsOpen ? "1" : "0"); } catch(e){} agroFsDraw(); };
   box.querySelectorAll("button[data-c]").forEach(b => b.onclick = () => { const a = AGRO[+b.dataset.a], c = b.dataset.c; agroSetHide(a, a.hide.includes(c) ? a.hide.filter(x => x !== c) : [...a.hide, c]); });
   box.querySelectorAll("button[data-all]").forEach(b => b.onclick = () => agroSetHide(AGRO[+b.dataset.all], []));
-  box.querySelectorAll("button[data-mm]").forEach(b => b.onclick = () => { const a = AGRO[+b.dataset.mm]; agroSetMM(a, !a.mm); });
+  box.querySelectorAll("button[data-mm]").forEach(b => b.onclick = () => agroSetMM(AGRO[+b.dataset.mm], b.dataset.u === "mm"));
   const op = box.querySelector(".fsop input"); if (op) op.oninput = () => { $("agroOp").value = op.value; agroOpacity(); };
 }
 // metres to mm for a legend's depth/height column (the header with "(m)"); the file's rounding stays, so
 // "0.01" becomes "10", not anything finer
 const mCol = lg => lg.rows[0].findIndex(c => /\(m\)/i.test(c.t));
-const toMM = t => t.replace(/-?\d+(\.\d+)?/g, x => String(Math.round(parseFloat(x) * 1000)));
+// a rounded "0.00" means under 5 mm, "0.01" means 5 to 15 mm, so: "0.00 to 0.00" -> "under 5", "0.01 to 0.01" -> "about 10",
+// "0.00 to 0.01" -> "under 5 to 10", "0.01 to 0.08" -> "10 to 80"; a lone "0.00" (the flat ground) stays 0
+const toMM = t => {
+  const n = (t.match(/-?\d+(\.\d+)?/g) || []).map(x => Math.round(parseFloat(x) * 1000));
+  if (n.length === 1) return String(n[0]);
+  if (n.length !== 2) return t;
+  const [a, b] = n;
+  return a === b ? (a ? `about ${a}` : "under 5") : `${a ? a : "under 5"} to ${b}`;
+};
 function legRows(a){
   const lg = a.stats.legend, k = mCol(lg);
   if (!a.mm || k < 0) return lg.rows;
@@ -4995,7 +5007,7 @@ function agroListDraw(){
   $("agroList").querySelectorAll("tr[data-c]").forEach(tr => tr.onclick = () => { const a = AGRO[+tr.dataset.a], c = tr.dataset.c;
     agroSetHide(a, a.hide.includes(c) ? a.hide.filter(x => x !== c) : [...a.hide, c]); });
   $("agroList").querySelectorAll("button[data-all]").forEach(b => b.onclick = e => { e.stopPropagation(); agroSetHide(AGRO[+b.dataset.all], []); });
-  $("agroList").querySelectorAll("button[data-mm]").forEach(b => b.onclick = e => { e.stopPropagation(); const a = AGRO[+b.dataset.mm]; agroSetMM(a, !a.mm); });
+  $("agroList").querySelectorAll("button[data-mm]").forEach(b => b.onclick = e => { e.stopPropagation(); agroSetMM(AGRO[+b.dataset.mm], b.dataset.u === "mm"); });
   $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); agroListDraw(); });
   $("agroList").querySelectorAll("button[data-z]").forEach(el => el.onclick = () => agroZoom(AGRO[+el.dataset.z]));
   $("agroList").querySelectorAll("button[data-x]").forEach(el => el.onclick = async () => { const a = AGRO[+el.dataset.x];
