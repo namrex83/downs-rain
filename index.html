@@ -308,6 +308,8 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .agrorow .nm small{display:block;font:400 .72rem var(--body);color:var(--ink-3)}
 .agrorow button{border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;padding:4px 9px;font:600 .78rem var(--body);cursor:pointer}
 .agrorow input{width:18px;height:18px;accent-color:var(--accent)}
+.agroleg{border-collapse:collapse;font-size:.75rem;margin:0 0 4px 30px;color:var(--ink-2)} .agroleg caption{text-align:left;font-weight:600;padding-bottom:2px}
+.agroleg td,.agroleg th{padding:1px 6px;text-align:right;font-weight:400} .agroleg th{color:var(--ink-3);font-size:.68rem}
 .agropop{max-width:240px;font-size:.82rem} .agropop table{border-collapse:collapse} .agropop td{padding:1px 4px;border-bottom:1px solid #eee}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
@@ -4760,6 +4762,41 @@ const kids = (el, tag) => [...el.children].filter(x => x.localName === tag);
 const kid = (el, tag) => kids(el, tag)[0];
 const txt = (el, tag) => { const k = el && kid(el, tag); return k ? k.textContent.trim() : ""; };
 const coords = s => s.trim().split(/\s+/).map(p => p.split(",").map(Number)).filter(p => p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])).map(p => [p[1], p[0]]);
+// A picture pinned by its four corners (KML LatLonQuad, or a rotated LatLonBox): drawn with a CSS perspective
+// transform that maps the picture's corners onto the four map points, redone whenever the map moves or turns.
+const H3 = {
+  adj: m => [m[4]*m[8]-m[5]*m[7], m[2]*m[7]-m[1]*m[8], m[1]*m[5]-m[2]*m[4], m[5]*m[6]-m[3]*m[8], m[0]*m[8]-m[2]*m[6], m[2]*m[3]-m[0]*m[5], m[3]*m[7]-m[4]*m[6], m[1]*m[6]-m[0]*m[7], m[0]*m[4]-m[1]*m[3]],
+  mm: (a, b) => { const c = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let v = 0; for (let k = 0; k < 3; k++) v += a[3*i+k] * b[3*k+j]; c[3*i+j] = v; } return c; },
+  mv: (m, v) => [m[0]*v[0]+m[1]*v[1]+m[2]*v[2], m[3]*v[0]+m[4]*v[1]+m[5]*v[2], m[6]*v[0]+m[7]*v[1]+m[8]*v[2]],
+  basis: p => { const m = [p[0][0], p[1][0], p[2][0], p[0][1], p[1][1], p[2][1], 1, 1, 1], v = H3.mv(H3.adj(m), [p[3][0], p[3][1], 1]); return H3.mm(m, [v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]]); },
+  proj: (src, dst) => { const t = H3.mm(H3.basis(dst), H3.adj(H3.basis(src))); return t.map(x => x / t[8]); }
+};
+const QuadImage = L.Layer.extend({
+  initialize(url, corners, opts){ this._url = url; this._ll = corners.map(c => L.latLng(c)); L.setOptions(this, opts); },   // corners: top-left, top-right, bottom-right, bottom-left
+  onAdd(map){
+    const img = this._img = L.DomUtil.create("img", "leaflet-zoom-hide");
+    img.style.cssText = "position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;max-width:none;max-height:none";
+    img.onload = () => this._place(); img.src = this._url;
+    map.getPane(this.options.pane || "overlayPane").appendChild(img);
+    map.on("zoomend viewreset moveend rotate resize", this._place, this); this._place();
+  },
+  onRemove(map){ map.off("zoomend viewreset moveend rotate resize", this._place, this); L.DomUtil.remove(this._img); },
+  getBounds(){ return L.latLngBounds(this._ll); },
+  _place(){
+    const img = this._img, m = this._map; if (!img || !m || !img.naturalWidth) return;
+    const w = img.naturalWidth, h = img.naturalHeight, d = this._ll.map(c => { const q = m.latLngToLayerPoint(c); return [q.x, q.y]; });
+    const t = H3.proj([[0, 0], [w, 0], [w, h], [0, h]], d);
+    img.style.width = w + "px"; img.style.height = h + "px";
+    img.style.transform = `matrix3d(${t[0]},${t[3]},0,${t[6]},${t[1]},${t[4]},0,${t[7]},0,0,1,0,${t[2]},${t[5]},0,${t[8]})`;
+  }
+});
+// a legend table in a layer's description (colour swatch, then its text), rebuilt as plain text so nothing in the file runs
+function kmlLegend(html){
+  if (!html || !/<t[dr]/i.test(html)) return null;
+  const doc = new DOMParser().parseFromString(html, "text/html"), rows = [...doc.querySelectorAll("tr")].map(tr => [...tr.children].map(td => ({
+    col: /^#?[0-9a-f]{6}$/i.test(td.getAttribute("bgcolor") || "") ? "#" + td.getAttribute("bgcolor").replace("#", "") : (td.style && td.style.backgroundColor) || "", t: td.textContent.replace(/ /g, " ").trim()})));
+  return rows.length > 1 ? rows : null;
+}
 // every element called tag under el, whatever namespace prefix the file gives it (kml:Placemark, gx:Track…)
 const allTag = (el, tag) => [...el.getElementsByTagNameNS("*", tag)];
 async function agroParse(name, buf){
@@ -4826,14 +4863,19 @@ async function agroParse(name, buf){
       const icon = allTag(go, "Icon")[0], href = icon ? txt(icon, "href") : "";
       const url = href && findFile(href);
       if (!url) { if (href) seen.missingPics.push(href.split(/[\\/]/).pop()); continue; }
-      let sw, ne;
       const box = allTag(go, "LatLonBox")[0], quad = allTag(go, "LatLonQuad")[0];
-      if (box) { sw = [+txt(box, "south"), +txt(box, "west")]; ne = [+txt(box, "north"), +txt(box, "east")]; if (+txt(box, "rotation")) stats.rotated++; }
-      else if (quad) { const c = ring(quad); if (c.length < 4) continue; const la = c.map(x => x[0]), lo = c.map(x => x[1]);
-        sw = [Math.min(...la), Math.min(...lo)]; ne = [Math.max(...la), Math.max(...lo)]; stats.rotated++; }
-      else continue;
-      if ([...sw, ...ne].some(isNaN)) continue;
-      L.imageOverlay(url, [sw, ne], {pane: "agro", interactive: false}).addTo(group); stats.pictures++;
+      let corners = null;   // top-left, top-right, bottom-right, bottom-left
+      if (quad) { const c = ring(quad); if (c.length >= 4) corners = [c[3], c[2], c[1], c[0]]; }   // KML lists them from the bottom left, anticlockwise
+      else if (box) {
+        const n = +txt(box, "north"), so = +txt(box, "south"), e = +txt(box, "east"), w = +txt(box, "west"), rot = (+txt(box, "rotation") || 0) * Math.PI / 180;
+        const cl = (n + so) / 2, cw = (e + w) / 2, k = Math.cos(cl * Math.PI / 180);
+        corners = [[n, w], [n, e], [so, e], [so, w]].map(([la, lo]) => { const x = (lo - cw) * k, y = la - cl;   // turned anticlockwise about the middle
+          return [cl + x * Math.sin(rot) + y * Math.cos(rot), cw + (x * Math.cos(rot) - y * Math.sin(rot)) / k]; });
+      }
+      if (!corners || corners.flat().some(isNaN)) continue;
+      new QuadImage(url, corners, {pane: "agro"}).addTo(group); stats.pictures++;
+      const lg = kmlLegend(txt(go, "description")); if (lg && !stats.legend) stats.legend = {name: txt(go, "name"), rows: lg};
+      if (!stats.label) stats.label = [txt(go, "name"), ...allTag(doc, "Folder").map(f => txt(f, "name")).filter(x => x && !/^\d{4}$/.test(x)).slice(-2)].filter(Boolean).join(" · ");
     }
     for (const nl of allTag(doc, "NetworkLink")){   // a link to another KML, inside the KMZ
       seen.links++;
@@ -4855,7 +4897,9 @@ async function agroParse(name, buf){
 }
 async function agroAdd(name, buf, id, on = true){
   const {group, stats} = await agroParse(name, buf);
-  const L1 = {id, name, layer: group, bounds: group.getBounds ? group.getBounds() : null, on, stats};
+  let bounds = null;
+  group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
+  const L1 = {id, name, layer: group, bounds, on, stats};
   AGRO.push(L1); if (on) agroGroup.addLayer(group);
   return L1;
 }
@@ -4863,11 +4907,17 @@ function agroOpacity(){
   const v = +$("agroOp").value, pane = map.getPane("agro"); if (pane) pane.style.opacity = v;
   try { localStorage.setItem("agroOp", v); } catch(e){}
 }
+const esc2 = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+function legendHTML(lg){
+  const safeCol = c => /^#[0-9a-f]{6}$/i.test(c) ? c : /^rgb\(\s*\d+,\s*\d+,\s*\d+\s*\)$/.test(c) ? c : "";
+  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")}</caption>${lg.rows.map((r, i) => `<tr>${r.map(c => { const col = safeCol(c.col);
+    return i ? `<td${col ? ` style="background:${col};width:18px"` : ""}>${col ? "" : esc2(c.t)}</td>` : `<th>${esc2(c.t)}</th>`; }).join("")}</tr>`).join("")}</table>`;
+}
 function agroListDraw(){
   $("agroList").innerHTML = AGRO.length ? AGRO.map((a, i) => `<div class="agrorow"><input type="checkbox" data-i="${i}" ${a.on ? "checked" : ""} aria-label="Show ${a.name}">
-    <span class="nm">${a.name.replace(/[<&]/g, "")}<small>${[a.stats.shapes ? `${a.stats.shapes} shape${a.stats.shapes === 1 ? "" : "s"}` : "", a.stats.pictures ? `${a.stats.pictures} picture layer${a.stats.pictures === 1 ? "" : "s"}` : "", a.stats.rotated ? "rotated pictures drawn straight" : ""].filter(Boolean).join(" · ")}</small></span>
-    <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>`).join("") : "";
-  $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); });
+    <span class="nm">${a.name.replace(/[<&]/g, "")}<small>${[a.stats.shapes ? `${a.stats.shapes} shape${a.stats.shapes === 1 ? "" : "s"}` : "", a.stats.pictures ? `${a.stats.pictures} picture layer${a.stats.pictures === 1 ? "" : "s"}` : "", a.stats.label ? esc2(a.stats.label) : ""].filter(Boolean).join(" · ")}</small></span>
+    <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>${a.stats.legend && a.on ? legendHTML(a.stats.legend) : ""}`).join("") : "";
+  $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); agroListDraw(); });
   $("agroList").querySelectorAll("button[data-z]").forEach(el => el.onclick = () => agroZoom(AGRO[+el.dataset.z]));
   $("agroList").querySelectorAll("button[data-x]").forEach(el => el.onclick = async () => { const a = AGRO[+el.dataset.x];
     if (!confirm(`Remove ${a.name} from this phone?`)) return;
