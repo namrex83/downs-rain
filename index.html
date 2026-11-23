@@ -298,7 +298,6 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .timing .tmbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:5px 11px;cursor:pointer}
 .timing .tmbtns button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink,#fff)}
 .timing .tmkey{font-size:.7rem;color:var(--ink-3);margin-top:5px}
-#aMode{margin-bottom:10px;width:max-content}
 .agrobtns{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:8px}
 .agrofile{text-transform:none;letter-spacing:normal;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink,#fff);border-radius:999px;padding:9px 15px;font:600 .9rem var(--body);cursor:pointer}
 .agroop{text-transform:none;letter-spacing:normal;display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--ink-2)} .agroop input{accent-color:var(--accent)}
@@ -635,6 +634,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field" id="fDayField"><label for="fDay">Forecast day · 10am to 10am</label><select id="fDay"></select></div>
   </div>
 
+  <div class="controls outOnly" hidden>
+    <div class="field"><span class="eyebrow">Show</span>
+      <div class="seg" id="aMode"><button data-m="links" aria-pressed="true">Outlooks</button><button data-m="agro" aria-pressed="false">Paddock layers</button></div></div>
+  </div>
+
   <div class="controls windOld" hidden>
     <div class="field"><span class="eyebrow">Show</span>
       <div class="seg" id="wShow"><button data-w="spd" aria-pressed="true">Wind speed</button><button data-w="gust" aria-pressed="false">Gusts</button><button data-w="spray" aria-pressed="false">Spray</button></div></div>
@@ -776,7 +780,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note">The Bureau of Meteorology's South East Queensland radars, Toowoomba (Mt Kynoch), Brisbane (Mt Stapylton), Marburg and Gympie (Mt Kanigan), at 128, 256 or 512 km range (not every radar has every range), the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel outOnly" hidden>
-    <div class="seg" id="aMode"><button data-m="agro" aria-pressed="true">Paddock layers</button><button data-m="links" aria-pressed="false">Outlooks</button></div>
     <div id="agroPane">
       <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ<input type="file" id="agroFile" multiple hidden></label>
         <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label></div>
@@ -4516,6 +4519,7 @@ function setTab(t, first){
     const v = fcView || {c: map.getCenter(), z: fcZoom()};
     map.setView(v.c, v.z, {animate: false});
   }
+  if (t === "outlook" && tab !== "outlook") aMode = "links";   // Extras always opens on Outlooks
   tab = t;
   try { localStorage.setItem("tab", t); } catch(e){}
   document.body.classList.toggle("fcwide", t === "fc");
@@ -4753,8 +4757,7 @@ async function fTiming(){
 // Agronomy tab, paddock layers: Google Earth files (KML, or KMZ = zipped KML with its pictures) opened from the
 // phone and drawn on the map: shapes with their colours, points, and picture overlays (elevation, yield, NDVI
 // layers). The files are kept on this phone (IndexedDB) so they're there next time; nothing is uploaded.
-let aMode = "agro", AGRO = [];   // AGRO: [{id, name, layer, bounds, on}]
-try { aMode = localStorage.getItem("aMode") || "agro"; } catch(e){}
+let aMode = "links", AGRO = [];   // the Extras tab always opens on Outlooks; AGRO: [{id, name, layer, bounds, on}]
 const agroGroup = L.layerGroup();
 const agroDB = () => new Promise((ok, no) => { const r = indexedDB.open("agro", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("files", {keyPath: "id"}); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
@@ -5003,7 +5006,7 @@ async function agroShow(){
   }
 }
 function agroHide(){ map.removeLayer(agroGroup); document.body.classList.remove("agrotab"); }
-$("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; aMode = b.dataset.m; try { localStorage.setItem("aMode", aMode); } catch(_){}
+$("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; aMode = b.dataset.m;
   $("map").hidden = aMode !== "agro"; agroShow(); if (aMode === "agro") { map.invalidateSize(); fitMap(); } };
 $("agroOp").oninput = agroOpacity;
 $("agroFile").onchange = async e => {
