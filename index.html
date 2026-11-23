@@ -308,8 +308,11 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .agrorow .nm small{display:block;font:400 .72rem var(--body);color:var(--ink-3)}
 .agrorow button{border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;padding:4px 9px;font:600 .78rem var(--body);cursor:pointer}
 .agrorow input{width:18px;height:18px;accent-color:var(--accent)}
-.agroleg{border-collapse:collapse;font-size:.75rem;margin:0 0 4px 30px;color:var(--ink-2)} .agroleg caption{text-align:left;font-weight:600;padding-bottom:2px}
-.agroleg td,.agroleg th{padding:1px 6px;text-align:right;font-weight:400} .agroleg th{color:var(--ink-3);font-size:.68rem}
+.agroleg{border-collapse:collapse;font-size:.75rem;margin:0 0 4px;width:100%;color:var(--ink-2)} .agroleg caption{text-align:left;font-weight:600;padding-bottom:2px}
+.agroleg td,.agroleg th{padding:1px 6px;text-align:right;font-weight:400}
+.agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
+.agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
+.agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
 .agropop{max-width:240px;font-size:.82rem} .agropop table{border-collapse:collapse} .agropop td{padding:1px 4px;border-bottom:1px solid #eee}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
@@ -4782,6 +4785,21 @@ const QuadImage = L.Layer.extend({
   },
   onRemove(map){ map.off("zoomend viewreset moveend rotate resize", this._place, this); L.DomUtil.remove(this._img); },
   getBounds(){ return L.latLngBounds(this._ll); },
+  // hide the pixels near any of these colours (["#rrggbb", ...]); [] shows the picture as it came
+  setHidden(cols){
+    this._hidden = cols || [];
+    if (!this._hidden.length) { if (this._img) this._img.src = this._url; return; }
+    const src = new Image(); src.onload = () => {
+      const c = document.createElement("canvas"); c.width = src.naturalWidth; c.height = src.naturalHeight;
+      const ctx = c.getContext("2d"); ctx.drawImage(src, 0, 0);
+      const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, hs = this._hidden.map(hex);
+      for (let i = 0; i < d.length; i += 4){ if (!d[i + 3]) continue;
+        for (const [r, g, b] of hs) if (Math.abs(d[i] - r) + Math.abs(d[i + 1] - g) + Math.abs(d[i + 2] - b) < 40) { d[i + 3] = 0; break; } }
+      ctx.putImageData(im, 0, 0);
+      c.toBlob(bl => { if (!bl || !this._img) return; if (this._blob) URL.revokeObjectURL(this._blob); this._blob = URL.createObjectURL(bl); this._img.src = this._blob; });
+    };
+    src.src = this._url;
+  },
   _place(){
     const img = this._img, m = this._map; if (!img || !m || !img.naturalWidth) return;
     const w = img.naturalWidth, h = img.naturalHeight, d = this._ll.map(c => { const q = m.latLngToLayerPoint(c); return [q.x, q.y]; });
@@ -4873,8 +4891,8 @@ async function agroParse(name, buf){
           return [cl + x * Math.sin(rot) + y * Math.cos(rot), cw + (x * Math.cos(rot) - y * Math.sin(rot)) / k]; });
       }
       if (!corners || corners.flat().some(isNaN)) continue;
-      new QuadImage(url, corners, {pane: "agro"}).addTo(group); stats.pictures++;
-      const lg = kmlLegend(txt(go, "description")); if (lg && !stats.legend) stats.legend = {name: txt(go, "name"), rows: lg};
+      const qi = new QuadImage(url, corners, {pane: "agro"}).addTo(group); stats.pictures++;
+      const lg = kmlLegend(txt(go, "description")); if (lg && !stats.legend) stats.legend = {name: txt(go, "name"), rows: lg, layer: qi};
       if (!stats.label) stats.label = [txt(go, "name"), ...allTag(doc, "Folder").map(f => txt(f, "name")).filter(x => x && !/^\d{4}$/.test(x)).slice(-2)].filter(Boolean).join(" · ");
     }
     for (const nl of allTag(doc, "NetworkLink")){   // a link to another KML, inside the KMZ
@@ -4899,7 +4917,9 @@ async function agroAdd(name, buf, id, on = true){
   const {group, stats} = await agroParse(name, buf);
   let bounds = null;
   group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
-  const L1 = {id, name, layer: group, bounds, on, stats};
+  const L1 = {id, name, layer: group, bounds, on, stats, hide: []};
+  try { L1.hide = JSON.parse(localStorage.getItem("agroHide:" + id) || "[]"); } catch(e){}
+  if (stats.legend && L1.hide.length) stats.legend.layer.setHidden(L1.hide);
   AGRO.push(L1); if (on) agroGroup.addLayer(group);
   return L1;
 }
@@ -4908,15 +4928,25 @@ function agroOpacity(){
   try { localStorage.setItem("agroOp", v); } catch(e){}
 }
 const esc2 = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-function legendHTML(lg){
-  const safeCol = c => /^#[0-9a-f]{6}$/i.test(c) ? c : /^rgb\(\s*\d+,\s*\d+,\s*\d+\s*\)$/.test(c) ? c : "";
-  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")}</caption>${lg.rows.map((r, i) => `<tr>${r.map(c => { const col = safeCol(c.col);
-    return i ? `<td${col ? ` style="background:${col};width:18px"` : ""}>${col ? "" : esc2(c.t)}</td>` : `<th>${esc2(c.t)}</th>`; }).join("")}</tr>`).join("")}</table>`;
+function legendHTML(lg, a, ai){
+  const safeCol = c => /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : "";
+  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")} <span>· tap a colour to hide or show it</span>${a.hide.length ? ` <button type="button" data-all="${ai}">Show all</button>` : ""}</caption>${lg.rows.map((r, i) => {
+    const sw = r.map(c => safeCol(c.col)).find(Boolean), off = sw && a.hide.includes(sw);
+    return `<tr${i && sw ? ` data-a="${ai}" data-c="${sw}" class="${off ? "off" : ""}"` : ""}>${r.map(c => { const col = safeCol(c.col);
+    return i ? `<td${col ? ` style="background:${col};width:18px"` : ""}>${col ? "" : esc2(c.t)}</td>` : `<th>${esc2(c.t)}</th>`; }).join("")}</tr>`; }).join("")}</table>`;
+}
+function agroSetHide(a, cols){
+  a.hide = cols; a.stats.legend.layer.setHidden(cols);
+  try { localStorage.setItem("agroHide:" + a.id, JSON.stringify(cols)); } catch(e){}
+  agroListDraw();
 }
 function agroListDraw(){
   $("agroList").innerHTML = AGRO.length ? AGRO.map((a, i) => `<div class="agrorow"><input type="checkbox" data-i="${i}" ${a.on ? "checked" : ""} aria-label="Show ${a.name}">
     <span class="nm">${a.name.replace(/[<&]/g, "")}<small>${[a.stats.shapes ? `${a.stats.shapes} shape${a.stats.shapes === 1 ? "" : "s"}` : "", a.stats.pictures ? `${a.stats.pictures} picture layer${a.stats.pictures === 1 ? "" : "s"}` : "", a.stats.label ? esc2(a.stats.label) : ""].filter(Boolean).join(" · ")}</small></span>
-    <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>${a.stats.legend && a.on ? legendHTML(a.stats.legend) : ""}`).join("") : "";
+    <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>${a.stats.legend && a.on ? legendHTML(a.stats.legend, a, i) : ""}`).join("") : "";
+  $("agroList").querySelectorAll("tr[data-c]").forEach(tr => tr.onclick = () => { const a = AGRO[+tr.dataset.a], c = tr.dataset.c;
+    agroSetHide(a, a.hide.includes(c) ? a.hide.filter(x => x !== c) : [...a.hide, c]); });
+  $("agroList").querySelectorAll("button[data-all]").forEach(b => b.onclick = e => { e.stopPropagation(); agroSetHide(AGRO[+b.dataset.all], []); });
   $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); agroListDraw(); });
   $("agroList").querySelectorAll("button[data-z]").forEach(el => el.onclick = () => agroZoom(AGRO[+el.dataset.z]));
   $("agroList").querySelectorAll("button[data-x]").forEach(el => el.onclick = async () => { const a = AGRO[+el.dataset.x];
