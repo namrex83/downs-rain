@@ -4760,67 +4760,97 @@ const kids = (el, tag) => [...el.children].filter(x => x.localName === tag);
 const kid = (el, tag) => kids(el, tag)[0];
 const txt = (el, tag) => { const k = el && kid(el, tag); return k ? k.textContent.trim() : ""; };
 const coords = s => s.trim().split(/\s+/).map(p => p.split(",").map(Number)).filter(p => p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])).map(p => [p[1], p[0]]);
+// every element called tag under el, whatever namespace prefix the file gives it (kml:Placemark, gx:Track…)
+const allTag = (el, tag) => [...el.getElementsByTagNameNS("*", tag)];
 async function agroParse(name, buf){
-  let kml, files = {};
-  const u8 = new Uint8Array(buf);
+  const u8 = new Uint8Array(buf), files = {}, kmls = {};
+  const norm = h => { try { h = decodeURIComponent(h); } catch(e){} return h.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase(); };
+  const unsupported = [];
   if (u8[0] === 0x50 && u8[1] === 0x4b) {   // a zip: KMZ
     const Z = await loadJSZip(), zip = await Z.loadAsync(buf);
-    const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
-    const main = names.find(n => /(^|\/)doc\.kml$/i.test(n)) || names.find(n => /\.kml$/i.test(n));
-    if (!main) throw new Error("no KML inside");
-    kml = await zip.file(main).async("string");
-    for (const n of names) if (/\.(png|jpe?g|gif|bmp|webp)$/i.test(n)) files[n.toLowerCase()] = URL.createObjectURL(await zip.file(n).async("blob"));
-  } else kml = new TextDecoder().decode(u8);
-  const doc = new DOMParser().parseFromString(kml, "text/xml");
-  if (doc.getElementsByTagName("parsererror").length) throw new Error("not a KML file");
-  // styles (and style maps' normal style)
-  const styles = {};
-  for (const st of doc.getElementsByTagName("Style")){
-    const id = st.getAttribute("id"); if (!id) continue;
-    const ps = st.getElementsByTagName("PolyStyle")[0], ls = st.getElementsByTagName("LineStyle")[0], is = st.getElementsByTagName("IconStyle")[0];
-    styles["#" + id] = {fill: ps ? kmlCol(txt(ps, "color"), null) : null, nofill: ps && txt(ps, "fill") === "0", line: ls ? kmlCol(txt(ls, "color"), null) : null,
-                        width: ls ? +txt(ls, "width") || 2 : null, icon: is ? kmlCol(txt(is, "color"), null) : null};
-  }
-  for (const sm of doc.getElementsByTagName("StyleMap")){
-    const id = sm.getAttribute("id"); if (!id) continue;
-    const pair = [...sm.getElementsByTagName("Pair")].find(p => txt(p, "key") === "normal"); if (pair) styles["#" + id] = styles[txt(pair, "styleUrl")] || {};
-  }
-  const group = L.featureGroup(), stats = {shapes: 0, pictures: 0, rotated: 0};
-  const popup = pm => { const nm = txt(pm, "name"), ds = txt(pm, "description"), ed = [...pm.getElementsByTagName("Data")].map(d => [d.getAttribute("name"), txt(d, "value")]);
-    const sd = [...pm.getElementsByTagName("SimpleData")].map(d => [d.getAttribute("name"), d.textContent.trim()]);
-    const rows = [...ed, ...sd].filter(([k]) => k).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
-    return nm || ds || rows ? `<div class="agropop">${nm ? `<b>${esc(nm)}</b>` : ""}${ds ? `<div>${ds.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ").slice(0, 400)}</div>` : ""}${rows ? `<table>${rows}</table>` : ""}</div>` : null; };
+    for (const n of Object.keys(zip.files)){
+      if (zip.files[n].dir) continue;
+      const k = norm(n);
+      if (/\.kml$/i.test(n)) kmls[k] = await zip.file(n).async("string");
+      else if (/\.(png|jpe?g|gif|bmp|webp)$/i.test(n)) files[k] = URL.createObjectURL(await zip.file(n).async("blob"));
+      else if (/\.(tiff?)$/i.test(n)) unsupported.push(n.split("/").pop());
+    }
+    if (!Object.keys(kmls).length) throw new Error("there's no KML inside the KMZ");
+  } else kmls["doc.kml"] = new TextDecoder().decode(u8);
+  const findFile = h => { const k = norm(h), base = k.split("/").pop(); return files[k] || files[Object.keys(files).find(x => x.split("/").pop() === base) || ""] || (/^https?:/i.test(h) ? h : null); };
+  const group = L.featureGroup(), stats = {shapes: 0, pictures: 0, rotated: 0}, seen = {placemarks: 0, overlays: 0, links: 0, missingPics: []};
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  for (const pm of doc.getElementsByTagName("Placemark")){
-    const inline = kid(pm, "Style"), su = txt(pm, "styleUrl");
-    let st = styles[su] || {};
-    if (inline){ const ps = inline.getElementsByTagName("PolyStyle")[0], ls = inline.getElementsByTagName("LineStyle")[0];
-      st = {...st, ...(ps ? {fill: kmlCol(txt(ps, "color"), st.fill), nofill: txt(ps, "fill") === "0"} : {}), ...(ls ? {line: kmlCol(txt(ls, "color"), st.line), width: +txt(ls, "width") || st.width} : {})}; }
-    const line = st.line || {col: "#ffd400", op: 1}, fill = st.fill || {col: "#ffd400", op: 0.25};
-    const pop = popup(pm), add = l => { if (pop) l.bindPopup(pop); l.addTo(group); stats.shapes++; };
-    for (const g of pm.getElementsByTagName("Polygon")){
-      const outer = g.getElementsByTagName("outerBoundaryIs")[0], inner = [...g.getElementsByTagName("innerBoundaryIs")];
-      const ring = el => coords(el.getElementsByTagName("coordinates")[0]?.textContent || "");
-      if (!outer) continue;
-      add(L.polygon([ring(outer), ...inner.map(ring)], {color: line.col, opacity: line.op, weight: st.width || 2, fillColor: fill.col, fillOpacity: st.nofill ? 0 : fill.op, pane: "agro"}));
+  const done = new Set();
+  const parseDoc = (key) => {
+    if (done.has(key) || !kmls[key]) return; done.add(key);
+    const doc = new DOMParser().parseFromString(kmls[key], "text/xml");
+    if (doc.getElementsByTagName("parsererror").length) return;
+    const styles = {};
+    for (const st of allTag(doc, "Style")){
+      const id = st.getAttribute("id"); if (!id) continue;
+      const ps = allTag(st, "PolyStyle")[0], ls = allTag(st, "LineStyle")[0], is = allTag(st, "IconStyle")[0];
+      styles["#" + id] = {fill: ps ? kmlCol(txt(ps, "color"), null) : null, nofill: !!ps && txt(ps, "fill") === "0", line: ls ? kmlCol(txt(ls, "color"), null) : null,
+                          width: ls ? +txt(ls, "width") || 2 : null, icon: is ? kmlCol(txt(is, "color"), null) : null};
     }
-    for (const g of pm.getElementsByTagName("LineString")){
-      const c = coords(g.getElementsByTagName("coordinates")[0]?.textContent || ""); if (c.length > 1) add(L.polyline(c, {color: line.col, opacity: line.op, weight: st.width || 3, pane: "agro"}));
+    for (const sm of allTag(doc, "StyleMap")){
+      const id = sm.getAttribute("id"); if (!id) continue;
+      const pair = allTag(sm, "Pair").find(p => txt(p, "key") === "normal"); if (pair) styles["#" + id] = styles[txt(pair, "styleUrl").replace(/^.*#/, "#")] || {};
     }
-    for (const g of pm.getElementsByTagName("Point")){
-      const c = coords(g.getElementsByTagName("coordinates")[0]?.textContent || ""); if (!c.length) continue;
-      add(L.circleMarker(c[0], {radius: 6, color: "#fff", weight: 2, fillColor: (st.icon || {}).col || "#e53935", fillOpacity: 1, pane: "agro"}));
+    const popup = pm => { const nm = txt(pm, "name"), ds = txt(pm, "description");
+      const rows = [...allTag(pm, "Data").map(d => [d.getAttribute("name"), txt(d, "value")]), ...allTag(pm, "SimpleData").map(d => [d.getAttribute("name"), d.textContent.trim()])]
+        .filter(([k]) => k).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+      return nm || ds || rows ? `<div class="agropop">${nm ? `<b>${esc(nm)}</b>` : ""}${ds ? `<div>${esc(ds.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 400))}</div>` : ""}${rows ? `<table>${rows}</table>` : ""}</div>` : null; };
+    const ring = el => coords((allTag(el, "coordinates")[0] || {}).textContent || "");
+    for (const pm of allTag(doc, "Placemark")){
+      seen.placemarks++;
+      const inline = allTag(pm, "Style")[0], su = txt(pm, "styleUrl").replace(/^.*#/, "#");
+      let st = styles[su] || {};
+      if (inline){ const ps = allTag(inline, "PolyStyle")[0], ls = allTag(inline, "LineStyle")[0];
+        st = {...st, ...(ps ? {fill: kmlCol(txt(ps, "color"), st.fill), nofill: txt(ps, "fill") === "0"} : {}), ...(ls ? {line: kmlCol(txt(ls, "color"), st.line), width: +txt(ls, "width") || st.width} : {})}; }
+      const line = st.line || {col: "#ffd400", op: 1}, fill = st.fill || {col: "#ffd400", op: 0.25};
+      const pop = popup(pm), add = l => { if (pop) l.bindPopup(pop); l.addTo(group); stats.shapes++; };
+      for (const g of allTag(pm, "Polygon")){
+        const outer = allTag(g, "outerBoundaryIs")[0], inner = allTag(g, "innerBoundaryIs");
+        const o = outer ? ring(outer) : ring(g); if (o.length < 3) continue;
+        add(L.polygon([o, ...inner.map(ring)], {color: line.col, opacity: line.op, weight: st.width || 2, fillColor: fill.col, fillOpacity: st.nofill ? 0 : fill.op, pane: "agro"}));
+      }
+      for (const g of allTag(pm, "LineString")){ const c = ring(g); if (c.length > 1) add(L.polyline(c, {color: line.col, opacity: line.op, weight: st.width || 3, pane: "agro"})); }
+      for (const g of allTag(pm, "Point")){ const c = ring(g); if (c.length) add(L.circleMarker(c[0], {radius: 6, color: "#fff", weight: 2, fillColor: (st.icon || {}).col || "#e53935", fillOpacity: 1, pane: "agro"})); }
+      for (const g of allTag(pm, "Track")){   // gx:Track: "lon lat alt" per gx:coord
+        const c = allTag(g, "coord").map(x => x.textContent.trim().split(/\s+/).map(Number)).filter(v => v.length >= 2 && !isNaN(v[0])).map(v => [v[1], v[0]]);
+        if (c.length > 1) add(L.polyline(c, {color: line.col, opacity: line.op, weight: st.width || 3, pane: "agro"}));
+      }
     }
+    for (const go of allTag(doc, "GroundOverlay")){
+      seen.overlays++;
+      const icon = allTag(go, "Icon")[0], href = icon ? txt(icon, "href") : "";
+      const url = href && findFile(href);
+      if (!url) { if (href) seen.missingPics.push(href.split(/[\\/]/).pop()); continue; }
+      let sw, ne;
+      const box = allTag(go, "LatLonBox")[0], quad = allTag(go, "LatLonQuad")[0];
+      if (box) { sw = [+txt(box, "south"), +txt(box, "west")]; ne = [+txt(box, "north"), +txt(box, "east")]; if (+txt(box, "rotation")) stats.rotated++; }
+      else if (quad) { const c = ring(quad); if (c.length < 4) continue; const la = c.map(x => x[0]), lo = c.map(x => x[1]);
+        sw = [Math.min(...la), Math.min(...lo)]; ne = [Math.max(...la), Math.max(...lo)]; stats.rotated++; }
+      else continue;
+      if ([...sw, ...ne].some(isNaN)) continue;
+      L.imageOverlay(url, [sw, ne], {pane: "agro", interactive: false}).addTo(group); stats.pictures++;
+    }
+    for (const nl of allTag(doc, "NetworkLink")){   // a link to another KML, inside the KMZ
+      seen.links++;
+      const h = txt(allTag(nl, "Link")[0] || allTag(nl, "Url")[0] || nl, "href"); if (!h) continue;
+      const k = norm(h), base = k.split("/").pop();
+      parseDoc(kmls[k] ? k : Object.keys(kmls).find(x => x.split("/").pop() === base));
+    }
+  };
+  const main = Object.keys(kmls).find(k => /(^|\/)doc\.kml$/.test(k)) || Object.keys(kmls)[0];
+  parseDoc(main);
+  for (const k of Object.keys(kmls)) parseDoc(k);   // any other KML files in the KMZ too
+  if (!stats.shapes && !stats.pictures) {
+    const what = [seen.placemarks ? `${seen.placemarks} placemark(s) with no shapes I can draw` : "", seen.overlays ? `${seen.overlays} picture layer(s)` : "",
+      seen.missingPics.length ? `picture file(s) not found inside: ${seen.missingPics.slice(0, 3).join(", ")}` : "", unsupported.length ? `TIFF picture(s), which phones can't show: ${unsupported.slice(0, 3).join(", ")}` : "",
+      seen.links ? `${seen.links} link(s) to other files` : ""].filter(Boolean);
+    throw new Error(`nothing I can draw in it${what.length ? ` (it has ${what.join("; ")})` : " (it looks empty)"}`);
   }
-  for (const go of doc.getElementsByTagName("GroundOverlay")){
-    const box = go.getElementsByTagName("LatLonBox")[0], icon = go.getElementsByTagName("Icon")[0]; if (!box || !icon) continue;
-    const href = txt(icon, "href"), url = files[href.toLowerCase()] || files[Object.keys(files).find(k => k.endsWith("/" + href.toLowerCase().split("/").pop())) || ""] || (/^https?:/.test(href) ? href : null);
-    if (!url) continue;
-    const n = +txt(box, "north"), so = +txt(box, "south"), e = +txt(box, "east"), w = +txt(box, "west");
-    if (+txt(box, "rotation")) stats.rotated++;
-    L.imageOverlay(url, [[so, w], [n, e]], {pane: "agro", interactive: false}).addTo(group); stats.pictures++;
-  }
-  if (!stats.shapes && !stats.pictures) throw new Error("nothing to draw in it");
   return {group, stats};
 }
 async function agroAdd(name, buf, id, on = true){
