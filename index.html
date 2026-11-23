@@ -298,6 +298,17 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .timing .tmbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:5px 11px;cursor:pointer}
 .timing .tmbtns button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink,#fff)}
 .timing .tmkey{font-size:.7rem;color:var(--ink-3);margin-top:5px}
+#aMode{margin-bottom:10px;width:max-content}
+.agrobtns{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:8px}
+.agrofile{text-transform:none;letter-spacing:normal;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink,#fff);border-radius:999px;padding:9px 15px;font:600 .9rem var(--body);cursor:pointer}
+.agroop{text-transform:none;letter-spacing:normal;display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--ink-2)} .agroop input{accent-color:var(--accent)}
+#agroList{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px}
+.agrorow{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:7px 9px;background:var(--bg,#fff)}
+.agrorow .nm{flex:1;min-width:0;font:600 .88rem var(--body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agrorow .nm small{display:block;font:400 .72rem var(--body);color:var(--ink-3)}
+.agrorow button{border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;padding:4px 9px;font:600 .78rem var(--body);cursor:pointer}
+.agrorow input{width:18px;height:18px;accent-color:var(--accent)}
+.agropop{max-width:240px;font-size:.82rem} .agropop table{border-collapse:collapse} .agropop td{padding:1px 4px;border-bottom:1px solid #eee}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
 .calhead{display:flex;justify-content:space-between;align-items:center}
@@ -536,13 +547,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="byline">by Namrex Weather Co.</p></div>
     <p class="sub" id="subRain">Toowoomba and Brisbane radar rainfall, gauge-checked each 9am.</p>
     <p class="sub" id="subStorm" hidden>Storm ingredients from the GFS and ECMWF weather models.</p>
-    <p class="sub" id="subOut" hidden>Long-range outlooks from the Bureau of Meteorology.</p>
+    <p class="sub" id="subOut" hidden>Your paddock maps (KML/KMZ) over the satellite map, and long-range outlooks.</p>
     <p class="sub" id="subRadar" hidden>Live Bureau of Meteorology radar: Toowoomba, Brisbane, Marburg and Gympie.</p>
     <p class="sub" id="subFc" hidden>Rain forecasts from the ECMWF and GFS weather models.</p>
     <p class="sub" id="subWind" hidden>Wind forecast from the ECMWF weather model.</p>
     <p class="sub" id="subTemp" hidden>Temperature forecast from the ECMWF weather model.</p>
     <p class="sub" id="subSoil" hidden>Soil temperature forecast at 10 cm from the weather models.</p></div>
-    <div class="seg"><button id="tRain" aria-pressed="true">Rainfall</button><button id="tFc" aria-pressed="false">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms<i class="fdot" id="stormDot" hidden></i></button><button id="tCatch" aria-pressed="false">Catchments<i class="fdot" id="floodDot" hidden></i></button><button id="tOut" aria-pressed="false">Outlook</button></div>
+    <div class="seg"><button id="tRain" aria-pressed="true">Rainfall</button><button id="tFc" aria-pressed="false">Forecast</button><button id="tTemp" aria-pressed="false">Temp</button><button id="tWind" aria-pressed="false">Wind</button><button id="tRadar" aria-pressed="false">Radar</button><button id="tSoil" aria-pressed="false">Soil</button><button id="tStorm" aria-pressed="false">Storms<i class="fdot" id="stormDot" hidden></i></button><button id="tCatch" aria-pressed="false">Catchments<i class="fdot" id="floodDot" hidden></i></button><button id="tOut" aria-pressed="false">Agronomy</button></div>
   </header>
 
   <div class="controls rainOnly" id="rControls">
@@ -751,9 +762,18 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note">The Bureau of Meteorology's South East Queensland radars, Toowoomba (Mt Kynoch), Brisbane (Mt Stapylton), Marburg and Gympie (Mt Kanigan), at 128, 256 or 512 km range (not every radar has every range), the last 90 minutes of pictures (every 5 minutes, or less often if BOM makes them less often). After the latest picture, the loop shows a prediction for the next 90 minutes: the latest rain slid along at the speed and direction it has been moving (measured from the radar about once an hour). It can't show storms growing, weakening, turning or new ones forming. 128 km has the most detail close to Toowoomba; 512 km shows weather coming from further away, in less detail. Zoom out to see a whole range. Colours are BOM's rain-rate scale; this is the live radar, before any gauge checks, so for totals use the Rainfall tab. Radar can miss low rain far from Toowoomba and over-read hail. Radar images © Commonwealth of Australia, Bureau of Meteorology.</p>
   </section>
   <section class="panel outOnly" hidden>
+    <div class="seg" id="aMode"><button data-m="agro" aria-pressed="true">Paddock layers</button><button data-m="links" aria-pressed="false">Outlooks</button></div>
+    <div id="agroPane">
+      <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ<input type="file" id="agroFile" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple hidden></label>
+        <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label></div>
+      <div id="agroList"></div>
+      <p class="note">Open a Google Earth file (KML or KMZ, e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
+    </div>
+    <div id="linksPane" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
     <div id="outLinks" class="outlinks"></div>
     <p class="note">These open on the Bureau's website (the SAM graph on NOAA's). Outlooks give the chance of a wetter or drier, warmer or cooler than usual season, not amounts on particular days.</p>
+    </div>
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
@@ -2593,7 +2613,8 @@ function locateErr(err){
 function fitMap(){
   const el = $("map");
   if (el.classList.contains("full")) { map.invalidateSize(); return; }   // full screen: leave it filling the screen
-  if (tab === "wind" || tab === "outlook") { el.style.height = ""; return; }   // no map on these tabs
+  if (tab === "wind" || (tab === "outlook" && aMode !== "agro")) { el.style.height = ""; return; }   // no map on these
+  if (tab === "outlook" && innerWidth < 1000) { el.style.width = ""; el.style.minHeight = "240px"; el.style.height = Math.round(Math.max(240, innerHeight * 0.58)) + "px"; map.invalidateSize(); return; }
   twoCol();
   if (innerWidth >= 1000) {   // a computer: a square map in the left half, as big as the screen height allows
     const top = $("cols").getBoundingClientRect().top + scrollY, half = ($("cols").clientWidth - 16) / 2;
@@ -4489,7 +4510,7 @@ function setTab(t, first){
   const only = {rain: "rainOnly", catch: "catchOnly", storms: "stormOnly", fc: "fcOnly", radar: "radarOnly", outlook: "outOnly", wind: "windOnly", temp: "tempOnly", soil: "soilOnly"}[t];
   document.querySelectorAll(".rainOnly, .catchOnly, .stormOnly, .fcOnly, .radarOnly, .outOnly, .windOnly, .tempOnly, .soilOnly").forEach(el => el.hidden = !el.classList.contains(only));
   $("subRain").hidden = t !== "rain"; $("subStorm").hidden = t !== "storms"; $("subFc").hidden = t !== "fc"; $("subRadar").hidden = t !== "radar"; $("subOut").hidden = t !== "outlook"; $("subWind").hidden = t !== "wind"; $("subTemp").hidden = t !== "temp"; $("subSoil").hidden = t !== "soil";
-  $("map").hidden = t === "outlook" || t === "wind";   // Outlook is just links; Wind is a chart page
+  $("map").hidden = (t === "outlook" && aMode !== "agro") || t === "wind";   // Agronomy's outlooks are just links; Wind is a chart page
   if (t !== "radar") rClear();
   map.getContainer().classList.toggle("nolabel", t === "radar");
   if (t !== "storms") sLoop(false);
@@ -4537,7 +4558,8 @@ function setTab(t, first){
     startCatchTab(true);
   } else if (t === "outlook"){
     if (overlay) map.removeLayer(overlay);
-    gaugeLayer.clearLayers();
+    gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
+    agroShow();
   } else if (t === "fc"){
     if (overlay) map.removeLayer(overlay);
     gaugeLayer.clearLayers(); if (ring) map.removeLayer(ring);
@@ -4547,7 +4569,8 @@ function setTab(t, first){
     if (idx) show();
   }
   townsForZoom(); fitMap();
-  if (t !== "outlook") map.invalidateSize();
+  if (t !== "outlook" || aMode === "agro") map.invalidateSize();
+  if (t !== "outlook") agroHide();
 }
 $("tRain").onclick = () => tab !== "rain" && setTab("rain");
 $("tCatch").onclick = () => tab !== "catch" && setTab("catch");
@@ -4713,6 +4736,144 @@ async function fTiming(){
     if ($("tmAll")) $("tmAll").onclick = () => { fStopPlay(); fSetFrame(null); };
   }
 }
+// Agronomy tab, paddock layers: Google Earth files (KML, or KMZ = zipped KML with its pictures) opened from the
+// phone and drawn on the map: shapes with their colours, points, and picture overlays (elevation, yield, NDVI
+// layers). The files are kept on this phone (IndexedDB) so they're there next time; nothing is uploaded.
+let aMode = "agro", AGRO = [];   // AGRO: [{id, name, layer, bounds, on}]
+try { aMode = localStorage.getItem("aMode") || "agro"; } catch(e){}
+const agroGroup = L.layerGroup();
+const agroDB = () => new Promise((ok, no) => { const r = indexedDB.open("agro", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("files", {keyPath: "id"}); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+async function agroStore(op, val){
+  try { const db = await agroDB(); return await new Promise((ok, no) => { const tx = db.transaction("files", op === "all" ? "readonly" : "readwrite"), st = tx.objectStore("files");
+    const q = op === "put" ? st.put(val) : op === "del" ? st.delete(val) : st.getAll(); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }); }
+  catch(e){ return op === "all" ? [] : null; }
+}
+let JSZIP = null;
+function loadJSZip(){
+  return JSZIP || (JSZIP = new Promise((ok, no) => { const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; sc.onload = () => ok(window.JSZip); sc.onerror = () => { JSZIP = null; no(new Error("zip")); }; document.head.appendChild(sc); }));
+}
+const kmlCol = (c, dflt) => { c = (c || "").trim(); if (!/^[0-9a-f]{8}$/i.test(c)) return dflt;   // KML colours are aabbggrr
+  return {col: `#${c.slice(6, 8)}${c.slice(4, 6)}${c.slice(2, 4)}`, op: parseInt(c.slice(0, 2), 16) / 255}; };
+const kids = (el, tag) => [...el.children].filter(x => x.localName === tag);
+const kid = (el, tag) => kids(el, tag)[0];
+const txt = (el, tag) => { const k = el && kid(el, tag); return k ? k.textContent.trim() : ""; };
+const coords = s => s.trim().split(/\s+/).map(p => p.split(",").map(Number)).filter(p => p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])).map(p => [p[1], p[0]]);
+async function agroParse(name, buf){
+  let kml, files = {};
+  const u8 = new Uint8Array(buf);
+  if (u8[0] === 0x50 && u8[1] === 0x4b) {   // a zip: KMZ
+    const Z = await loadJSZip(), zip = await Z.loadAsync(buf);
+    const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+    const main = names.find(n => /(^|\/)doc\.kml$/i.test(n)) || names.find(n => /\.kml$/i.test(n));
+    if (!main) throw new Error("no KML inside");
+    kml = await zip.file(main).async("string");
+    for (const n of names) if (/\.(png|jpe?g|gif|bmp|webp)$/i.test(n)) files[n.toLowerCase()] = URL.createObjectURL(await zip.file(n).async("blob"));
+  } else kml = new TextDecoder().decode(u8);
+  const doc = new DOMParser().parseFromString(kml, "text/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("not a KML file");
+  // styles (and style maps' normal style)
+  const styles = {};
+  for (const st of doc.getElementsByTagName("Style")){
+    const id = st.getAttribute("id"); if (!id) continue;
+    const ps = st.getElementsByTagName("PolyStyle")[0], ls = st.getElementsByTagName("LineStyle")[0], is = st.getElementsByTagName("IconStyle")[0];
+    styles["#" + id] = {fill: ps ? kmlCol(txt(ps, "color"), null) : null, nofill: ps && txt(ps, "fill") === "0", line: ls ? kmlCol(txt(ls, "color"), null) : null,
+                        width: ls ? +txt(ls, "width") || 2 : null, icon: is ? kmlCol(txt(is, "color"), null) : null};
+  }
+  for (const sm of doc.getElementsByTagName("StyleMap")){
+    const id = sm.getAttribute("id"); if (!id) continue;
+    const pair = [...sm.getElementsByTagName("Pair")].find(p => txt(p, "key") === "normal"); if (pair) styles["#" + id] = styles[txt(pair, "styleUrl")] || {};
+  }
+  const group = L.featureGroup(), stats = {shapes: 0, pictures: 0, rotated: 0};
+  const popup = pm => { const nm = txt(pm, "name"), ds = txt(pm, "description"), ed = [...pm.getElementsByTagName("Data")].map(d => [d.getAttribute("name"), txt(d, "value")]);
+    const sd = [...pm.getElementsByTagName("SimpleData")].map(d => [d.getAttribute("name"), d.textContent.trim()]);
+    const rows = [...ed, ...sd].filter(([k]) => k).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+    return nm || ds || rows ? `<div class="agropop">${nm ? `<b>${esc(nm)}</b>` : ""}${ds ? `<div>${ds.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ").slice(0, 400)}</div>` : ""}${rows ? `<table>${rows}</table>` : ""}</div>` : null; };
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  for (const pm of doc.getElementsByTagName("Placemark")){
+    const inline = kid(pm, "Style"), su = txt(pm, "styleUrl");
+    let st = styles[su] || {};
+    if (inline){ const ps = inline.getElementsByTagName("PolyStyle")[0], ls = inline.getElementsByTagName("LineStyle")[0];
+      st = {...st, ...(ps ? {fill: kmlCol(txt(ps, "color"), st.fill), nofill: txt(ps, "fill") === "0"} : {}), ...(ls ? {line: kmlCol(txt(ls, "color"), st.line), width: +txt(ls, "width") || st.width} : {})}; }
+    const line = st.line || {col: "#ffd400", op: 1}, fill = st.fill || {col: "#ffd400", op: 0.25};
+    const pop = popup(pm), add = l => { if (pop) l.bindPopup(pop); l.addTo(group); stats.shapes++; };
+    for (const g of pm.getElementsByTagName("Polygon")){
+      const outer = g.getElementsByTagName("outerBoundaryIs")[0], inner = [...g.getElementsByTagName("innerBoundaryIs")];
+      const ring = el => coords(el.getElementsByTagName("coordinates")[0]?.textContent || "");
+      if (!outer) continue;
+      add(L.polygon([ring(outer), ...inner.map(ring)], {color: line.col, opacity: line.op, weight: st.width || 2, fillColor: fill.col, fillOpacity: st.nofill ? 0 : fill.op, pane: "agro"}));
+    }
+    for (const g of pm.getElementsByTagName("LineString")){
+      const c = coords(g.getElementsByTagName("coordinates")[0]?.textContent || ""); if (c.length > 1) add(L.polyline(c, {color: line.col, opacity: line.op, weight: st.width || 3, pane: "agro"}));
+    }
+    for (const g of pm.getElementsByTagName("Point")){
+      const c = coords(g.getElementsByTagName("coordinates")[0]?.textContent || ""); if (!c.length) continue;
+      add(L.circleMarker(c[0], {radius: 6, color: "#fff", weight: 2, fillColor: (st.icon || {}).col || "#e53935", fillOpacity: 1, pane: "agro"}));
+    }
+  }
+  for (const go of doc.getElementsByTagName("GroundOverlay")){
+    const box = go.getElementsByTagName("LatLonBox")[0], icon = go.getElementsByTagName("Icon")[0]; if (!box || !icon) continue;
+    const href = txt(icon, "href"), url = files[href.toLowerCase()] || files[Object.keys(files).find(k => k.endsWith("/" + href.toLowerCase().split("/").pop())) || ""] || (/^https?:/.test(href) ? href : null);
+    if (!url) continue;
+    const n = +txt(box, "north"), so = +txt(box, "south"), e = +txt(box, "east"), w = +txt(box, "west");
+    if (+txt(box, "rotation")) stats.rotated++;
+    L.imageOverlay(url, [[so, w], [n, e]], {pane: "agro", interactive: false}).addTo(group); stats.pictures++;
+  }
+  if (!stats.shapes && !stats.pictures) throw new Error("nothing to draw in it");
+  return {group, stats};
+}
+async function agroAdd(name, buf, id, on = true){
+  const {group, stats} = await agroParse(name, buf);
+  const L1 = {id, name, layer: group, bounds: group.getBounds ? group.getBounds() : null, on, stats};
+  AGRO.push(L1); if (on) agroGroup.addLayer(group);
+  return L1;
+}
+function agroOpacity(){
+  const v = +$("agroOp").value, pane = map.getPane("agro"); if (pane) pane.style.opacity = v;
+  try { localStorage.setItem("agroOp", v); } catch(e){}
+}
+function agroListDraw(){
+  $("agroList").innerHTML = AGRO.length ? AGRO.map((a, i) => `<div class="agrorow"><input type="checkbox" data-i="${i}" ${a.on ? "checked" : ""} aria-label="Show ${a.name}">
+    <span class="nm">${a.name.replace(/[<&]/g, "")}<small>${[a.stats.shapes ? `${a.stats.shapes} shape${a.stats.shapes === 1 ? "" : "s"}` : "", a.stats.pictures ? `${a.stats.pictures} picture layer${a.stats.pictures === 1 ? "" : "s"}` : "", a.stats.rotated ? "rotated pictures drawn straight" : ""].filter(Boolean).join(" · ")}</small></span>
+    <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>`).join("") : "";
+  $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); });
+  $("agroList").querySelectorAll("button[data-z]").forEach(el => el.onclick = () => agroZoom(AGRO[+el.dataset.z]));
+  $("agroList").querySelectorAll("button[data-x]").forEach(el => el.onclick = async () => { const a = AGRO[+el.dataset.x];
+    if (!confirm(`Remove ${a.name} from this phone?`)) return;
+    agroGroup.removeLayer(a.layer); AGRO.splice(+el.dataset.x, 1); await agroStore("del", a.id); agroListDraw(); });
+}
+function agroZoom(a){ if (a && a.bounds && a.bounds.isValid()) map.fitBounds(a.bounds, {padding: [20, 20], maxZoom: 17}); }
+let agroLoaded = false;
+async function agroShow(){
+  [...$("aMode").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.m === aMode));
+  $("agroPane").hidden = aMode !== "agro"; $("linksPane").hidden = aMode === "agro";
+  if (aMode !== "agro") { agroHide(); return; }
+  if (!map.getPane("agro")) { map.createPane("agro"); map.getPane("agro").style.zIndex = 450; }
+  try { const v = localStorage.getItem("agroOp"); if (v) $("agroOp").value = v; } catch(e){}
+  agroOpacity();
+  agroGroup.addTo(map);
+  if (!agroLoaded) { agroLoaded = true;
+    for (const f of (await agroStore("all")) || []) { try { await agroAdd(f.name, f.buf, f.id, f.on !== false); } catch(e){} }
+    agroListDraw();
+    const vis = AGRO.filter(a => a.on); if (vis.length) agroZoom(vis[vis.length - 1]);
+  }
+}
+function agroHide(){ map.removeLayer(agroGroup); }
+$("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; aMode = b.dataset.m; try { localStorage.setItem("aMode", aMode); } catch(_){}
+  $("map").hidden = aMode !== "agro"; agroShow(); if (aMode === "agro") { map.invalidateSize(); fitMap(); } };
+$("agroOp").oninput = agroOpacity;
+$("agroFile").onchange = async e => {
+  for (const f of [...e.target.files]){
+    try {
+      const buf = await f.arrayBuffer(), id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const a = await agroAdd(f.name.replace(/\.(kml|kmz)$/i, ""), buf, id);
+      await agroStore("put", {id, name: a.name, buf, on: true});
+      agroZoom(a);
+    } catch(err){ alert(`Couldn't open ${f.name}: ${err.message === "zip" ? "the KMZ reader didn't load (check the internet connection)" : err.message}. It needs to be a KML or KMZ file.`); }
+  }
+  e.target.value = ""; agroListDraw();
+};
 function fSetSum(n, quiet){
   // ECMWF's main model only reaches 10 days, so on the 15-day total its button is taken off
   // (and if it was the one showing, the ECMWF AI model shows instead)
