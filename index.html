@@ -4930,7 +4930,7 @@ async function agroAdd(name, buf, id, on = true){
   let bounds = null;
   group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
   const L1 = {id, name, layer: group, bounds, on, stats, hide: []};
-  try { L1.hide = JSON.parse(localStorage.getItem("agroHide:" + id) || "[]"); } catch(e){}
+  try { L1.hide = JSON.parse(localStorage.getItem("agroHide:" + id) || "[]"); L1.mm = localStorage.getItem("agroMM:" + id) === "1"; } catch(e){}
   if (stats.legend && L1.hide.length) stats.legend.layer.setHidden(L1.hide);
   AGRO.push(L1); if (on) agroGroup.addLayer(group);
   return L1;
@@ -4942,7 +4942,8 @@ function agroOpacity(){
 const esc2 = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 function legendHTML(lg, a, ai){
   const safeCol = c => /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : "";
-  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")} <span>· tap a colour to hide or show it</span>${a.hide.length ? ` <button type="button" data-all="${ai}">Show all</button>` : ""}</caption>${lg.rows.map((r, i) => {
+  const unit = mCol(lg) >= 0 ? ` <button type="button" data-mm="${ai}">${a.mm ? "Show in m" : "Convert to mm"}</button>` : "";
+  return `<table class="agroleg"><caption>${esc2(lg.name || "Legend")} <span>· tap a colour to hide or show it</span>${a.hide.length ? ` <button type="button" data-all="${ai}">Show all</button>` : ""}${unit}${a.mm ? `<span><br>mm worked out from the file's metres, which are rounded to the nearest 10 mm</span>` : ""}</caption>${legRows(a).map((r, i) => {
     const sw = r.map(c => safeCol(c.col)).find(Boolean), off = sw && a.hide.includes(sw);
     return `<tr${i && sw ? ` data-a="${ai}" data-c="${sw}" class="${off ? "off" : ""}"` : ""}>${r.map(c => { const col = safeCol(c.col);
     return i ? `<td${col ? ` style="background:${col};width:18px"` : ""}>${col ? "" : esc2(c.t)}</td>` : `<th>${esc2(c.t)}</th>`; }).join("")}</tr>`; }).join("")}</table>`;
@@ -4960,16 +4961,27 @@ function agroFsDraw(){
   if (!AGRO.some(a => a.on)) { box.innerHTML = ""; return; }
   const short = r => { const t = r.map(c => c.t).filter(Boolean); return t[0] || ""; };
   box.innerHTML = `<button type="button" class="fshead" aria-expanded="${agroFsOpen}">🗺 Layer colours ${agroFsOpen ? "▾" : "▸"}</button>` + (agroFsOpen ? shown.map(a => {
-    const ai = AGRO.indexOf(a), rows = a.stats.legend.rows.slice(1);
-    return `<div class="fsname">${esc2(a.stats.legend.name || a.name)}${a.hide.length ? ` <button type="button" data-all="${ai}">All</button>` : ""}</div><div class="fssw">${rows.map(r => {
+    const ai = AGRO.indexOf(a), rows = legRows(a).slice(1), hasM = mCol(a.stats.legend) >= 0;
+    return `<div class="fsname">${esc2(a.stats.legend.name || a.name)}${hasM ? ` ${a.mm ? "(mm)" : "(m)"}` : ""}${a.hide.length ? ` <button type="button" data-all="${ai}">All</button>` : ""}${hasM ? ` <button type="button" data-mm="${ai}">${a.mm ? "m" : "mm"}</button>` : ""}</div><div class="fssw">${rows.map(r => {
       const sw = r.map(c => /^#[0-9a-f]{6}$/i.test(c.col) ? c.col.toLowerCase() : "").find(Boolean); if (!sw) return "";
       return `<button type="button" data-a="${ai}" data-c="${sw}" class="${a.hide.includes(sw) ? "off" : ""}" title="${esc2(r.map(c => c.t).filter(Boolean).join(" · "))}"><i style="background:${sw}"></i>${esc2(short(r))}</button>`; }).join("")}</div>`; }).join("")
     + `<label class="fsop">See-through <input type="range" min="0.2" max="1" step="0.05" value="${$("agroOp").value}"></label>` : "");
   box.querySelector(".fshead").onclick = () => { agroFsOpen = !agroFsOpen; try { localStorage.setItem("agroFsOpen", agroFsOpen ? "1" : "0"); } catch(e){} agroFsDraw(); };
   box.querySelectorAll("button[data-c]").forEach(b => b.onclick = () => { const a = AGRO[+b.dataset.a], c = b.dataset.c; agroSetHide(a, a.hide.includes(c) ? a.hide.filter(x => x !== c) : [...a.hide, c]); });
   box.querySelectorAll("button[data-all]").forEach(b => b.onclick = () => agroSetHide(AGRO[+b.dataset.all], []));
+  box.querySelectorAll("button[data-mm]").forEach(b => b.onclick = () => { const a = AGRO[+b.dataset.mm]; agroSetMM(a, !a.mm); });
   const op = box.querySelector(".fsop input"); if (op) op.oninput = () => { $("agroOp").value = op.value; agroOpacity(); };
 }
+// metres to mm for a legend's depth/height column (the header with "(m)"); the file's rounding stays, so
+// "0.01" becomes "10", not anything finer
+const mCol = lg => lg.rows[0].findIndex(c => /\(m\)/i.test(c.t));
+const toMM = t => t.replace(/-?\d+(\.\d+)?/g, x => String(Math.round(parseFloat(x) * 1000)));
+function legRows(a){
+  const lg = a.stats.legend, k = mCol(lg);
+  if (!a.mm || k < 0) return lg.rows;
+  return lg.rows.map((r, i) => r.map((c, j) => j !== k ? c : {...c, t: i ? toMM(c.t) : c.t.replace(/\(m\)/i, "(mm)")}));
+}
+function agroSetMM(a, on){ a.mm = on; try { localStorage.setItem("agroMM:" + a.id, on ? "1" : "0"); } catch(e){} agroListDraw(); }
 function agroSetHide(a, cols){
   a.hide = cols; a.stats.legend.layer.setHidden(cols);
   try { localStorage.setItem("agroHide:" + a.id, JSON.stringify(cols)); } catch(e){}
@@ -4983,6 +4995,7 @@ function agroListDraw(){
   $("agroList").querySelectorAll("tr[data-c]").forEach(tr => tr.onclick = () => { const a = AGRO[+tr.dataset.a], c = tr.dataset.c;
     agroSetHide(a, a.hide.includes(c) ? a.hide.filter(x => x !== c) : [...a.hide, c]); });
   $("agroList").querySelectorAll("button[data-all]").forEach(b => b.onclick = e => { e.stopPropagation(); agroSetHide(AGRO[+b.dataset.all], []); });
+  $("agroList").querySelectorAll("button[data-mm]").forEach(b => b.onclick = e => { e.stopPropagation(); const a = AGRO[+b.dataset.mm]; agroSetMM(a, !a.mm); });
   $("agroList").querySelectorAll("input[data-i]").forEach(el => el.onchange = () => { const a = AGRO[+el.dataset.i]; a.on = el.checked; a.on ? agroGroup.addLayer(a.layer) : agroGroup.removeLayer(a.layer); agroListDraw(); });
   $("agroList").querySelectorAll("button[data-z]").forEach(el => el.onclick = () => agroZoom(AGRO[+el.dataset.z]));
   $("agroList").querySelectorAll("button[data-x]").forEach(el => el.onclick = async () => { const a = AGRO[+el.dataset.x];
