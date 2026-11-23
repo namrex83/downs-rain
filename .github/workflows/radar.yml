@@ -287,6 +287,61 @@ jobs:
               return rate, off
           
           
+          # ---------------------------------------------------------------- false echoes
+          # Light "rain" that isn't: ground clutter on still nights (an inversion bends the beam down onto hills and
+          # trees), speckle near the edge of range, and spots that keep echoing in dry weather. Two checks on every
+          # picture before it's added up, both only on light echoes (CLUTTER_LIGHT mm/h or less) so real storms are
+          # never touched:
+          #  1. speckle: a light echo with little other echo around it (under CLUTTER_COVER of the squares within
+          #     CLUTTER_R pixels) is dropped. Real light rain comes in sheets; clutter comes in specks.
+          #  2. a learned clutter map for each radar picture: how often each square echoes in pictures that are
+          #     otherwise nearly dry (under QUIET_AREA of the picture echoing). Squares echoing in over CLUTTER_FREQ of
+          #     those are masked for light echoes. It keeps learning (state/clutter_<picture>.npy), so new clutter is
+          #     picked up and squares that stop echoing are let back in.
+          CLUTTER_LIGHT = 3.2
+          CLUTTER_R = 3
+          CLUTTER_COVER = 0.25
+          QUIET_AREA = 0.03
+          CLUTTER_LEARN = 0.01
+          CLUTTER_FREQ = 0.3
+
+
+          def box_mean(m, r):
+              """The mean of m over the (2r+1) square around every point (outside the picture counts as 0)."""
+              k = 2 * r + 1
+              c = np.zeros((m.shape[0] + k, m.shape[1] + k), np.float64)
+              c[1:, 1:] = np.pad(m.astype(np.float64), r).cumsum(0).cumsum(1)
+              return ((c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / (k * k)).astype(np.float32)
+
+
+          def declutter(rate, key):
+              """rate with likely false light echoes removed (see above). key: which radar picture (its clutter map)."""
+              echo = rate > 0
+              if not echo.any():
+                  return rate
+              light = echo & (rate <= CLUTTER_LIGHT)
+              speck = light & (box_mean(echo, CLUTTER_R) < CLUTTER_COVER)
+              path = os.path.join(STATE, f"clutter_{key}.npy")
+              freq = None
+              try:
+                  freq = np.load(path)
+                  if freq.shape != rate.shape:
+                      freq = None
+              except (OSError, ValueError):
+                  pass
+              masked = (light & (freq > CLUTTER_FREQ)) if freq is not None else np.zeros_like(light)
+              if echo.mean() < QUIET_AREA:     # a nearly dry picture: learn from it
+                  f = freq if freq is not None else np.zeros(rate.shape, np.float32)
+                  f = (f * (1 - CLUTTER_LEARN) + CLUTTER_LEARN * echo).astype(np.float32)
+                  os.makedirs(STATE, exist_ok=True)
+                  np.save(path, f)
+              drop = speck | masked
+              if drop.any():
+                  rate = np.where(drop, 0.0, rate).astype(np.float32)
+                  log(f"    false echoes removed ({key}): {int(speck.sum())} speckle, {int((masked & ~speck).sum())} clutter-map square(s)")
+              return rate
+
+
           # ---------------------------------------------------------------- geometry
           def km_per_px(n):
               return 2.0 * RANGE_KM / n
@@ -1293,6 +1348,7 @@ jobs:
                           continue
                       png = src.get(FTP_RADAR_DIR, nm)
                       rate, off = decode_rate(png)
+                      rate = declutter(rate, PRODUCT)
                       n = rate.shape[0]
                       step = (t - last).total_seconds() / 60 if last else NOMINAL_STEP_MIN
                       win = st["windows"].setdefault(day, {"frames": 0, "minutes": 0.0, "n": n, "offset": off})
@@ -1324,6 +1380,7 @@ jobs:
                               last_c = t
                               continue
                           rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm), text_rows=24)
+                          rate = declutter(rate, PRODUCT_C)
                           step = (t - last_c).total_seconds() / 60 if last_c else NOMINAL_STEP_MIN
                           if step > MAX_STEP_MIN:
                               step = NOMINAL_STEP_MIN
@@ -1359,6 +1416,7 @@ jobs:
                               last_b = t
                               continue
                           rate, _ = decode_rate(src.get(FTP_RADAR_DIR, nm), text_rows=24)
+                          rate = declutter(rate, PRODUCT_B)
                           step = (t - last_b).total_seconds() / 60 if last_b else NOMINAL_STEP_MIN
                           if step > MAX_STEP_MIN:
                               step = NOMINAL_STEP_MIN
