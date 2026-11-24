@@ -1950,31 +1950,56 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   // creek columns go above or below the river, whichever side is shorter, each side packed in bands left to right
   const LZ = 96;   // room each side of the river for the station names, which alternate up and down at an angle
   const side = {up: [], dn: []};
-  // each column goes where it moves least from its join (left or right of it), on whichever side and band keeps
-  // the diagram shortest: placement score = sideways move + 3 x the height it adds
-  const tot = bands => bands.reduce((a, B) => a + B.h + 10, 0);
-  const place = (B, col) => {   // nearest free x to the join in this band
-    const occ = (B ? B.occ : []).slice().sort((p, q) => p[0] - q[0]), lo = 4, hi = W - col.w - 4;
-    const cands = [col.jx, col.jx - col.w + 10, ...occ.flatMap(([a, b2]) => [b2 + 14, a - col.w - 14])].map(x => Math.max(lo, Math.min(hi, x)));
-    let best = null;
-    for (const x of cands){ if (occ.some(([a, b2]) => x < b2 + 12 && x + col.w > a - 12)) continue;
-      const mv = Math.abs(x - col.jx) + (x > col.jx ? 0 : Math.max(0, col.jx - x - col.w + 20) * .5); if (!best || mv < best.mv) best = {x, mv}; }
-    return best; };
-  for (const col of C.sort((p, q) => q.h - p.h)){
-    let best = null;
-    for (const sd of ["up", "dn"]) for (let b = 0; b <= side[sd].length; b++){
-      const B = side[sd][b], pl = place(B, col); if (!pl) continue;
-      const grow = B ? Math.max(0, col.h - B.h) : col.h + 10, score = pl.mv * .5 + 6 * (tot(side[sd]) + grow);   // height counts heavily: one screen
-      if (!best || score < best.score) best = {score, sd, b, x: pl.x}; }
-    const bands = side[best.sd], B = bands[best.b] = bands[best.b] || {h: 0, occ: []};
-    col.side = best.sd; col.x = best.x; col.b = best.b; B.h = Math.max(B.h, col.h); B.occ.push([best.x, best.x + col.w]);
-  }
-  const bentUp0 = C.filter(c => c.side === "up" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx)), bentDn0 = C.filter(c => c.side === "dn" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx));
-  const bentUp = [], bentDn = [];   // no separate tracks: creeks run diagonally
-  const mainY = 16 + tot(side.up) + bentUp.length * 6 + (side.up.length ? LZ : 90);
-  bentUp.forEach((c, k) => c.ty = mainY - LZ + 8 - k * 6); bentDn.forEach((c, k) => c.ty = mainY + LZ - 8 + k * 6);
-  let yu = mainY - LZ - bentUp.length * 6 - 4; side.up.forEach(B => { B.y = yu - B.h; yu -= B.h + 10; });
-  let yd = mainY + LZ + bentDn.length * 6 + 4; side.dn.forEach(B => { B.y = yd; yd += B.h + 10; });
+  // each column's place: a side (above/below), a band (row of columns, nearest the river first) and an x. Chosen so
+  // that no creek line crosses another line or runs through another creek's names, then the least sideways move and
+  // the shortest diagram. Placed one by one, then each re-placed a few times with all the others known.
+  const tot = bands => bands.reduce((a, h) => a + h + 10, 0);
+  const geom = cs => {   // band heights and positions, each column's box and line, from the placements so far
+    const bh = {up: [], dn: []};
+    for (const c of cs) if (c.side) bh[c.side][c.b] = Math.max(bh[c.side][c.b] || 0, c.h);
+    for (const sd of ["up", "dn"]) for (let i = 0; i < bh[sd].length; i++) bh[sd][i] = bh[sd][i] || 0;
+    const mY = 16 + tot(bh.up) + (bh.up.length ? LZ : 90), by = {up: [], dn: []};
+    let yu = mY - LZ - 4; bh.up.forEach((h, i) => { by.up[i] = yu - h; yu -= h + 10; });
+    let yd = mY + LZ + 4; bh.dn.forEach((h, i) => { by.dn[i] = yd; yd += h + 10; });
+    const out = new Map();
+    for (const c of cs){ if (!c.side) continue; const y = by[c.side][c.b], up = c.side === "up", end = up ? y + c.h : y + 12, dy = up ? -1 : 1;
+      const pts = Math.abs(c.x - c.jx) < 4 ? [[c.x, mY], [c.x, end]] : [[c.jx, mY], [c.jx, mY + dy * 12], [c.x, end - dy * 14], [c.x, end]];
+      out.set(c, {pts, box: [c.x - 9, y - 2, c.x + c.w, y + c.h + 2]}); }
+    return {mY, H: Math.max(mY + (bh.dn.length ? 0 : LZ), yd), out, by, bh};
+  };
+  const segX = (p1, p2, p3, p4) => { const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)); };
+  const segBox = (p, q, [x1, y1, x2, y2]) => { if (Math.max(p[0], q[0]) < x1 || Math.min(p[0], q[0]) > x2 || Math.max(p[1], q[1]) < y1 || Math.min(p[1], q[1]) > y2) return false;
+    if ([p, q].some(([x, y]) => x > x1 && x < x2 && y > y1 && y < y2)) return true;
+    const e = [[[x1, y1], [x2, y1]], [[x2, y1], [x2, y2]], [[x2, y2], [x1, y2]], [[x1, y2], [x1, y1]]]; return e.some(([a, b]) => segX(p, q, a, b)); };
+  const cost = (cs, focus) => {   // crossings that involve the focus column, plus how far it moved and the height
+    const g = geom(cs), me = g.out.get(focus); let x = 0;
+    if (me) for (const [c, o] of g.out){ if (c === focus) continue;
+      for (let i = 0; i + 1 < me.pts.length; i++){
+        if (segBox(me.pts[i], me.pts[i + 1], o.box)) x++;
+        for (let j = 0; j + 1 < o.pts.length; j++) if (segX(me.pts[i], me.pts[i + 1], o.pts[j], o.pts[j + 1])) x++; }
+      for (let j = 0; j + 1 < o.pts.length; j++) if (segBox(o.pts[j], o.pts[j + 1], me.box)) x++;
+      if (c.side === focus.side && c.b === focus.b && focus.x < c.x + c.w + 12 && focus.x + focus.w > c.x - 12) x += 5; }   // overlapping boxes
+    return x * 1e5 + Math.abs(focus.x - focus.jx) * .4 + 4 * g.H;
+  };
+  const tryAll = (col, cs) => {
+    let best = null; const bands = sd => Math.max(...cs.filter(c => c !== col && c.side === sd).map(c => c.b + 1), 0);
+    for (const sd of ["up", "dn"]) for (let b = 0; b <= bands(sd); b++){
+      const same = cs.filter(c => c !== col && c.side === sd && c.b === b);
+      const xs = [col.jx, col.jx - col.w + 10, ...same.flatMap(c => [c.x + c.w + 14, c.x - col.w - 14])].map(x => Math.max(4, Math.min(W - col.w - 4, x)));
+      for (const x of xs){ Object.assign(col, {side: sd, b, x}); const sc = cost(cs, col); if (!best || sc < best.sc) best = {sc, side: sd, b, x}; } }
+    Object.assign(col, best);
+  };
+  C.sort((p, q) => q.h - p.h);
+  const placed = [];
+  for (const col of C){ placed.push(col); tryAll(col, placed); }
+  for (let pass = 0; pass < 2; pass++) for (const col of C) tryAll(col, C);
+  // tidy: drop empty bands
+  for (const sd of ["up", "dn"]){ const used = [...new Set(C.filter(c => c.side === sd).map(c => c.b))].sort((a, b2) => a - b2); C.forEach(c => { if (c.side === sd) c.b = used.indexOf(c.b); }); }
+  const G = geom(C);
+  for (const sd of ["up", "dn"]) G.bh[sd].forEach((h, i) => { side[sd][i] = {h, y: G.by[sd][i]}; });
+  const mainY = G.mY, yd = G.H;
   mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
     lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
   for (const col of C){
@@ -1995,7 +2020,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
       y += 6;
     }
   }
-  let H = Math.max(mainY + (side.dn.length ? 0 : LZ), yd);
+  let H = yd;
   main.forEach((x, k) => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s), numOf.get(x.i)); labs += txt(xOf.get(x.i), mainY, i, k % 2 ? "dn" : true); });
   // line bullet at the start of the river, Tokyo style
   const bul = (x, y, c, col) => `<rect x="${x - 15}" y="${y - 13}" width="26" height="26" rx="7" fill="${col}"/><text x="${x - 2}" y="${y + 5}" text-anchor="middle" class="tmbul">${c}</text>`;
