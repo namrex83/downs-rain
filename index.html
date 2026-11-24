@@ -1894,7 +1894,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
     return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const W = 1300, mainY = 150, PAD = 52, ROW = 26;
+  const W = 1300, PAD = 52, ROW = 26;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
   const sp = Math.max(42, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + k * sp));
@@ -1914,11 +1914,9 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     return `<circle cx="${x}" cy="${y}" r="${big ? 9 : 6.5}" fill="${fill}" stroke="${col}" stroke-width="3.5"><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title></circle>`
       + (i.ai ? `<text x="${x}" y="${y + 3}" text-anchor="middle" class="tmai">🤖</text>` : ""); };
   const txt = (x, y, i, rot) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan> <tspan class="tmh">${esc(i.h)}${i.up ? " ▲" : ""}</tspan>`;
-    const el = rot ? `<text transform="translate(${x + 3},${y - 12}) rotate(-38)">${t}</text>` : `<text x="${x + 12}" y="${y + 4}">${t}</text>`;
+    const el = rot === "dn" ? `<text transform="translate(${x + 3},${y + 18}) rotate(38)">${t}</text>` : rot ? `<text transform="translate(${x + 3},${y - 12}) rotate(-38)">${t}</text>` : `<text x="${x + 12}" y="${y + 4}">${t}</text>`;
     return i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">${el}</a>` : el; };
   let lines = "", dots = "", labs = "";
-  mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
-    lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
   // creeks: each hangs straight down from where it joins the river, its gauges as stations down it (the lowest the
   // furthest upstream), names beside them; a creek that runs into another creek continues further down that column
   const creeks = streams.filter(c => !tops.includes(c)), rootOf = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf(parent[c]);
@@ -1932,20 +1930,45 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     const w = Math.max(...chain.map(k => (k.c.length + (k.c === r ? 0 : 12)) * 6.4 + 22), ...chain.flatMap(k => k.st.map(z => z.i.name.length * 6.1 + z.i.h.length * 7 + 34)));
     const h = chain.reduce((a, k) => a + 14 + k.st.length * ROW + 10, 0);
     return {r, jx, chain, w: Math.min(260, w), h};
+  }).flatMap(col => {   // a tall column (a creek with many creeks running into it) split into shorter ones side by side
+    const MAXH = 250, out = []; let cur = null;
+    for (const k of col.chain){ const kh = 14 + k.st.length * ROW + 10;
+      if (!cur || cur.h + kh > MAXH) { cur = {...col, chain: [], h: 0}; out.push(cur); }
+      cur.chain.push(k); cur.h += kh; }
+    return out;
   });
-  const bands = [];
-  for (const col of C){
-    let b = 0;
-    for (;; b++){ const B = bands[b] = bands[b] || {right: 0, h: 0, cols: []}; const x = Math.max(col.jx, B.right + 14);
-      if (x + col.w <= W - 4 || !B.cols.length) { col.x = x; col.b = b; B.right = x + col.w; B.h = Math.max(B.h, col.h); B.cols.push(col); break; } }
+  // creek columns go above or below the river, whichever side is shorter, each side packed in bands left to right
+  const LZ = 112;   // room each side of the river for the station names, which alternate up and down at an angle
+  const side = {up: [], dn: []};
+  // each column goes where it moves least from its join (left or right of it), on whichever side and band keeps
+  // the diagram shortest: placement score = sideways move + 3 x the height it adds
+  const tot = bands => bands.reduce((a, B) => a + B.h + 18, 0);
+  const place = (B, col) => {   // nearest free x to the join in this band
+    const occ = (B ? B.occ : []).slice().sort((p, q) => p[0] - q[0]), lo = 4, hi = W - col.w - 4;
+    const cands = [col.jx, col.jx - col.w + 10, ...occ.flatMap(([a, b2]) => [b2 + 14, a - col.w - 14])].map(x => Math.max(lo, Math.min(hi, x)));
+    let best = null;
+    for (const x of cands){ if (occ.some(([a, b2]) => x < b2 + 12 && x + col.w > a - 12)) continue;
+      const mv = Math.abs(x - col.jx) + (x > col.jx ? 0 : Math.max(0, col.jx - x - col.w + 20) * .5); if (!best || mv < best.mv) best = {x, mv}; }
+    return best; };
+  for (const col of C.sort((p, q) => q.h - p.h)){
+    let best = null;
+    for (const sd of ["up", "dn"]) for (let b = 0; b <= side[sd].length; b++){
+      const B = side[sd][b], pl = place(B, col); if (!pl) continue;
+      const grow = B ? Math.max(0, col.h - B.h) : col.h + 18, score = pl.mv + 3 * (tot(side[sd]) + grow);
+      if (!best || score < best.score) best = {score, sd, b, x: pl.x}; }
+    const bands = side[best.sd], B = bands[best.b] = bands[best.b] || {h: 0, occ: []};
+    col.side = best.sd; col.x = best.x; col.b = best.b; B.h = Math.max(B.h, col.h); B.occ.push([best.x, best.x + col.w]);
   }
-  const bent = C.filter(c => Math.abs(c.x - c.jx) > 4); bent.forEach((c, k) => c.ty = mainY + 14 + k * 6);
-  let yb = mainY + 26 + bent.length * 6; bands.forEach(B => { B.y = yb; yb += B.h + 18; });
+  const bentUp = C.filter(c => c.side === "up" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx)), bentDn = C.filter(c => c.side === "dn" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx));
+  const mainY = 16 + tot(side.up) + bentUp.length * 6 + (side.up.length ? LZ : 90);
+  bentUp.forEach((c, k) => c.ty = mainY - LZ + 8 - k * 6); bentDn.forEach((c, k) => c.ty = mainY + LZ - 8 + k * 6);
+  let yu = mainY - LZ - bentUp.length * 6 - 4; side.up.forEach(B => { B.y = yu - B.h; yu -= B.h + 18; });
+  let yd = mainY + LZ + bentDn.length * 6 + 4; side.dn.forEach(B => { B.y = yd; yd += B.h + 18; });
+  mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
+    lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
   for (const col of C){
-    const x = col.x, by = bands[col.b].y, rc = streamColour(col.r);
-    // the run from the river: straight down at the join, then a 45° bend over to its column
-    // each bent run gets its own track just under the river, so none of them lie along it or on each other
-    const d = col.ty == null ? `M${x} ${mainY} V${by + 12}` : `M${col.jx} ${mainY} V${col.ty} H${x} V${by + 12}`;
+    const x = col.x, by = side[col.side][col.b].y, rc = streamColour(col.r), up = col.side === "up", end = up ? by + col.h : by + 12;
+    const d = col.ty == null ? `M${x} ${mainY} V${end}` : `M${col.jx} ${mainY} V${col.ty} H${x} V${end}`;
     lines += `<path d="${d}" fill="none" stroke="${rc}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" opacity="${col.b ? .7 : 1}"/>`;
     let y = by;
     for (const k of col.chain){
@@ -1958,8 +1981,8 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
       y += 10;
     }
   }
-  let H = Math.max(mainY + 30, yb);
-  main.forEach(x => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s), numOf.get(x.i)); labs += txt(xOf.get(x.i), mainY, i, true); });
+  let H = Math.max(mainY + (side.dn.length ? 0 : LZ), yd);
+  main.forEach((x, k) => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s), numOf.get(x.i)); labs += txt(xOf.get(x.i), mainY, i, k % 2 ? "dn" : true); });
   // line bullet at the start of the river, Tokyo style
   const bul = (x, y, c, col) => `<rect x="${x - 15}" y="${y - 13}" width="26" height="26" rx="7" fill="${col}"/><text x="${x - 2}" y="${y + 5}" text-anchor="middle" class="tmbul">${c}</text>`;
   if (main.length) labs = bul(PAD - 30, mainY, code[tops[0]], streamColour(tops[0])) + labs;
