@@ -388,6 +388,7 @@ details.discfold{text-align:left}
   .tap{padding:6px 10px;font-size:.86rem}
   .tlmid{padding:3px 10px 3px} .tltime{font-size:.84rem} .tlticks{height:15px;font-size:.7rem}
   .tlmid .transport{margin:3px auto 1px}
+  .timing svg{max-height:150px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
   .addread{font-size:.9rem!important}
@@ -933,12 +934,15 @@ const twoCol = (() => {
   return () => {
     const w = innerWidth >= 1000;
     if (w === wide) return; wide = w;
+    const tw = document.getElementById("fTiming").parentElement;   // Forecast's rain timing: beside the map on a computer
     if (w) {
       wrap.insertBefore(cols, order[0]);
       for (const e of order) { if (e === row) { left.appendChild(row); right.appendChild(side); } else right.appendChild(e); }
+      side.insertBefore(tw, side.firstChild);
     } else {
       for (const e of order) wrap.appendChild(e);
       row.appendChild(side); cols.remove();
+      row.insertBefore(tw, side);
     }
   };
 })();
