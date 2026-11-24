@@ -1969,7 +1969,8 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     const bands = side[best.sd], B = bands[best.b] = bands[best.b] || {h: 0, occ: []};
     col.side = best.sd; col.x = best.x; col.b = best.b; B.h = Math.max(B.h, col.h); B.occ.push([best.x, best.x + col.w]);
   }
-  const bentUp = C.filter(c => c.side === "up" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx)), bentDn = C.filter(c => c.side === "dn" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx));
+  const bentUp0 = C.filter(c => c.side === "up" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx)), bentDn0 = C.filter(c => c.side === "dn" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx));
+  const bentUp = [], bentDn = [];   // no separate tracks: creeks run diagonally
   const mainY = 16 + tot(side.up) + bentUp.length * 6 + (side.up.length ? LZ : 90);
   bentUp.forEach((c, k) => c.ty = mainY - LZ + 8 - k * 6); bentDn.forEach((c, k) => c.ty = mainY + LZ - 8 + k * 6);
   let yu = mainY - LZ - bentUp.length * 6 - 4; side.up.forEach(B => { B.y = yu - B.h; yu -= B.h + 10; });
@@ -1978,7 +1979,10 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
   for (const col of C){
     const x = col.x, by = side[col.side][col.b].y, rc = streamColour(col.r), up = col.side === "up", end = up ? by + col.h : by + 12;
-    const d = col.ty == null ? `M${x} ${mainY} V${end}` : `M${col.jx} ${mainY} V${col.ty} H${x} V${end}`;
+    // a creek runs straight from where it joins the river to its column, at whatever angle that takes (a short
+    // drop off the river first, so it leaves the line cleanly), instead of along shared tracks
+    const dy = up ? -1 : 1, kick = mainY + dy * 12, near = end - dy * 14;
+    const d = Math.abs(x - col.jx) < 4 ? `M${x} ${mainY} V${end}` : `M${col.jx} ${mainY} V${kick} L${x} ${near} V${end}`;
     lines += `<path d="${d}" fill="none" stroke="${rc}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" opacity="${col.b ? .7 : 1}"/>`;
     let y = by;
     for (const k of col.chain){
