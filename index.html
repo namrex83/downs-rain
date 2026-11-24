@@ -327,6 +327,20 @@ body.extrastab .pin, body.extrastab .pinlabel{display:none}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
 .agropop{max-width:240px;font-size:.82rem} .agropop table{border-collapse:collapse} .agropop td{padding:1px 4px;border-bottom:1px solid #eee}
+details.fold{margin:6px 0 0}
+details.fold>summary{cursor:pointer;font:600 .82rem var(--body);color:var(--accent);list-style:none;display:inline-flex;align-items:center;gap:5px;padding:3px 0}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"ⓘ";font-size:.9rem}
+details.fold>summary::after{content:"▸";font-size:.75rem;transition:transform .15s}
+details.fold[open]>summary::after{transform:rotate(90deg)}
+details.discfold>summary::before{content:""}
+details.discfold{text-align:left}
+@media (min-width:1000px){
+  body header{padding-bottom:8px}
+  /* Rainfall: the gauge table scrolls in its own box, so the page fits the screen; the headings stay in view */
+  section.panel.rainOnly .tablewrap{max-height:max(220px,calc(100vh - 540px));overflow:auto}
+  section.panel.rainOnly #gauges thead th{position:sticky;top:0;background:var(--panel);z-index:1}
+}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
 .calhead{display:flex;justify-content:space-between;align-items:center}
@@ -819,7 +833,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <p class="note"><b>Severity:</b> CAPE and shear combined (the square root of 2 × CAPE times the shear in m/s), a measure storm researchers use for how violent storms can get. Under 400 severe storms are unlikely; 400–1000 severe storms possible; 1000–1600 significant severe (large hail, damaging winds); 1600+ high-end. It is turned down where the air near the ground isn't unstable, and where a cap of stable air holds storms back (the inhibition, or "cap", in the tap readout; over about 50 J/kg is a real lid, as after a clear night). It shows how bad storms could be where they form, not where they will form. <b>Lifted index:</b> how much warmer than the surrounding air a surface parcel would be at about 5.5 km. Below 0 it keeps rising on its own; −4 to −6 is unstable, −6 or lower very unstable. <b>CAPE:</b> the energy available to updrafts; 1000+ J/kg is plenty for strong storms. <b>Shear:</b> change in wind between the ground and about 5.5 km; 30+ knots lets storms organise, 40+ suits supercells (large hail, damaging winds, rarely tornadoes). <b>Helicity</b> (0–3 km storm-relative helicity): how much the winds in the lowest 3 km turn and strengthen with height, which is what spins a storm's updraft. Worked out for the storm that rotates clockwise (the Southern Hemisphere supercell, usually moving left of the upper winds), so higher numbers mean more rotation. 100+ m²/s² supports supercells; 150–250+ strong rotation; high helicity with moist air near the ground is the tornado signal. <b>Supercell</b> (supercell composite): CAPE × helicity × shear in one number, the best single guide here to where supercells could form. Under 1 unlikely; 1–4 supercells possible; 4–8 likely if storms fire; 8+ a classic big supercell day. It is cut where a cap holds storms back. <b>Combined</b> shows where the ingredients overlap, with the severe areas graded by severity so the worst spots stand out. None of these says whether something will set storms off (a trough, front or sea breeze), so the BOM forecasts and warnings remain the ones to act on.</p>
   </section>
   <p class="note rainOnly">Radar rain rates come from Bureau of Meteorology images from the Toowoomba (Mt Kynoch) and Brisbane (Mt Stapylton) radars, added up every few minutes; each spot leans on the nearer radar, blending smoothly between them (Brisbane from the rain day ending 9am Sat 7 Nov 2026; earlier days, and any day the Brisbane radar misses much of, are Toowoomba only). Each 9am the total is scaled to match the BOM gauges, then nudged locally near each gauge. Radar reads less reliably far from the radars, behind hills and in hail. Satellite imagery © Esri and partners; street map © OpenStreetMap contributors.</p>
-  <p class="note" id="disclaimer"></p>
+  <details class="fold discfold"><summary>Disclaimer</summary><p class="note" id="disclaimer"></p></details>
   <p class="note" id="pagever" style="text-align:center;font-size:.72rem;color:var(--ink-3)"></p>
 </div>
 
@@ -831,6 +845,19 @@ const $ = id => document.getElementById(id);
 // the boxes under the map (timelines, readouts, chart, colour keys) are gathered into one panel (#side), which
 // on a phone sits just under the map as before. On a computer (1000 px or wider) the page becomes two columns:
 // the map on the left, and on the right everything else in its usual order, with #side where the map was.
+// the long explanations under each tab: folded into one "About this map" line (tap to open), so the map,
+// controls and chart fit on the screen; ones with an id are filled in by the page and stay as they are
+(function foldNotes(){
+  const groups = [];
+  document.querySelectorAll("section.panel").forEach(sec => { const ps = [...sec.children].filter(e => e.matches("p.note") && !e.id); if (ps.length) groups.push(ps); });
+  const loose = [...document.querySelectorAll("p.note.rainOnly")].filter(e => !e.closest("section.panel")); if (loose.length) groups.push(loose);
+  for (const ps of groups){
+    if (ps.reduce((a, e) => a + e.textContent.length, 0) < 160) continue;
+    const d = document.createElement("details"); d.className = "fold"; d.innerHTML = "<summary>About this map</summary>";
+    ps[0].before(d); ps.forEach(e => d.appendChild(e));
+    const cls = [...ps[0].classList].find(c => /Only$/.test(c)); if (cls && !ps[0].closest("section.panel")) { d.classList.add(cls); d.hidden = ps[0].hidden; }
+  }
+})();
 const twoCol = (() => {
   const wrap = document.querySelector(".wrap"), row = document.getElementById("mapRow"), side = document.createElement("div"); side.id = "side";
   side.appendChild(document.getElementById("fChart"));
@@ -3614,8 +3641,8 @@ function namInfo(){
   if (!sk || !Object.keys(sk).length) return namLogo(16) + " <b>Namrex AI</b>: the models blended by how well each has done lately over the Downs. There are no scores yet, so for now all three count the same; the weights start moving as rain days are checked against the radar and gauges.";
   const rows = ["A", "B", "C"].filter(b => sk[b]).map(b => `<tr><td>${lab[b]}</td><td>${pct(sk[b].w)}</td><td class="n">${sk[b].n}</td></tr>`).join("");
   return `${namLogo(16)} <b>Namrex AI</b>: GFS, ECMWF and ECMWF AI blended by how close each has been to the rain that actually fell over the Downs and SEQ (the gauge-corrected radar maps) on the last ${SKILL.window} days' rain days, with more weight on the ones getting it right. Rechecked every day.`
-    + `<table class="slim namtbl"><thead><tr><th>Forecast for</th><th>Weights now</th><th class="n">Rain days</th></tr></thead><tbody>${rows}</tbody></table>`
-    + `<span class="gnote2">The gold Namrex AI line on the chart is this same blend, so it ends on the map's figure. The other models on the chart are there to compare.</span>`;
+    + `<details class="fold"><summary>Weights now</summary><table class="slim namtbl"><thead><tr><th>Forecast for</th><th>Weights now</th><th class="n">Rain days</th></tr></thead><tbody>${rows}</tbody></table>`
+    + `<span class="gnote2">The gold Namrex AI line on the chart is this same blend, so it ends on the map's figure. The other models on the chart are there to compare.</span></details>`;
 }
 async function startForecast(){
   [...$("fModel").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.m === fModel));
