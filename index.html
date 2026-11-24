@@ -4944,15 +4944,24 @@ function timingData(d){
   const chance = [...Array(8)].map((_, b) => ms.filter(m => hr[m][b*3] + hr[m][b*3+1] + hr[m][b*3+2] >= 0.5).length);
   return {start, end, nam, chance, n: ms.length, blend: nm.length >= 2};
 }
-function stormHours(st, at, start, end){   // GFS storm category each hour at the nearest point: 2 organised storms, 3+ severe
+// storm category each hour at the pin, the worse of GFS (hourly) and ECMWF (3-hourly, filled across its 3 hours):
+// 1 storms possible, 2 organised storms, 3+ severe
+function stormHours(sts, at, start, end){
+  const out = new Array(24).fill(0); let any = false;
+  for (const st of sts){ const h = stormHours1(st, at, start, end); if (h) h.forEach((v, i) => { if (v > out[i]) { out[i] = v; any = true; } }); }
+  return any ? out : null;
+}
+function stormHours1(st, at, start, end){
   if (!st || !st.times) return null;
   let r = 0, c = 0, bd = 1e9;
   st.lats.forEach((la, i) => st.lons.forEach((lo, j) => { const d = Math.hypot(la - at.lat, lo - at.lng); if (d < bd) { bd = d; r = i; c = j; } }));
   if (bd > 0.5) return null;
   const k = r * st.lons.length + c, out = new Array(24).fill(0); let any = false;
-  st.times.forEach((t, ti) => { if (t <= start || t > end) return;
-    const v = category(st.li[ti][k], st.cape[ti][k], st.shear[ti][k], st.cin ? st.cin[ti][k] : null), i = Math.min(23, Math.round((t - start) / 3600) - 1);
-    out[i] = Math.max(out[i], v); if (v) any = true; });
+  const stepH = st.times.length > 1 ? Math.max(1, Math.round((st.times[1] - st.times[0]) / 3600)) : 1;
+  st.times.forEach((t, ti) => { if (t <= start || t - stepH * 3600 >= end) return;
+    const v = category(st.li[ti][k], st.cape[ti][k], st.shear[ti][k], st.cin ? st.cin[ti][k] : null);
+    for (let q = 0; q < stepH; q++){ const i = Math.round((t - start) / 3600) - 1 - q; if (i < 0 || i > 23) continue; out[i] = Math.max(out[i], v); }
+    if (v) any = true; });
   return any ? out : null;
 }
 async function fTiming(){
@@ -4963,7 +4972,7 @@ async function fTiming(){
   if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
   if (FRAC === undefined) { FRAC = null; try { FRAC = await getJSON("data/om_frac.json"); } catch(e){} }
   if (FAUS === undefined) { FAUS = null; try { FAUS = await getJSON("data/frac_aus.json"); } catch(e){} }
-  if (STJ === undefined) { STJ = null; try { STJ = await getJSON("data/storms.json"); } catch(e){} }
+  if (STJ === undefined) { STJ = []; for (const f of ["data/storms.json", "data/storms_ecmwf.json"]) { try { STJ.push(await getJSON(f)); } catch(e){} } }
   if (fDayNow() !== d) return;
   const at = FC.pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), where = FC.pinned ? "the pin" : SPOT.name;
   const {nam, n} = td, top = Math.max(1, ...nam), half = Math.ceil(n / 2);
@@ -4984,14 +4993,17 @@ async function fTiming(){
     sum = likely.length === 8 ? `Rain likely <b>on and off all day</b>` : `Most likely <b>${runs.slice(0, 2).map(([a, b]) => `${FR_CLOCK[a]}–${FR_CLOCK[b + 1]}`).join("</b> and <b>")}</b>`;
     sum += `${left[peak] >= 0.3 ? `, heaviest around ${hrClock(peak)}` : ""} (${amt}). ${maxC >= Math.max(2, n - 1) ? "Models agree well." : "Models partly agree."}`;
   } else sum = `Low confidence: only ${maxC} of ${n} models have rain, mostly ${FR_CLOCK[best]}–${FR_CLOCK[best + 1]} (${amt}).`;
-  if (storm){ const sv = storm.map((v, i) => v >= 3 ? i : -1).filter(i => i >= 0), og = storm.map((v, i) => v >= 2 ? i : -1).filter(i => i >= 0);
-    const hs = sv.length ? sv : og; if (hs.length) sum += ` <b style="color:#c62828">${sv.length ? "Severe storm" : "Storm"} risk ${hrClock(hs[0])}–${hrClock(hs[hs.length - 1] + 1)}</b> (GFS).`; }
+  if (storm){   // each level's own spells of hours, e.g. "Storms possible 10am–7pm · organised storms 8am–10am"
+    const spells = L => { const r = []; storm.forEach((v, i) => { if (v !== L && !(L === 3 && v >= 3)) return; const last = r[r.length - 1]; if (last && last[1] === i - 1) last[1] = i; else r.push([i, i]); }); return r; };
+    const txt = r => r.length === 1 && r[0][0] === 0 && r[0][1] === 23 ? "all day" : r.slice(0, 2).map(([a, b]) => `${hrClock(a)}–${hrClock(b + 1)}`).join(", ");
+    const parts = [[3, "Severe storm risk", "#c62828"], [2, "organised storms", "#d9660a"], [1, "storms possible", "#9a7a00"]].map(([L, w, c]) => { const r = spells(L); return r.length ? `<b style="color:${c}">${w} ${txt(r)}</b>` : ""; }).filter(Boolean);
+    if (parts.length) { parts[0] = parts[0].replace(/>([a-z])/, (m, ch) => ">" + ch.toUpperCase()); sum += ` ${parts.join(" · ")} (GFS / ECMWF).`; } }
   // the strip
   const Wd = 480, bw = Wd / 24, y0 = 14, bh = 56, cy = y0 + bh + 6, ch = 20;
   let g = "";
   for (let i = 9; i < 19; i++) g += `<rect x="${i * bw}" y="${y0 - 4}" width="${bw}" height="${bh + 4}" fill="rgba(40,60,110,.09)"/>`;   // 7pm to 5am
   if (past) g += `<rect x="0" y="${y0 - 4}" width="${past * bw}" height="${bh + ch + 10}" fill="var(--panel)" fill-opacity=".6" pointer-events="none"/><text pointer-events="none" x="${Math.max(2, past * bw - 3)}" y="${y0 + 10}" text-anchor="${past > 2 ? "end" : "start"}">now</text><line x1="${past * bw}" x2="${past * bw}" y1="${y0 - 4}" y2="${y0 + bh}" stroke="var(--ink-3)" stroke-dasharray="2 2"/>`;
-  if (storm) storm.forEach((v, i) => { if (v >= 2) g += `<rect x="${i * bw + 1}" y="2" width="${bw - 2}" height="5" rx="2" fill="${v >= 3 ? "#d32f2f" : "#f5a623"}"/>`; });
+  if (storm) storm.forEach((v, i) => { if (v >= 1) g += `<rect x="${i * bw + 1}" y="2" width="${bw - 2}" height="5" rx="2" fill="${v >= 3 ? "#d32f2f" : v >= 2 ? "#f08a24" : "#f2c94c"}"><title>${v >= 3 ? "Severe storms" : v >= 2 ? "Organised storms" : "Storms possible"}</title></rect>`; });
   nam.forEach((v, i) => { if (v < 0.05) return; const h = Math.max(2, v / top * bh);
     g += `<rect x="${i * bw + 2}" y="${y0 + bh - h}" width="${bw - 4}" height="${h}" rx="2" fill="var(--accent)"><title>${hrClock(i)}: ${fmt(v)} mm</title></rect>`; });
   g += `<line x1="0" x2="${Wd}" y1="${y0 + bh}" y2="${y0 + bh}" stroke="var(--line)"/>`;
@@ -5015,7 +5027,7 @@ async function fTiming(){
     <p class="tmsum">${sum}</p>
     <svg viewBox="0 0 ${Wd + 34} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
     ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span class="tmtap">or tap a 3-hour block</span>`}</div>` : ""}
-    <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
+    <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · strip above the bars: <span style="color:#f2c94c">■</span> storms possible <span style="color:#f08a24">■</span> organised storms <span style="color:#d32f2f">■</span> severe (GFS / ECMWF)` : ""}</div>`;
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
