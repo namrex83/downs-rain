@@ -115,6 +115,17 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
   #cols{display:flex;gap:16px;align-items:flex-start}
   #leftCol{flex:0 0 auto;position:sticky;top:10px}
   #rightCol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px}
+  /* the right-hand column scrolls inside itself beside the map, so the page fits the window */
+  #rightCol{max-height:var(--colH,none);overflow-y:auto;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin}
+  #rightCol>*{flex-shrink:0}
+  body{padding-bottom:8px}
+}
+@media (min-width:1000px) and (max-height:760px){   /* short laptop windows: a slimmer header */
+  body header{padding-top:calc(6px + env(safe-area-inset-top,0px))!important;padding-bottom:6px!important}
+  header h1{font-size:1.55rem}
+  header .seg button{min-height:42px!important;padding:0 8px!important;font-size:.72rem!important}
+  header .seg button svg{width:16px;height:16px}
+  .wrap{gap:8px}
 }
 #mapRow{display:flex;flex-direction:column;gap:12px}
 #side{display:flex;flex-direction:column;gap:12px}
@@ -2675,6 +2686,7 @@ function locateErr(err){
 }
 function fitMap(){
   const el = $("map");
+  if (innerWidth >= 1000 && $("cols")) document.documentElement.style.setProperty("--colH", Math.max(300, Math.round(innerHeight - $("cols").getBoundingClientRect().top - 8)) + "px");
   if (el.classList.contains("full")) { map.invalidateSize(); return; }   // full screen: leave it filling the screen
   if (tab === "wind" || (tab === "outlook" && aMode !== "agro")) { el.style.height = ""; return; }   // no map on these
   if (tab === "outlook" && innerWidth < 1000) { el.style.width = ""; el.style.minHeight = "240px"; el.style.height = Math.round(Math.max(240, innerHeight * 0.58)) + "px"; map.invalidateSize(); return; }
@@ -3341,7 +3353,7 @@ function fcChartPx(){
   const box = $("fChart"), svg = box.querySelector("svg:not(.namlogo)"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
   if (!m.height || !c.height) return 300;
   const other = box.offsetHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
-  return Math.max(300, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
+  return Math.max(170, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
 }
 // after drawing, if the box still doesn't end level with the map (its text wrapped differently), draw once more
 setTimeout(() => { const draw0 = fChartDraw;
