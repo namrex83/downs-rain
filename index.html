@@ -152,8 +152,8 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
-  .tubemap text{font:600 11px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
-  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
+  .tubemap text{font:600 12.5px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
+  .tubemap .tmc{font:700 italic 12px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
@@ -1898,7 +1898,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const box = $("riverTube"), cw = Math.max(600, box.clientWidth || 1200), top = box.getBoundingClientRect().top || 300;
   const avail = Math.max(380, innerHeight - Math.max(60, Math.min(top, 330)) - 70);
   let best = null;
-  for (const W of [1300, 1500, 1750, 2000, 2300]){
+  for (const W of [1300, 1450]){   // no wider: the names would be too small to read
     const r = tubeMap1(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H);
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
   return best.html;
@@ -2046,7 +2046,9 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     <p class="note" style="margin:2px 0 0">Station numbers run down each line (C01 at the top of the Condamine; on a creek, 1 is nearest where it joins). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
 function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || innerWidth < 1000) return;
-  document.documentElement.style.setProperty("--tubeH", Math.max(340, Math.round(innerHeight - sv.getBoundingClientRect().top - 10)) + "px"); }
+  const vb = sv.viewBox.baseVal, full = sv.parentElement.clientWidth / vb.width * vb.height;   // its height at full width
+  const fit = innerHeight - sv.getBoundingClientRect().top - 10;
+  document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * .9, 340)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   tubeMain = b.dataset.m === "1"; drawRivers(FW); });
