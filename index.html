@@ -125,6 +125,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.ctable #watchPanel > #secRiv{grid-column:1;grid-row:1 / span 20}
   body.ctable #watchPanel > :not(#secRiv){grid-column:2}
   body.ctable #watchPanel > #secWatch{margin-top:0}
+  body.clines #watchPanel:not([hidden]){grid-template-columns:minmax(300px,0.62fr) minmax(0,1fr)}   /* river lines are narrow: give the watch and warnings the room */
 }
 .cshowfield{flex-basis:100%} #cShow{width:max-content;max-width:100%} #cShow button{font-weight:600}
 #fTap.merged{display:none}   /* its text is in the chart's heading */
@@ -2429,7 +2430,7 @@ $("catchSel").onchange = () => pickCatch(true);
 // Table / Map view on the Catchments tab: it opens on the table (the map is busy); the map is a button away
 function cShowSync(){
   const t = tab === "catch" && !cMapOn;
-  document.body.classList.toggle("ctable", t);
+  document.body.classList.toggle("ctable", t); document.body.classList.toggle("clines", t && cList === "lines");
   [...$("cShow").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.s === "map" ? cMapOn : !cMapOn && b.dataset.s === cList));
   $("catchSelLbl").textContent = cMapOn ? "Catchment (or tap one on the map)" : "Catchment";
 }
@@ -4522,6 +4523,8 @@ function setTab(t, first){
     mainView = {c: map.getCenter(), z: map.getZoom()};
     const v = fcView || {c: map.getCenter(), z: fcZoom()};
     map.setView(v.c, v.z, {animate: false});
+    if (!fcView) { const sz = map.getSize(), e = map.latLngToContainerPoint([v.c.lat !== undefined ? v.c.lat : v.c[0], 154.6]).x;   // just past the coast is the edge of the forecast
+      if (e < sz.x - 10) map.panBy([Math.round(e - sz.x + 10), 0], {animate: false}); }
   }
   if (t === "outlook" && tab !== "outlook") aMode = "links";   // Extras always opens on Outlooks
   tab = t;
@@ -5029,10 +5032,11 @@ async function agroShow(){
     agroListDraw();
     const vis = AGRO.filter(a => a.on); if (vis.length) agroZoom(vis[vis.length - 1]);
   }
+  if (!AGRO.some(a => a.on)) { const c = MYLL || [-27.18, 151.26]; map.setView(c, MYLL ? 13 : 9, {animate: false}); }   // nothing open: your area (or Dalby)
 }
 function agroHide(){ map.removeLayer(agroGroup); document.body.classList.remove("agrotab"); }
 $("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; aMode = b.dataset.m;
-  $("map").hidden = aMode !== "agro"; agroShow(); if (aMode === "agro") { map.invalidateSize(); fitMap(); } };
+  $("map").hidden = aMode !== "agro"; if (aMode === "agro") { fitMap(); map.invalidateSize(); } agroShow(); };
 $("agroOp").oninput = agroOpacity;
 $("agroFile").onchange = async e => {
   for (const f of [...e.target.files]){
