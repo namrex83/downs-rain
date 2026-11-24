@@ -389,7 +389,7 @@ details.discfold{text-align:left}
   .tlmid{padding:3px 10px 3px} .tltime{font-size:.84rem} .tlticks{height:15px;font-size:.7rem}
   .tlmid .transport{margin:3px auto 1px}
   body.fcdaily #fChart .cfoot>span{display:none}   /* Daily: the chart's explanation line hidden to make room for the timing */
-  .timing svg{max-height:105px} .timing .tmkey{display:none} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
+  .timing svg{max-height:105px} .timing .tmkey{margin-top:2px} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
   .addread{font-size:.9rem!important}
@@ -4964,7 +4964,7 @@ async function fTiming(){
     <p class="tmsum">${sum}</p>
     <svg viewBox="0 0 ${Wd} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
     ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span>or tap a 3-hour block</span>`}</div>` : ""}
-    <div class="tmkey">Bars: Namrex AI rain each hour${td.blend ? "" : " (average of the models)"} · blocks: how many of the ${n} models have rain (0.5 mm+) in those 3 hours · night shaded${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
+    <div class="tmkey"><b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of the ${n} weather models have rain (0.5 mm+) in those 3 hours; the more models, the surer the timing · bars: Namrex AI rain each hour${td.blend ? "" : " (average of the models)"} · night shaded${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
