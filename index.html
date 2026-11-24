@@ -485,6 +485,9 @@ td.n,th.n{text-align:right;font:500 .82rem var(--mono);font-variant-numeric:tabu
 #map.full{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;min-height:0!important;z-index:3000;border-radius:0!important;margin:0!important}
 body.mapfull{overflow:hidden}
 #map.full .leaflet-top{top:env(safe-area-inset-top,0px)}
+#map.full .mapkey{bottom:env(safe-area-inset-bottom,0px)}   /* iPhone: clear of the home bar and iOS 26's floating Safari toolbar */
+#map.full .leaflet-bottom{bottom:calc(15px + env(safe-area-inset-bottom,0px))!important}
+#map.full .leaflet-left{left:env(safe-area-inset-left,0px)} #map.full .leaflet-right{right:env(safe-area-inset-right,0px)}
 .fspanel{position:absolute;left:0;right:0;bottom:0;z-index:1000;max-height:58%;overflow:auto;background:none;   /* fully see-through: only the buttons show */
   padding:4px 10px calc(20px + env(safe-area-inset-bottom,0px))}
 .fspanel .eyebrow,.fspanel label{color:#1c2621;text-shadow:0 0 3px #fff,0 0 6px #fff,0 0 9px #fff;font-size:.56rem}
