@@ -372,6 +372,13 @@ details.discfold>summary::before{content:""}
 details.discfold{text-align:left}
 @media (min-width:1000px){
   body header{padding-bottom:8px}
+  /* Catchments: view buttons, area and catchment on one row (labels off), the river-lines box tighter, so the map gets the room */
+  #cControls .cshowfield{flex-basis:auto} #cControls{flex-wrap:nowrap;align-items:center;column-gap:8px}
+  #cControls .field>.eyebrow, #cControls .field>label{display:none}
+  #cControls .catchfield{flex:1 1 220px} #cControls .catchfield select{min-height:32px;padding-top:2px;padding-bottom:2px}
+  body.ctable #secRiv>summary{font-size:.86rem;padding:2px 0} body.ctable #secRiv{padding:6px 10px}
+  #cControls .seg button{white-space:nowrap;padding:0 9px}
+  body.ctable #riverTube{position:relative} body.ctable .tubesw{position:absolute;top:-30px;right:0;margin:0} body.ctable .tubesw button{min-height:26px;font-size:.76rem}
   /* tighter controls: the buttons and loop controls only as big as they need to be */
   .seg button{min-height:32px;padding:0 10px;font-size:.84rem}
   .transport{padding:2px 4px}
@@ -2039,7 +2046,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     <p class="note" style="margin:2px 0 0">Station numbers run down each line (C01 at the top of the Condamine; on a creek, 1 is nearest where it joins). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
 function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || innerWidth < 1000) return;
-  document.documentElement.style.setProperty("--tubeH", Math.max(420, Math.round(innerHeight - sv.getBoundingClientRect().top - 10)) + "px"); }
+  document.documentElement.style.setProperty("--tubeH", Math.max(340, Math.round(innerHeight - sv.getBoundingClientRect().top - 10)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   tubeMain = b.dataset.m === "1"; drawRivers(FW); });
