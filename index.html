@@ -397,6 +397,14 @@ details.discfold{text-align:left}
   .windpage>*{grid-column:1/-1} .windpage>.wloc{grid-column:1} .windpage>.wnow{grid-column:2;gap:26px;padding:4px 14px} .windpage>#wRange{grid-column:3;align-self:center}
   .wnow .big{font-size:1.35rem} .wnow .sub{margin-top:1px}
   body.fcdaily #fChart .cfoot>span{display:none}
+  /* Forecast: the loop and day labels go (the buttons say what they are), the day picker beside the loop buttons */
+  #fLoopField>.eyebrow, #fDayField>label{display:none}
+  #fControls{row-gap:5px;column-gap:6px} #fDayField select{min-height:32px;padding-top:2px;padding-bottom:2px;width:auto}
+  #fControls .seg button{padding:0 8px} #fDayField{flex:0 0 auto!important;align-self:flex-end}
+  #fControls .transport button{width:28px} #fControls .transport .tpplay{width:34px}
+  /* Daily's timing panel: the date (already in the picker) off, shorter bars */
+  .timing .tmhead span{display:none} .timing .tmsum{font-size:.8rem;line-height:1.3}
+  .timing .tmhead b{font-size:.86rem}
   /* the chart's Running total / Daily / Both buttons up in its heading row, small */
   #fChart{position:relative} #fChart .chead{padding-right:250px}
   #fChart .cmode{position:absolute;top:5px;right:8px;margin:0}
@@ -405,7 +413,7 @@ details.discfold{text-align:left}
   .timing .tmbtns{display:inline-flex;margin:2px 10px 0 0;vertical-align:middle;font-size:.74rem}
   .timing .tmbtns button{padding:2px 9px;font-size:.74rem}
   .timing .tmkey{display:inline;font-size:.68rem}
-  .timing svg{max-height:92px}   /* Daily: the chart's explanation line hidden to make room for the timing */
+  .timing svg{max-height:76px} .timing .tmtap, .timing .tmmore{display:none} .timing{padding:5px 10px}   /* Daily: the chart's explanation line hidden to make room for the timing */
   .timing svg{max-height:105px} .timing .tmkey{margin-top:2px} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
@@ -3497,7 +3505,7 @@ function fcChartPx(){
   const box = $("fChart"), svg = box.querySelector("svg:not(.namlogo)"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
   if (!m.height || !c.height) return 300;
   const other = box.offsetHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
-  return Math.max(110, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
+  return Math.max(105, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
 }
 // after drawing, if the box still doesn't end level with the map (its text wrapped differently), draw once more
 setTimeout(() => { const draw0 = fChartDraw;
@@ -4993,8 +5001,8 @@ async function fTiming(){
   box.innerHTML = `<div class="tmhead"><b>Rain timing at ${where}</b><span>${wd(addDays(d, -1))} 10am – ${wd(d)} ${part(d, {month: "short"})} 10am</span></div>
     <p class="tmsum">${sum}</p>
     <svg viewBox="0 0 ${Wd} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
-    ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span>or tap a 3-hour block</span>`}</div>` : ""}
-    <div class="tmkey"><b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of the ${n} weather models have rain (0.5 mm+) in those 3 hours; the more models, the surer the timing · bars: Namrex AI rain each hour${td.blend ? "" : " (average of the models)"} · night shaded${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
+    ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span class="tmtap">or tap a 3-hour block</span>`}</div>` : ""}
+    <div class="tmkey"><b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · bars: Namrex AI rain each hour${td.blend ? "" : " (average of the models)"} · night shaded</span>${storm ? ` · <span style="color:#d32f2f">■</span> severe storm risk, <span style="color:#f5a623">■</span> storms (GFS)` : ""}</div>`;
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
