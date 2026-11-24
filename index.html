@@ -3293,6 +3293,22 @@ const hDay = t => `${part(qDate(t), {weekday: "short"})} ${part(qDate(t), {day: 
 const hWhen = t => `${hDay(t)}, ${hHour(t)}`;
 // the chart's three views: running total, each day's own total as bars, rain in each 3 hours
 const fcButtons = () => `<div class="seg cmode"><button data-c="cum" aria-pressed="${fcMode === "cum"}">Running total</button><button data-c="bars" aria-pressed="${fcMode === "bars"}">Daily</button><button data-c="both" aria-pressed="${fcMode === "both"}">Both</button></div>`;
+// on a computer, how tall the chart drawing should be so the chart box ends level with the bottom of the map
+// (between 300 and 560 px): the map's bottom, less the box's top and everything in it besides the drawing
+function fcChartPx(){
+  if (innerWidth < 1000) return 300;
+  const box = $("fChart"), svg = box.querySelector("svg:not(.namlogo)"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
+  if (!m.height || !c.height) return 300;
+  const other = box.offsetHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
+  return Math.max(300, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
+}
+// after drawing, if the box still doesn't end level with the map (its text wrapped differently), draw once more
+setTimeout(() => { const draw0 = fChartDraw;
+  fChartDraw = function(){ draw0();
+    if (innerWidth < 1000 || fChartDraw.again || $("fChart").hidden) return;
+    const d = $("fChart").getBoundingClientRect().bottom - $("map").getBoundingClientRect().bottom;
+    if (Math.abs(d) > 6) { fChartDraw.again = true; try { draw0(); } finally { fChartDraw.again = false; } } };
+}, 0);
 function fChartDrawBars(){
   const spot = FC.pinned ? [FC.pinned.lat, FC.pinned.lng] : SPOT.ll;
   const {hourly, pinned} = FC, both = fcMode === "both";   // both: the running totals drawn over the bars, on a right-hand scale
@@ -3319,8 +3335,8 @@ function fChartDrawBars(){
     const x = bom.days.find(x => x.min != null && Math.abs(bomEnd(x.d) - e) <= 12 * 3600); return x || null; };
   const top = Math.max(2, ...shown.flatMap(m => tot[m].filter(v => v != null)), ...[...Array(nD)].map((_, k) => (bomDay(k) || {}).min || 0));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const cw = $("fChart").parentElement.clientWidth || 340, H0 = innerWidth >= 1000 ? 230 : 128;
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / 300)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 12, B0 = 20;
+  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
+  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 12, B0 = 20;
   let anySev = false;
   const slot = (W0 - L0 - R0) / nD, X = k => L0 + slot * (k + .5), Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax), bw = Math.min(34, slot * .62);
   let g = "";
@@ -3432,8 +3448,8 @@ function fChartDrawHourly(){
   const bomSum = cum ? bomDays.reduce((a, x) => a + x.min, 0) : 0;   // so the BOM line fits too
   const top = Math.max(cum ? 5 : 1, bomSum, ...shown.flatMap(m => vals[m].map(p => p[1])));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const cw = $("fChart").parentElement.clientWidth || 340, H0 = innerWidth >= 1000 ? 230 : 128;
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / 300)) : 340, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
+  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
+  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
   const X = t => L0 + (W0 - L0 - R0) * (t - t0) / (t1 - t0), Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax + 1e-9; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${+v.toFixed(1)}</text>`;
@@ -3515,9 +3531,9 @@ function fChartDraw(){
   const top = Math.max(cum ? 5 : 2, ...vals.flatMap(x => Object.values(x)));
   const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
   // on a phone 340 wide; on a computer the chart is as wide as its column but about 300 px tall
-  const cw = $("fChart").parentElement.clientWidth || 340, H0 = innerWidth >= 1000 ? 230 : 128;
+  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
   const both = fcMode === "both";   // the daily bars with the running totals over them (right-hand scale)
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / 300)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 8, B0 = 20;
+  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 8, B0 = 20;
   const X = i => L0 + (W0 - L0 - R0) * (i + (cum ? 1 : 0.5)) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
