@@ -1724,6 +1724,21 @@ async function stormFlags(){
     + `The models' storm ingredients, not a forecast that storms will form: check the Bureau's thunderstorm warnings.` : "";
 }
 // the worst storm category each model has within SEV_KM of a spot on a day: {gfs: 3, ecmwf: 2}
+// the forecast chart's storm dot for a day at the spot, from the storm model chosen in the rain timing panel
+// (ECMWF, GFS or both): severe within SEV_KM, storms possible / organised within 30 km. Returns [level, models].
+const stormSrc = () => { try { return localStorage.getItem("tmStorm") || "ecmwf"; } catch(e){ return "ecmwf"; } };
+function chartStorm(d, lat, lon){
+  const src = stormSrc(), keys = src === "both" ? Object.keys(SDAYS || {}) : [src];
+  let best = 0, who = [];
+  for (const key of keys){ const m = (SDAYS || {})[key], str = m && m.days && m.days[d]; if (!str) continue;
+    const nc = m.lons.length; let w = 0;
+    m.lats.forEach((la, r) => { if (Math.abs(la - lat) * 111.2 > SEV_KM) return;
+      m.lons.forEach((lo, c) => { const km = kmBetween(la, lo, lat, lon), v = +str[r * nc + c]; if (km <= 30 || (km <= SEV_KM && v >= 3)) w = Math.max(w, v); }); });
+    if (w > best) { best = w; who = [key]; } else if (w && w === best) who.push(key); }
+  return [best, who];
+}
+const STORM_DOT = l => l >= 3 ? "#dc2626" : l === 2 ? "#f08a24" : "#f2c94c";
+const STORM_WORD = l => l >= 3 ? `Severe storms possible within ${SEV_KM} km` : l === 2 ? "Organised storms possible" : "Storms possible";
 function stormCatAt(d, lat, lon){
   const out = {};
   for (const [key, m] of Object.entries(SDAYS || {})){
@@ -3558,9 +3573,9 @@ function fChartDrawBars(){
     const d = qDate(t0 + (k + 1) * 86400 - 1), x = X(k);
     if (nD <= 9 || k % 2 === 0) g += `<text x="${x.toFixed(1)}" y="${H0 - 7}" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".7">${part(d, {weekday: "short"}).slice(0, 2)} ${part(d, {day: "numeric"})}</text>`;
     // each model its own thin bar, side by side (and BOM's, green, at the end); the median a dashed line across them
-    const sc = stormCatAt(qDate(t0 + k * 86400 + 1), spot[0], spot[1]), sw = Math.max(0, ...Object.values(sc));
+    const [sw, swho] = chartStorm(qDate(t0 + k * 86400 + 1), spot[0], spot[1]);
     if (sw >= 3) anySev = true;
-    if (sw >= 3) g += `<circle cx="${x.toFixed(1)}" cy="5.5" r="4.5" fill="#dc2626" stroke="var(--panel)" stroke-width="1.2"><title>Severe storms possible within ${SEV_KM} km ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</title></circle>`;
+    if (sw >= 1) g += `<circle cx="${x.toFixed(1)}" cy="5.5" r="${sw >= 3 ? 4.5 : 3.8}" fill="${STORM_DOT(sw)}" stroke="var(--panel)" stroke-width="1.2"><title>${STORM_WORD(sw)} ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} (${swho.map(m => SM_NAME[m] || m).join(", ")})</title></circle>`;
     const b = bomDay(k), bars = [...shown.map(m => [hCol(m), tot[m][k]]), ...(bom ? [[BOM_COL, b ? b.min : null]] : [])];
     const gw = slot * .86, w1 = gw / bars.length, x0 = x - gw / 2;
     bars.forEach(([col, v], j) => { if (v == null || v <= 0) return;
@@ -3593,17 +3608,17 @@ function fChartDrawBars(){
   const sum = m => tot[m].some(v => v == null) ? null : tot[m].reduce((a, b) => a + b, 0);
   $("fChart").innerHTML = `<div class="chead">${head}</div><div class="cwrap"><svg viewBox="0 0 ${W0} ${H0}" style="color:var(--ink)">${g}</svg></div><div class="ctip" hidden></div>
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span><span>${namLogo(11, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(nam.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
-    <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). " : "Each day's rain, 10am to 10am. "}Dashed = median; gold = Namrex AI (models weighted by recent skill); green = BOM (days end at midnight). ${anySev ? `Red dot: severe storms possible within ${SEV_KM} km that day (see the Storms tab). ` : ""}Key: totals over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– stops sooner)" : ""}. Tap a day for numbers.</span>${fcButtons()}</div>`;
+    <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). " : "Each day's rain, 10am to 10am. "}Dashed = median; gold = Namrex AI (models weighted by recent skill); green = BOM (days end at midnight). Dots over a day: storms from ${{ecmwf: "ECMWF", gfs: "GFS", both: "GFS / ECMWF"}[stormSrc()]} (chosen in Daily's rain timing) - <span style="color:#f2c94c">●</span> possible, <span style="color:#f08a24">●</span> organised, <span style="color:#dc2626">●</span> severe within ${SEV_KM} km; about 4 days ahead. Key: totals over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– stops sooner)" : ""}. Tap a day for numbers.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   const svg = $("fChart").querySelector("svg"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
     const r = svg.getBoundingClientRect(), xx = (ev.clientX - r.left) / r.width * W0, k = Math.max(0, Math.min(nD - 1, Math.floor((xx - L0) / slot)));
     const d = qDate(t0 + (k + 1) * 86400 - 1), rows = shown.map(m => [m, tot[m][k]]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]), b = bomDay(k);
-    const sc = Object.entries(stormCatAt(qDate(t0 + k * 86400 + 1), spot[0], spot[1])).filter(([, c]) => c >= 3);
+    const [scl, scw] = chartStorm(qDate(t0 + k * 86400 + 1), spot[0], spot[1]), sc = scl ? scw.map(m => [m, scl]) : [];
     tip.innerHTML = `<b>10am ${part(qDate(t0 + k * 86400 + 1), {weekday: "short", day: "numeric"})} to 10am ${part(d, {weekday: "short", day: "numeric"})}:</b>${nam[k] != null ? ` <span style="color:${NAM_COL};white-space:nowrap">${namLogo(10, "namlogo nk")}Namrex AI</span> <b>${fmt(nam[k])} mm</b> ·` : ""}${med[k] != null ? ` median ${fmt(med[k])} ·` : ""} `
       + rows.map(([m, v]) => `<span style="white-space:nowrap"><i style="background:${hCol(m)}"></i>${hName(m)} ${fmt(v)}</span> `).join("")
       + (b ? `<br><span style="white-space:nowrap"><i style="background:${BOM_COL}"></i><b>BOM ${bom.name}</b></span> ${part(b.d, {weekday: "short"})}: ${fmt(b.min)}${b.max != null && b.max !== b.min ? `–${fmt(b.max)}` : ""} mm, ${b.chance ?? "?"}% chance` : "")
-      + (sc.length ? `<br><span style="color:#dc2626">●</span> <b>Severe storms possible within ${SEV_KM} km ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})} afternoon/evening</b> (${sc.map(([m, c]) => `${SM_NAME[m] || m} ${CAT_NAME[c]}`).join(", ")}): see the Storms tab.` : "");
+      + (sc.length ? `<br><span style="color:${STORM_DOT(scl)}">●</span> <b>${STORM_WORD(scl)} ${part(qDate(t0 + k * 86400 + 1), {weekday: "long"})}</b> (${sc.map(([m]) => SM_NAME[m] || m).join(", ")})${scl >= 3 ? ": see the Storms tab." : "."}` : "");
     if (tip.hidden) { tip.hidden = false; fitMap(); }
   };
   svg.addEventListener("pointerdown", at); svg.addEventListener("pointermove", at); svg.addEventListener("click", at);
@@ -5033,7 +5048,7 @@ async function fTiming(){
     <div class="tmstorm">Storms from <span class="seg" id="tmStormSeg">${["ecmwf", "gfs", "both"].map(k => `<button type="button" data-s="${k}" aria-pressed="${tmStorm === k}">${k === "both" ? "Both" : SNAME[k]}</button>`).join("")}</span></div>
     ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span class="tmtap">or tap a 3-hour block</span>`}</div>` : ""}
     <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · strip above the bars: <span style="color:#f2c94c">■</span> storms possible <span style="color:#f08a24">■</span> organised storms <span style="color:#d32f2f">■</span> severe (${SNAME[tmStorm]})` : ""}</div>`;
-  box.querySelectorAll("#tmStormSeg button").forEach(b => b.onclick = () => { try { localStorage.setItem("tmStorm", b.dataset.s); } catch(e){} fTiming(); });
+  box.querySelectorAll("#tmStormSeg button").forEach(b => b.onclick = () => { try { localStorage.setItem("tmStorm", b.dataset.s); } catch(e){} if (FC) fChartDraw(); else fTiming(); });
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
