@@ -153,7 +153,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
   .tubemap{display:block;width:100%;height:auto;overflow:visible}
   .tubemap text{font:600 11px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
-  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round} .tubemap .tmai{font-size:8px}
+  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
@@ -1838,12 +1838,23 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
     return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const W = 1300, mainY = 150, PAD = 20, ROW = 24;
+  const W = 1300, mainY = 150, PAD = 52, ROW = 26;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
-  const sp = Math.max(40, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
+  const sp = Math.max(42, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + k * sp));
   const lastX = PAD + (main.length - 1) * sp;
-  const dot = (x, y, i, col) => { const big = /g[234]/.test(i.lvl), fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff";
+  // Tokyo-style station numbers: each line a letter (its initial, or initial + next letter if taken), stations numbered
+  // from the river end of a creek, or from the top of the river
+  const code = {}, taken = new Set();
+  for (const st of [...tops, ...streams.filter(c => !tops.includes(c))]){
+    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + (w.split(" ")[1] || "")[0], w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
+    const c = cand.find(x => x && x.length && !taken.has(x)) || w.slice(0, 3); taken.add(c); code[st] = c; }
+  const numOf = new Map(); main.forEach((x, k) => numOf.set(x.i, `${code[x.s]}${String(k + 1).padStart(2, "0")}`));
+  const dot = (x, y, i, col, num) => {
+    if (num) { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
+      const w = 10 + num.length * 5.6;
+      return `<g><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
+        + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>${i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : ""}</g>`; } const big = /g[234]/.test(i.lvl), fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff";
     return `<circle cx="${x}" cy="${y}" r="${big ? 9 : 6.5}" fill="${fill}" stroke="${col}" stroke-width="3.5"><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title></circle>`
       + (i.ai ? `<text x="${x}" y="${y + 3}" text-anchor="middle" class="tmai">🤖</text>` : ""); };
   const txt = (x, y, i, rot) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan> <tspan class="tmh">${esc(i.h)}${i.up ? " ▲" : ""}</tspan>`;
@@ -1883,18 +1894,22 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     let y = by;
     for (const k of col.chain){
       const cc = streamColour(k.c), y0 = y;
-      labs += `<text x="${x + 12}" y="${y + 10}" class="tmc" fill="${cc}">${esc(k.c)}${k.c === col.r ? "" : ` → ${esc((parent[k.c] || "").replace(/ (River|Creek)$/, ""))}`}</text>`;
+      labs += `<rect x="${x + 12}" y="${y}" width="${8 + code[k.c].length * 7}" height="13" rx="3" fill="${cc}"/><text x="${x + 16}" y="${y + 10}" class="tmbul" style="font-size:9.5px">${code[k.c]}</text><text x="${x + 24 + code[k.c].length * 7}" y="${y + 10}" class="tmc" fill="${cc}">${esc(k.c)}${k.c === col.r ? "" : ` → ${esc((parent[k.c] || "").replace(/ (River|Creek)$/, ""))}`}</text>`;
       y += 14;
-      k.st.forEach(z => { y += ROW; dots += dot(x, y, z.i, cc); labs += txt(x, y, z.i, false); });
+      const nst = k.st.length;
+      k.st.forEach((z, q) => { y += ROW; dots += dot(x, y, z.i, cc, `${code[k.c]}${nst - q}`); labs += txt(x + 8, y, z.i, false); });
       lines += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y}" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`;
       y += 10;
     }
   }
   let H = Math.max(mainY + 30, yb);
-  main.forEach(x => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s)); labs += txt(xOf.get(x.i), mainY, i, true); });
+  main.forEach(x => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s), numOf.get(x.i)); labs += txt(xOf.get(x.i), mainY, i, true); });
+  // line bullet at the start of the river, Tokyo style
+  const bul = (x, y, c, col) => `<rect x="${x - 15}" y="${y - 13}" width="26" height="26" rx="7" fill="${col}"/><text x="${x - 2}" y="${y + 5}" text-anchor="middle" class="tmbul">${c}</text>`;
+  if (main.length) labs = bul(PAD - 30, mainY, code[tops[0]], streamColour(tops[0])) + labs;
   labs += `<text x="${lastX + 14}" y="${mainY + 4}" class="tmc" fill="${streamColour(tops[0])}">${esc(tops.join(" & "))} →</text>`;
   return `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>
-    <p class="note" style="margin:2px 0 0">Heights in metres. Names link to the Bureau's graph; hover a dot for the AI note. 🤖 = an AI peak estimate · ▲ rising · dot colour: <i class="gdot g1"></i>rising <i class="gdot g2"></i>minor <i class="gdot g3"></i>moderate <i class="gdot g4"></i>major flood.</p>`;
+    <p class="note" style="margin:2px 0 0">Station numbers run down each line (C01 at the top of the Condamine; on a creek, 1 is nearest where it joins). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`;
 }
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   tubeMain = b.dataset.m === "1"; drawRivers(FW); });
