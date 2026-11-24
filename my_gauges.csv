@@ -224,3 +224,5 @@
 2026-11-25,Kupunn (DDCGI),,,0
 2026-11-25,Tangalooma (Macalister),,,0
 2026-11-25,Daandine (DDCGI),,,0
+# 2026-11-25: the owner judges the Bureau's Miles gauge (16.6 mm, radar 0.2 mm) a faulty reading: left out ("x" = leave this gauge's reading out that day)
+2026-11-25,Miles,,,x

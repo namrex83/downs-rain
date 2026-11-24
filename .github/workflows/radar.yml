@@ -928,6 +928,9 @@ jobs:
                   parts = [x.strip() for x in line.split(",")]
                   if len(parts) != 5 or parts[0] != day:
                       continue
+                  if parts[4].lower() in ("x", "bad", "skip"):   # date,name,,,x: that day's reading from this gauge is faulty, leave it out
+                      out.append({"name": parts[1], "lat": None, "lon": None, "mm": -1.0, "source": "mine", "exclude": True})
+                      continue
                   try:
                       mm = float(parts[4])
                       if parts[2] or parts[3]:
@@ -959,7 +962,18 @@ jobs:
           
           def usable(gauges):
               """Gauges with a position (private readings waiting for the secret are left out)."""
-              return [g for g in gauges if not g.get("unplaced")]
+              return [g for g in gauges if not g.get("unplaced") and not g.get("exclude")]
+
+
+          def drop_marked(gauges, mine):
+              """Readings marked faulty in my_gauges.csv (date,name,,,x), e.g. a Bureau gauge that read rain the radar
+              never saw: kept in the table, marked, but left out of the correction."""
+              bad = {site_key(g["name"]) for g in mine if g.get("exclude")}
+              for g in gauges:
+                  if site_key(g["name"]) in bad:
+                      g["ignored"] = "marked as a faulty reading"
+                      log(f"  leaving out {g['name']}: marked as a faulty reading")
+              return gauges
           
           
           def waiting(gauges):
@@ -989,6 +1003,8 @@ jobs:
                   rad = max(1, int(round(1.5 / k)))   # ~3 km box around the gauge
                   box = radar[max(0, int(r) - rad):int(r) + rad + 1, max(0, int(c) - rad):int(c) + rad + 1]
                   g["radar_mm"] = round(float(box.mean()), 1)
+                  if g.get("ignored"):   # marked faulty by hand
+                      continue
                   # a dry gauge with solid rain over it and all around it (not just a storm edge) is
                   # probably blocked or broken, so leave it out
                   ring = max(1, int(round(DEAD_RING_KM / k)))
@@ -1103,7 +1119,7 @@ jobs:
                   radar = np.load(radar_total_path(day))["radar"].astype(np.float32)
                   bom = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
                          for g in meta.get("gauges", []) if g.get("source") == "BOM"]
-                  gauges = bom + usable(mine)
+                  gauges = drop_marked(bom + usable(mine), mine)
                   field, bias, overall, npairs = correct(radar, gauges)
                   meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
                   meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
@@ -1205,7 +1221,7 @@ jobs:
                      "grid": raw.flatten().tolist()}
               try:
                   mine = read_my_gauges(day)
-                  gauges = fetch_bom_gauges(day, positions) + usable(mine)
+                  gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
                   if gauges:   # dry readings count too: they take out radar rain that didn't reach the ground
                       field, bias, overall, npairs = correct(accum, gauges)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
@@ -1452,7 +1468,7 @@ jobs:
                       win = st["windows"].pop(day)
                       radar = merged_radar(day, win)
                       mine = read_my_gauges(day)
-                      gauges = fetch_bom_gauges(day, positions) + usable(mine)
+                      gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
                       field, bias, overall, npairs = correct(radar, gauges)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * win["minutes"] / 1440),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
@@ -1504,7 +1520,7 @@ jobs:
                   # (until the previous day is finished at 9:25am, its running map stays up rather than the new day's)
                   if cur in st["windows"] and not any(d < cur for d in st["windows"]):
                       w = st["windows"][cur]
-                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{gauge_key(usable(read_my_gauges(cur)))}"   # also redo it when readings are entered
+                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{gauge_key([g for g in read_my_gauges(cur) if not g.get("unplaced")])}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           merged = merged_radar(cur, w)
                           write_today(cur, merged,
