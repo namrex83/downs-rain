@@ -152,8 +152,8 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
-  .tubemap text{font:600 12.5px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
-  .tubemap .tmc{font:700 italic 12px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
+  .tubemap text{font:600 13.5px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
+  .tubemap .tmc{font:700 italic 13px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
@@ -1911,7 +1911,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
     return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const PAD = 52, ROW = 21;
+  const PAD = 52, ROW = 23;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
   const sp = Math.max(42, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + k * sp));
@@ -1944,7 +1944,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const C = roots.map(r => {
     const j = joinAt(r), nx = main.findIndex(x => x.i >= j), jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? PAD + 6 : xOf.get(main[nx].i) - sp / 2;
     const chain = [r, ...cols[r].filter(c2 => c2 !== r)].map(c => ({c, st: items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}))}));
-    const w = Math.max(...chain.map(k => (k.c.length + (k.c === r ? 0 : 12)) * 6.4 + 22), ...chain.flatMap(k => k.st.map(z => z.i.name.length * 6.1 + z.i.h.length * 7 + 34)));
+    const w = Math.max(...chain.map(k => (k.c.length + (k.c === r ? 0 : 12)) * 7.2 + 26), ...chain.flatMap(k => k.st.map(z => z.i.name.length * 7 + z.i.h.length * 8 + 40)));
     const h = chain.reduce((a, k) => a + 14 + k.st.length * ROW + 6, 0);
     return {r, jx, chain, w: Math.min(260, w), h};
   }).flatMap(col => {   // a tall column (a creek with many creeks running into it) split into shorter ones side by side
@@ -1953,6 +1953,18 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
       if (!cur || cur.h + kh > MAXH) { cur = {...col, chain: [], h: 0}; out.push(cur); }
       cur.chain.push(k); cur.h += kh; }
     return out;
+  }).map(col => {   // each column's rows (creek headings and stations); a column over 4 stations tall snakes into
+    // side-by-side sub-columns, the line turning at the bottom (or top) like a bend in the track
+    const rows = [];
+    for (const k of col.chain){ rows.push({k, head: true, h: 16}); const n = k.st.length; k.st.forEach((z, q) => rows.push({k, z, num: `${code[k.c]}${n - q}`, h: ROW})); rows[rows.length - 1].gap = 6; }
+    const sts = rows.filter(r => !r.head).length, ncol = sts > 4 ? Math.ceil(sts / 4) : 1, per = Math.ceil(rows.length / ncol);
+    const subs = []; for (let i = 0; i < rows.length; i += per) subs.push(rows.slice(i, i + per));
+    // don't leave a creek heading alone at the bottom of a sub-column
+    for (let j = 0; j + 1 < subs.length; j++) while (subs[j].length > 1 && subs[j][subs[j].length - 1].head) subs[j + 1].unshift(subs[j].pop());
+    const hs = subs.map(r => r.reduce((a, q) => a + q.h + (q.gap || 0), 0) + 6);
+    const rw = q => q.head ? (q.k.c.length + (q.k.c === col.r ? 0 : 12)) * 7.2 + 26 : q.z.i.name.length * 7 + q.z.i.h.length * 8 + 40;
+    const sws = subs.map(r => Math.min(260, Math.max(...r.map(rw)))), sx = sws.map((w, j) => sws.slice(0, j).reduce((a, b) => a + b + 18, 0));
+    return {...col, subs, sx, h: Math.max(...hs), w: sx[sx.length - 1] + sws[sws.length - 1]};
   });
   // creek columns go above or below the river, whichever side is shorter, each side packed in bands left to right
   const LZ = 96;   // room each side of the river for the station names, which alternate up and down at an angle
@@ -2025,16 +2037,30 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
     const dy = up ? -1 : 1, kick = mainY + dy * 12, near = end - dy * 14;
     const d = Math.abs(x - col.jx) < 4 ? `M${x} ${mainY} V${end}` : `M${col.jx} ${mainY} V${kick} L${x} ${near} V${end}`;
     lines += `<path d="${d}" fill="none" stroke="${rc}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" opacity="${col.b ? .7 : 1}"/>`;
-    let y = by;
-    for (const k of col.chain){
-      const cc = streamColour(k.c), y0 = y;
-      labs += `<rect x="${x + 12}" y="${y}" width="${8 + code[k.c].length * 7}" height="13" rx="3" fill="${cc}"/><text x="${x + 16}" y="${y + 10}" class="tmbul" style="font-size:9.5px">${code[k.c]}</text><text x="${x + 24 + code[k.c].length * 7}" y="${y + 10}" class="tmc" fill="${cc}">${esc(k.c)}${k.c === col.r ? "" : ` → ${esc((parent[k.c] || "").replace(/ (River|Creek)$/, ""))}`}</text>`;
-      y += 14;
-      const nst = k.st.length;
-      k.st.forEach((z, q) => { y += ROW; dots += dot(x, y, z.i, cc, `${code[k.c]}${nst - q}`); labs += txt(x + 8, y, z.i, false); });
-      lines += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y}" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`;
-      y += 6;
-    }
+    // place every row: sub-column j at x + j * (width + 16), running down (j even) or up (j odd) so the line snakes;
+    // above the river the whole column is flipped, so the line comes in from the bottom
+    const pos = [];
+    col.subs.forEach((rows, j) => { const sx = x + col.sx[j]; let yy = 0;
+      const placed = rows.map(r => { const p = {r, x: sx, top: yy}; yy += r.h + (r.gap || 0); return p; });
+      const tot = yy; placed.forEach(p => { if (j % 2) p.top = tot - p.top - p.r.h; });   // odd sub-columns run upward
+      placed.sort((p, q) => j % 2 ? q.top - p.top : p.top - q.top); pos.push(placed); });
+    const Y = t => up ? by + col.h - t : by + t;   // box-relative to page, flipped above the river
+    const at = p => p.r.head ? (up ? Y(p.top + 8) : Y(p.top + 8)) : Y(p.top + p.r.h - 4);
+    let prev = null, path = "";
+    pos.forEach((placed, j) => placed.forEach((p, q) => {
+      const yy = at(p), cc = streamColour(p.r.k.c);
+      if (p.r.head) {
+        const ty = up ? yy - 2 : yy - 6;
+        labs += `<rect x="${p.x + 12}" y="${ty}" width="${8 + code[p.r.k.c].length * 7}" height="13" rx="3" fill="${cc}"/><text x="${p.x + 16}" y="${ty + 10}" class="tmbul" style="font-size:9.5px">${code[p.r.k.c]}</text><text x="${p.x + 24 + code[p.r.k.c].length * 7}" y="${ty + 10}" class="tmc" fill="${cc}">${esc(p.r.k.c)}${p.r.k.c === col.r ? "" : ` → ${esc((parent[p.r.k.c] || "").replace(/ (River|Creek)$/, ""))}`}</text>`;
+      } else { dots += dot(p.x, yy, p.r.z.i, cc, p.r.num); labs += txt(p.x + 8, yy, p.r.z.i, false); }
+      if (prev) {
+        if (prev.x === p.x) lines += `<line x1="${p.x}" y1="${prev.y}" x2="${p.x}" y2="${yy}" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`;
+        else {   // the bend: out past the end of the sub-column (beyond its last name), across, and back
+          const goUp = yy < prev.y || (Math.abs(yy - prev.y) < 2 && prev.y < by + col.h / 2), ext = goUp ? Math.min(prev.y, yy) - 16 : Math.max(prev.y, yy) + 16;
+          lines += `<path d="M${prev.x} ${prev.y} V${ext + (goUp ? 8 : -8)} Q${prev.x} ${ext} ${prev.x + 8} ${ext} H${p.x - 8} Q${p.x} ${ext} ${p.x} ${ext + (goUp ? 8 : -8)} V${yy}" fill="none" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`; }
+      }
+      prev = {x: p.x, y: yy};
+    }));
   }
   let H = yd;
   main.forEach((x, k) => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s), numOf.get(x.i)); labs += txt(xOf.get(x.i), mainY, i, k % 2 ? "dn" : true); });
