@@ -153,7 +153,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
   .tubemap text{font:600 11px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
-  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
+  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
@@ -1973,13 +1973,22 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const segBox = (p, q, [x1, y1, x2, y2]) => { if (Math.max(p[0], q[0]) < x1 || Math.min(p[0], q[0]) > x2 || Math.max(p[1], q[1]) < y1 || Math.min(p[1], q[1]) > y2) return false;
     if ([p, q].some(([x, y]) => x > x1 && x < x2 && y > y1 && y < y2)) return true;
     const e = [[[x1, y1], [x2, y1]], [[x2, y1], [x2, y2]], [[x2, y2], [x1, y2]], [[x1, y2], [x1, y1]]]; return e.some(([a, b]) => segX(p, q, a, b)); };
+  // how close two segments come (0 if they cross)
+  const ptSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)) : 0;
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+  const segDist = (a, b, c, d) => segX(a, b, c, d) ? 0 : Math.min(ptSeg(a, c, d), ptSeg(b, c, d), ptSeg(c, a, b), ptSeg(d, a, b));
+  const GAP = 16;   // lines of different creeks kept at least this far apart, and this far from other creeks' names
+  const grow = ([x1, y1, x2, y2]) => [x1 - GAP, y1 - GAP / 2, x2 + GAP / 2, y2 + GAP / 2];
   const cost = (cs, focus) => {   // crossings that involve the focus column, plus how far it moved and the height
     const g = geom(cs), me = g.out.get(focus); let x = 0;
     if (me) for (const [c, o] of g.out){ if (c === focus) continue;
+      const sameStart = Math.abs(me.pts[0][0] - o.pts[0][0]) < 1;   // the same creek family, forking from one point
       for (let i = 0; i + 1 < me.pts.length; i++){
-        if (segBox(me.pts[i], me.pts[i + 1], o.box)) x++;
-        for (let j = 0; j + 1 < o.pts.length; j++) if (segX(me.pts[i], me.pts[i + 1], o.pts[j], o.pts[j + 1])) x++; }
-      for (let j = 0; j + 1 < o.pts.length; j++) if (segBox(o.pts[j], o.pts[j + 1], me.box)) x++;
+        if (segBox(me.pts[i], me.pts[i + 1], grow(o.box))) x++;
+        for (let j = 0; j + 1 < o.pts.length; j++){ const dd = segDist(me.pts[i], me.pts[i + 1], o.pts[j], o.pts[j + 1]);
+          if (dd === 0 && !(sameStart && i === 0 && j === 0)) x++;
+          else if (dd < GAP && !(sameStart && i <= 1 && j <= 1)) x += .6; } }
+      for (let j = 0; j + 1 < o.pts.length; j++) if (segBox(o.pts[j], o.pts[j + 1], grow(me.box))) x++;
       if (c.side === focus.side && c.b === focus.b && focus.x < c.x + c.w + 12 && focus.x + focus.w > c.x - 12) x += 5; }   // overlapping boxes
     return x * 1e5 + Math.abs(focus.x - focus.jx) * .4 + 4 * g.H;
   };
