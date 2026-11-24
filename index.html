@@ -388,7 +388,8 @@ details.discfold{text-align:left}
   .tap{padding:6px 10px;font-size:.86rem}
   .tlmid{padding:3px 10px 3px} .tltime{font-size:.84rem} .tlticks{height:15px;font-size:.7rem}
   .tlmid .transport{margin:3px auto 1px}
-  .timing svg{max-height:150px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
+  body.fcdaily #fChart .cfoot>span{display:none}   /* Daily: the chart's explanation line hidden to make room for the timing */
+  .timing svg{max-height:105px} .timing .tmkey{display:none} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
   .addread{font-size:.9rem!important}
@@ -938,7 +939,7 @@ const twoCol = (() => {
     if (w) {
       wrap.insertBefore(cols, order[0]);
       for (const e of order) { if (e === row) { left.appendChild(row); right.appendChild(side); } else right.appendChild(e); }
-      side.insertBefore(tw, side.firstChild);
+      side.insertBefore(tw, side.firstChild);   // Daily's rain timing at the top of the right column, beside the map
     } else {
       for (const e of order) wrap.appendChild(e);
       row.appendChild(side); cols.remove();
@@ -3479,7 +3480,7 @@ function fcChartPx(){
   const box = $("fChart"), svg = box.querySelector("svg:not(.namlogo)"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
   if (!m.height || !c.height) return 300;
   const other = box.offsetHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
-  return Math.max(170, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
+  return Math.max(110, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
 }
 // after drawing, if the box still doesn't end level with the map (its text wrapped differently), draw once more
 setTimeout(() => { const draw0 = fChartDraw;
@@ -4912,7 +4913,7 @@ function stormHours(st, at, start, end){   // GFS storm category each hour at th
 }
 async function fTiming(){
   const box = $("fTiming"), d = fDayNow();
-  if (tab !== "fc" || !d) { box.hidden = true; fStopPlay(); return; }
+  if (tab !== "fc" || !d) { document.body.classList.remove("fcdaily"); const was = !box.hidden; box.hidden = true; fStopPlay(); if (was && innerWidth >= 1000 && FC) fChartDraw(); return; }
   if (fFrameDay && fFrameDay !== d) { fFrame = null; fFrameDay = null; fStopPlay(); }
   const td = timingData(d);
   if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
@@ -4955,7 +4956,10 @@ async function fTiming(){
   if (past) { const m = g.match(/<rect x="0" y="[^"]+" width="[^"]+" height="[^"]+" fill="var\(--panel\)"[^>]*\/><text[^>]*>now<\/text><line[^>]*\/>/); if (m) { g = g.replace(m[0], "") + m[0]; } }
   FR_CLOCK.forEach((t, b) => g += `<text x="${Math.min(Wd - 12, Math.max(12, b * bw * 3))}" y="${cy + ch + 13}" text-anchor="middle">${t}</text>`);
   const canMap = FRAC && FRAC.days.includes(d);
+  document.body.classList.add("fcdaily");
+  const hBefore = box.hidden ? 0 : box.offsetHeight;
   box.hidden = false;
+  setTimeout(() => { if (innerWidth >= 1000 && box.offsetHeight !== hBefore && FC) fChartDraw(); }, 0);
   box.innerHTML = `<div class="tmhead"><b>Rain timing at ${where}</b><span>${wd(addDays(d, -1))} 10am – ${wd(d)} ${part(d, {month: "short"})} 10am</span></div>
     <p class="tmsum">${sum}</p>
     <svg viewBox="0 0 ${Wd} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
