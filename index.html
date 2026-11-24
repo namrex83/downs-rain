@@ -151,7 +151,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{flex:0 0 auto;width:max-content;max-width:100%;margin:0 10px 0 0;padding:2px 0 2px 8px;border:1px dashed var(--c);border-radius:10px;background:color-mix(in srgb,var(--c) 5%,transparent)}
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
-  .tubemap{display:block;width:100%;height:auto;overflow:visible}
+  .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
   .tubemap text{font:600 11px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
   .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
@@ -1886,7 +1886,17 @@ function tubeDiagram(rows, nameOf, cell){
 // above; each creek branches off below to its own line, joining the river where it runs in, stacked in lanes so
 // they don't overlap. Dots are coloured as in the list (rising / minor / moderate / major); hover or tap for the AI
 // note; names link to the Bureau's graph.
+// try a few widths and keep the one that shows biggest in the space on screen (wider = shorter diagram)
 function tubeMap(items, streams, tops, parent, joinAt, cell){
+  const box = $("riverTube"), cw = Math.max(600, box.clientWidth || 1200), top = box.getBoundingClientRect().top || 300;
+  const avail = Math.max(380, innerHeight - Math.max(60, Math.min(top, 330)) - 70);
+  let best = null;
+  for (const W of [1300, 1500, 1750, 2000, 2300]){
+    const r = tubeMap1(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H);
+    if (!best || sc > best.sc + .01) best = {...r, sc}; }
+  return best.html;
+}
+function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
     const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
     const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
@@ -1894,7 +1904,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
     return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const W = 1300, PAD = 52, ROW = 26;
+  const PAD = 52, ROW = 21;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
   const sp = Math.max(42, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + k * sp));
@@ -1928,21 +1938,21 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     const j = joinAt(r), nx = main.findIndex(x => x.i >= j), jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? PAD + 6 : xOf.get(main[nx].i) - sp / 2;
     const chain = [r, ...cols[r].filter(c2 => c2 !== r)].map(c => ({c, st: items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}))}));
     const w = Math.max(...chain.map(k => (k.c.length + (k.c === r ? 0 : 12)) * 6.4 + 22), ...chain.flatMap(k => k.st.map(z => z.i.name.length * 6.1 + z.i.h.length * 7 + 34)));
-    const h = chain.reduce((a, k) => a + 14 + k.st.length * ROW + 10, 0);
+    const h = chain.reduce((a, k) => a + 14 + k.st.length * ROW + 6, 0);
     return {r, jx, chain, w: Math.min(260, w), h};
   }).flatMap(col => {   // a tall column (a creek with many creeks running into it) split into shorter ones side by side
-    const MAXH = 250, out = []; let cur = null;
-    for (const k of col.chain){ const kh = 14 + k.st.length * ROW + 10;
+    const MAXH = 175, out = []; let cur = null;
+    for (const k of col.chain){ const kh = 14 + k.st.length * ROW + 6;
       if (!cur || cur.h + kh > MAXH) { cur = {...col, chain: [], h: 0}; out.push(cur); }
       cur.chain.push(k); cur.h += kh; }
     return out;
   });
   // creek columns go above or below the river, whichever side is shorter, each side packed in bands left to right
-  const LZ = 112;   // room each side of the river for the station names, which alternate up and down at an angle
+  const LZ = 96;   // room each side of the river for the station names, which alternate up and down at an angle
   const side = {up: [], dn: []};
   // each column goes where it moves least from its join (left or right of it), on whichever side and band keeps
   // the diagram shortest: placement score = sideways move + 3 x the height it adds
-  const tot = bands => bands.reduce((a, B) => a + B.h + 18, 0);
+  const tot = bands => bands.reduce((a, B) => a + B.h + 10, 0);
   const place = (B, col) => {   // nearest free x to the join in this band
     const occ = (B ? B.occ : []).slice().sort((p, q) => p[0] - q[0]), lo = 4, hi = W - col.w - 4;
     const cands = [col.jx, col.jx - col.w + 10, ...occ.flatMap(([a, b2]) => [b2 + 14, a - col.w - 14])].map(x => Math.max(lo, Math.min(hi, x)));
@@ -1954,7 +1964,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
     let best = null;
     for (const sd of ["up", "dn"]) for (let b = 0; b <= side[sd].length; b++){
       const B = side[sd][b], pl = place(B, col); if (!pl) continue;
-      const grow = B ? Math.max(0, col.h - B.h) : col.h + 18, score = pl.mv + 3 * (tot(side[sd]) + grow);
+      const grow = B ? Math.max(0, col.h - B.h) : col.h + 10, score = pl.mv * .5 + 6 * (tot(side[sd]) + grow);   // height counts heavily: one screen
       if (!best || score < best.score) best = {score, sd, b, x: pl.x}; }
     const bands = side[best.sd], B = bands[best.b] = bands[best.b] || {h: 0, occ: []};
     col.side = best.sd; col.x = best.x; col.b = best.b; B.h = Math.max(B.h, col.h); B.occ.push([best.x, best.x + col.w]);
@@ -1962,8 +1972,8 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const bentUp = C.filter(c => c.side === "up" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx)), bentDn = C.filter(c => c.side === "dn" && Math.abs(c.x - c.jx) > 4).sort((p, q) => Math.abs(p.x - p.jx) - Math.abs(q.x - q.jx));
   const mainY = 16 + tot(side.up) + bentUp.length * 6 + (side.up.length ? LZ : 90);
   bentUp.forEach((c, k) => c.ty = mainY - LZ + 8 - k * 6); bentDn.forEach((c, k) => c.ty = mainY + LZ - 8 + k * 6);
-  let yu = mainY - LZ - bentUp.length * 6 - 4; side.up.forEach(B => { B.y = yu - B.h; yu -= B.h + 18; });
-  let yd = mainY + LZ + bentDn.length * 6 + 4; side.dn.forEach(B => { B.y = yd; yd += B.h + 18; });
+  let yu = mainY - LZ - bentUp.length * 6 - 4; side.up.forEach(B => { B.y = yu - B.h; yu -= B.h + 10; });
+  let yd = mainY + LZ + bentDn.length * 6 + 4; side.dn.forEach(B => { B.y = yd; yd += B.h + 10; });
   mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
     lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
   for (const col of C){
@@ -1978,7 +1988,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
       const nst = k.st.length;
       k.st.forEach((z, q) => { y += ROW; dots += dot(x, y, z.i, cc, `${code[k.c]}${nst - q}`); labs += txt(x + 8, y, z.i, false); });
       lines += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y}" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`;
-      y += 10;
+      y += 6;
     }
   }
   let H = Math.max(mainY + (side.dn.length ? 0 : LZ), yd);
@@ -1987,9 +1997,12 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const bul = (x, y, c, col) => `<rect x="${x - 15}" y="${y - 13}" width="26" height="26" rx="7" fill="${col}"/><text x="${x - 2}" y="${y + 5}" text-anchor="middle" class="tmbul">${c}</text>`;
   if (main.length) labs = bul(PAD - 30, mainY, code[tops[0]], streamColour(tops[0])) + labs;
   labs += `<text x="${lastX + 14}" y="${mainY + 4}" class="tmc" fill="${streamColour(tops[0])}">${esc(tops.join(" & "))} →</text>`;
-  return `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>
-    <p class="note" style="margin:2px 0 0">Station numbers run down each line (C01 at the top of the Condamine; on a creek, 1 is nearest where it joins). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`;
+  return {H, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>
+    <p class="note" style="margin:2px 0 0">Station numbers run down each line (C01 at the top of the Condamine; on a creek, 1 is nearest where it joins). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
+function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || innerWidth < 1000) return;
+  document.documentElement.style.setProperty("--tubeH", Math.max(420, Math.round(innerHeight - sv.getBoundingClientRect().top - 10)) + "px"); }
+addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   tubeMain = b.dataset.m === "1"; drawRivers(FW); });
 function drawRivers(fw){
@@ -2032,6 +2045,7 @@ function drawRivers(fw){
   const head = `<thead><tr><th>Gauge</th><th class="n">m</th><th></th><th>Flood</th>${anyAI ? `<th class="n aicol" title="AI estimate of the peak, from past floods (not the Bureau's forecast)">AI peak</th>` : ""}</tr></thead>`;
   const asLines = sel && cList === "lines";   // a picked catchment: as river lines (or the full table)
   $("rivers").innerHTML = asLines ? "" : head + `<tbody>${(sel ? rows : top).map(tr).join("")}</tbody>`;
+  setTimeout(tubeFit, 0);
   $("riverTube").innerHTML = asLines ? tubeDiagram(rows, r => g(r, iName), r => {   // a picked catchment: as a line diagram
     const nm = g(r, iName), u = plotOf(nm), e = estFor(nm), L = lvl(r);
     const pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
