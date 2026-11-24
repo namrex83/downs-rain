@@ -151,6 +151,10 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{flex:0 0 auto;width:max-content;max-width:100%;margin:0 10px 0 0;padding:2px 0 2px 8px;border:1px dashed var(--c);border-radius:10px;background:color-mix(in srgb,var(--c) 5%,transparent)}
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
+  .tubemap{display:block;width:100%;height:auto;overflow:visible}
+  .tubemap text{font:600 11px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
+  .tubemap .tmc{font:700 italic 11px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round} .tubemap .tmai{font-size:8px}
+  .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
 .cshowfield{flex-basis:100%} #cShow{width:max-content;max-width:100%} #cShow button{font-weight:600}
@@ -1819,7 +1823,78 @@ function tubeDiagram(rows, nameOf, cell){
     for (const kd of kids.filter(kd => kd.j === Infinity)) html += line(kd.k, deep + 1);
     return `<div class="tline${kids.some(kd => kd.j === Infinity) ? " tend" : ""}" style="--c:${streamColour(s)}"><span class="tlab">${s}${deep ? ` <small>→ ${parent[s].replace(/ (River|Creek)$/, "")}</small>` : ""}</span>${html}</div>`;
   };
+  if (innerWidth >= 1000) return sw + tubeMap(items, streams, tops, parent, joinAt, cell);
   return sw + tops.map(t => line(t, 0)).join("");
+}
+// On a computer: a real tube-map. The river is one straight line across with its gauges as stations, names angled
+// above; each creek branches off below to its own line, joining the river where it runs in, stacked in lanes so
+// they don't overlap. Dots are coloured as in the list (rising / minor / moderate / major); hover or tap for the AI
+// note; names link to the Bureau's graph.
+function tubeMap(items, streams, tops, parent, joinAt, cell){
+  const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
+    const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
+    const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
+    const note = [...t.content.querySelectorAll(".pkline,.tsai")].map(e => e.textContent.trim()).filter(Boolean).join(" · ");
+    const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
+    return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const W = 1300, mainY = 150, PAD = 20, ROW = 24;
+  const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
+  const sp = Math.max(40, Math.min(90, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
+  const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + k * sp));
+  const lastX = PAD + (main.length - 1) * sp;
+  const dot = (x, y, i, col) => { const big = /g[234]/.test(i.lvl), fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff";
+    return `<circle cx="${x}" cy="${y}" r="${big ? 9 : 6.5}" fill="${fill}" stroke="${col}" stroke-width="3.5"><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title></circle>`
+      + (i.ai ? `<text x="${x}" y="${y + 3}" text-anchor="middle" class="tmai">🤖</text>` : ""); };
+  const txt = (x, y, i, rot) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan> <tspan class="tmh">${esc(i.h)}${i.up ? " ▲" : ""}</tspan>`;
+    const el = rot ? `<text transform="translate(${x + 3},${y - 12}) rotate(-38)">${t}</text>` : `<text x="${x + 12}" y="${y + 4}">${t}</text>`;
+    return i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">${el}</a>` : el; };
+  let lines = "", dots = "", labs = "";
+  mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
+    lines += `<line x1="${xs[0]}" y1="${mainY}" x2="${xs[xs.length - 1]}" y2="${mainY}" stroke="${streamColour(tops[k])}" stroke-width="7" stroke-linecap="round"/>`; });
+  // creeks: each hangs straight down from where it joins the river, its gauges as stations down it (the lowest the
+  // furthest upstream), names beside them; a creek that runs into another creek continues further down that column
+  const creeks = streams.filter(c => !tops.includes(c)), rootOf = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf(parent[c]);
+  const cols = {}; for (const c of creeks) (cols[rootOf(c)] = cols[rootOf(c)] || []).push(c);
+  const roots = Object.keys(cols).sort((a, b) => joinAt(a) - joinAt(b));
+  // each creek column: where it leaves the river, how wide its names are, how tall it is; then laid out in bands
+  // under the river, left to right, each column as near its join as there's room (a bend takes it across)
+  const C = roots.map(r => {
+    const j = joinAt(r), nx = main.findIndex(x => x.i >= j), jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? PAD + 6 : xOf.get(main[nx].i) - sp / 2;
+    const chain = [r, ...cols[r].filter(c2 => c2 !== r)].map(c => ({c, st: items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}))}));
+    const w = Math.max(...chain.map(k => (k.c.length + (k.c === r ? 0 : 12)) * 6.4 + 22), ...chain.flatMap(k => k.st.map(z => z.i.name.length * 6.1 + z.i.h.length * 7 + 34)));
+    const h = chain.reduce((a, k) => a + 14 + k.st.length * ROW + 10, 0);
+    return {r, jx, chain, w: Math.min(260, w), h};
+  });
+  const bands = [];
+  for (const col of C){
+    let b = 0;
+    for (;; b++){ const B = bands[b] = bands[b] || {right: 0, h: 0, cols: []}; const x = Math.max(col.jx, B.right + 14);
+      if (x + col.w <= W - 4 || !B.cols.length) { col.x = x; col.b = b; B.right = x + col.w; B.h = Math.max(B.h, col.h); B.cols.push(col); break; } }
+  }
+  const bent = C.filter(c => Math.abs(c.x - c.jx) > 4); bent.forEach((c, k) => c.ty = mainY + 14 + k * 6);
+  let yb = mainY + 26 + bent.length * 6; bands.forEach(B => { B.y = yb; yb += B.h + 18; });
+  for (const col of C){
+    const x = col.x, by = bands[col.b].y, rc = streamColour(col.r);
+    // the run from the river: straight down at the join, then a 45° bend over to its column
+    // each bent run gets its own track just under the river, so none of them lie along it or on each other
+    const d = col.ty == null ? `M${x} ${mainY} V${by + 12}` : `M${col.jx} ${mainY} V${col.ty} H${x} V${by + 12}`;
+    lines += `<path d="${d}" fill="none" stroke="${rc}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" opacity="${col.b ? .7 : 1}"/>`;
+    let y = by;
+    for (const k of col.chain){
+      const cc = streamColour(k.c), y0 = y;
+      labs += `<text x="${x + 12}" y="${y + 10}" class="tmc" fill="${cc}">${esc(k.c)}${k.c === col.r ? "" : ` → ${esc((parent[k.c] || "").replace(/ (River|Creek)$/, ""))}`}</text>`;
+      y += 14;
+      k.st.forEach(z => { y += ROW; dots += dot(x, y, z.i, cc); labs += txt(x, y, z.i, false); });
+      lines += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y}" stroke="${cc}" stroke-width="5" stroke-linecap="round"/>`;
+      y += 10;
+    }
+  }
+  let H = Math.max(mainY + 30, yb);
+  main.forEach(x => { const i = info(x); dots += dot(xOf.get(x.i), mainY, i, streamColour(x.s)); labs += txt(xOf.get(x.i), mainY, i, true); });
+  labs += `<text x="${lastX + 14}" y="${mainY + 4}" class="tmc" fill="${streamColour(tops[0])}">${esc(tops.join(" & "))} →</text>`;
+  return `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>
+    <p class="note" style="margin:2px 0 0">Heights in metres. Names link to the Bureau's graph; hover a dot for the AI note. 🤖 = an AI peak estimate · ▲ rising · dot colour: <i class="gdot g1"></i>rising <i class="gdot g2"></i>minor <i class="gdot g3"></i>moderate <i class="gdot g4"></i>major flood.</p>`;
 }
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   tubeMain = b.dataset.m === "1"; drawRivers(FW); });
