@@ -4727,8 +4727,10 @@ function setTab(t, first){
     mainView = {c: map.getCenter(), z: map.getZoom()};
     const v = fcView || {c: map.getCenter(), z: fcZoom()};
     map.setView(v.c, v.z, {animate: false});
-    if (!fcView) { const sz = map.getSize(), e = map.latLngToContainerPoint([v.c.lat !== undefined ? v.c.lat : v.c[0], F && F.lons ? F.lons[F.lons.length - 1] - 0.4 : 154.6]).x;   // just past the coast is the edge of the forecast
-      if (e < sz.x - 10) map.panBy([Math.round(e - sz.x + 10), 0], {animate: false}); }
+    // opening view: the coast (Brisbane, about 153.1°E) about three-quarters of the way across, so the forecast is
+    // seen a good way out to sea as well as west over the Downs
+    if (!fcView) { const sz = map.getSize(), cx = map.latLngToContainerPoint([v.c.lat !== undefined ? v.c.lat : v.c[0], 153.1]).x;
+      map.panBy([Math.round(cx - sz.x * 0.74), 0], {animate: false}); }
   }
   if (t === "outlook" && tab !== "outlook") aMode = "links";   // Extras always opens on Outlooks
   tab = t;
