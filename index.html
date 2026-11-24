@@ -388,7 +388,16 @@ details.discfold{text-align:left}
   .tap{padding:6px 10px;font-size:.86rem}
   .tlmid{padding:3px 10px 3px} .tltime{font-size:.84rem} .tlticks{height:15px;font-size:.7rem}
   .tlmid .transport{margin:3px auto 1px}
-  body.fcdaily #fChart .cfoot>span{display:none}   /* Daily: the chart's explanation line hidden to make room for the timing */
+  body.fcdaily #fChart .cfoot>span{display:none}
+  /* the chart's Running total / Daily / Both buttons up in its heading row, small */
+  #fChart{position:relative} #fChart .chead{padding-right:250px}
+  #fChart .cmode{position:absolute;top:5px;right:8px;margin:0}
+  #fChart .cmode button{min-height:24px;padding:0 8px;font-size:.72rem}
+  /* rain timing: the play button, the map note and the key on one line */
+  .timing .tmbtns{display:inline-flex;margin:2px 10px 0 0;vertical-align:middle;font-size:.74rem}
+  .timing .tmbtns button{padding:2px 9px;font-size:.74rem}
+  .timing .tmkey{display:inline;font-size:.68rem}
+  .timing svg{max-height:92px}   /* Daily: the chart's explanation line hidden to make room for the timing */
   .timing svg{max-height:105px} .timing .tmkey{margin-top:2px} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
