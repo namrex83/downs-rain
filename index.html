@@ -332,6 +332,8 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .timing .tmbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:5px 11px;cursor:pointer}
 .timing .tmbtns button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink,#fff)}
 .timing .tmkey{font-size:.7rem;color:var(--ink-3);margin-top:5px}
+.timing .tmstorm{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--ink-3);margin:4px 0 2px}
+.timing .tmstorm .seg button{min-height:22px;padding:0 7px;font-size:.7rem}
 .agrobtns{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:8px}
 .agrofile{text-transform:none;letter-spacing:normal;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink,#fff);border-radius:999px;padding:9px 15px;font:600 .9rem var(--body);cursor:pointer}
 .agroop{text-transform:none;letter-spacing:normal;display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--ink-2)} .agroop input{accent-color:var(--accent)}
@@ -416,7 +418,7 @@ details.discfold{text-align:left}
   .timing .tmbtns{display:inline-flex;margin:2px 10px 0 0;vertical-align:middle;font-size:.74rem}
   .timing .tmbtns button{padding:2px 9px;font-size:.74rem}
   .timing .tmkey{display:inline;font-size:.68rem}
-  .timing svg{max-height:76px} .timing .tmtap, .timing .tmmore{display:none} .timing{padding:5px 10px}   /* Daily: the chart's explanation line hidden to make room for the timing */
+  .timing svg{max-height:76px} .timing .tmstorm{display:inline-flex;margin:2px 10px 0 0;vertical-align:middle} .timing .tmtap, .timing .tmmore{display:none} .timing{padding:5px 10px}   /* Daily: the chart's explanation line hidden to make room for the timing */
   .timing svg{max-height:105px} .timing .tmkey{margin-top:2px} .timing .tmbtns{margin-top:3px} .timing .tmhead{margin-bottom:1px} .timing{padding:6px 10px} .timing .tmsum{margin:1px 0 3px;font-size:.84rem}
   .daybar button{padding:3px 0;font-size:.72rem} .daybar button b{font-size:.62rem}
   .chartbox{padding:6px 10px}
@@ -4972,14 +4974,16 @@ async function fTiming(){
   if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
   if (FRAC === undefined) { FRAC = null; try { FRAC = await getJSON("data/om_frac.json"); } catch(e){} }
   if (FAUS === undefined) { FAUS = null; try { FAUS = await getJSON("data/frac_aus.json"); } catch(e){} }
-  if (STJ === undefined) { STJ = []; for (const f of ["data/storms.json", "data/storms_ecmwf.json"]) { try { STJ.push(await getJSON(f)); } catch(e){} } }
+  if (STJ === undefined) { STJ = {}; for (const [k, f] of [["gfs", "data/storms.json"], ["ecmwf", "data/storms_ecmwf.json"]]) { try { STJ[k] = await getJSON(f); } catch(e){} } }
   if (fDayNow() !== d) return;
   const at = FC.pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), where = FC.pinned ? "the pin" : SPOT.name;
   const {nam, n} = td, top = Math.max(1, ...nam), half = Math.ceil(n / 2);
   const past = Math.max(0, Math.min(24, Math.floor((Date.now() / 1000 - td.start) / 3600)));   // hours of this day already gone
   const chance = td.chance.map((c, b) => (b + 1) * 3 <= past ? 0 : c);   // blocks already over don't count
   const left = nam.map((v, i) => i < past ? 0 : v), tot = left.reduce((a, x) => a + x, 0);
-  const storm = stormHours(STJ, at, td.start, td.end);
+  let tmStorm = "ecmwf"; try { tmStorm = localStorage.getItem("tmStorm") || "ecmwf"; } catch(e){}
+  const storm = stormHours(tmStorm === "both" ? Object.values(STJ) : [STJ[tmStorm]].filter(Boolean), at, td.start, td.end);
+  const SNAME = {ecmwf: "ECMWF", gfs: "GFS", both: "GFS / ECMWF"};
   const hrClock = i => { const h = (10 + i) % 24; return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };   // the start of hour i
   // the summary
   const maxC = Math.max(...chance), best = chance.indexOf(maxC), likely = chance.map((c, b) => c >= half ? b : -1).filter(b => b >= 0);
@@ -4997,7 +5001,7 @@ async function fTiming(){
     const spells = L => { const r = []; storm.forEach((v, i) => { if (v !== L && !(L === 3 && v >= 3)) return; const last = r[r.length - 1]; if (last && last[1] === i - 1) last[1] = i; else r.push([i, i]); }); return r; };
     const txt = r => r.length === 1 && r[0][0] === 0 && r[0][1] === 23 ? "all day" : r.slice(0, 2).map(([a, b]) => `${hrClock(a)}–${hrClock(b + 1)}`).join(", ");
     const parts = [[3, "Severe storm risk", "#c62828"], [2, "organised storms", "#d9660a"], [1, "storms possible", "#9a7a00"]].map(([L, w, c]) => { const r = spells(L); return r.length ? `<b style="color:${c}">${w} ${txt(r)}</b>` : ""; }).filter(Boolean);
-    if (parts.length) { parts[0] = parts[0].replace(/>([a-z])/, (m, ch) => ">" + ch.toUpperCase()); sum += ` ${parts.join(" · ")} (GFS / ECMWF).`; } }
+    if (parts.length) { parts[0] = parts[0].replace(/>([a-z])/, (m, ch) => ">" + ch.toUpperCase()); sum += ` ${parts.join(" · ")} (${SNAME[tmStorm]}).`; } }
   // the strip
   const Wd = 480, bw = Wd / 24, y0 = 14, bh = 56, cy = y0 + bh + 6, ch = 20;
   let g = "";
@@ -5026,8 +5030,10 @@ async function fTiming(){
   box.innerHTML = `<div class="tmhead"><b>Rain timing at ${where}</b><span>${wd(addDays(d, -1))} 10am – ${wd(d)} ${part(d, {month: "short"})} 10am</span></div>
     <p class="tmsum">${sum}</p>
     <svg viewBox="0 0 ${Wd + 34} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
+    <div class="tmstorm">Storms from <span class="seg" id="tmStormSeg">${["ecmwf", "gfs", "both"].map(k => `<button type="button" data-s="${k}" aria-pressed="${tmStorm === k}">${k === "both" ? "Both" : SNAME[k]}</button>`).join("")}</span></div>
     ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span class="tmtap">or tap a 3-hour block</span>`}</div>` : ""}
-    <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · strip above the bars: <span style="color:#f2c94c">■</span> storms possible <span style="color:#f08a24">■</span> organised storms <span style="color:#d32f2f">■</span> severe (GFS / ECMWF)` : ""}</div>`;
+    <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · strip above the bars: <span style="color:#f2c94c">■</span> storms possible <span style="color:#f08a24">■</span> organised storms <span style="color:#d32f2f">■</span> severe (${SNAME[tmStorm]})` : ""}</div>`;
+  box.querySelectorAll("#tmStormSeg button").forEach(b => b.onclick = () => { try { localStorage.setItem("tmStorm", b.dataset.s); } catch(e){} fTiming(); });
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
