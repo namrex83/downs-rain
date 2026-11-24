@@ -1856,7 +1856,7 @@ function streamColour(name){   // the same colour the stream has on the map
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TUBE_COL[h % TUBE_COL.length];
 }
-let tubeMain = true;   // the river lines open on the main river's gauges only; a button shows the creeks too
+let tubeMain = innerWidth < 1000;   // a phone opens on the main river only; a computer on the tube map with all the creeks   // the river lines open on the main river's gauges only; a button shows the creeks too
 function tubeDiagram(rows, nameOf, cell){
   const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
   const items = rows.map((r, i) => ({r, i, s: streamOf(nameOf(r))}));
@@ -4894,7 +4894,7 @@ function setTab(t, first){
   if (t !== "rain") { if (hailLayer) map.removeLayer(hailLayer); $("hailKey").innerHTML = ""; map.removeLayer(dotLayer); setDotMode(false); }
   if (t !== "catch") { clearCatchTab(); $("legendBox").style.display = ""; }
   $("sevNote").hidden = !(t === "storms" && stormFlags.any);
-  if (t === "catch" && tab_prev !== "catch") { if (!tubeMain && FW) { tubeMain = true; if (!cMapOn && cList === "lines") drawRivers(FW); } else tubeMain = true;
+  if (t === "catch" && tab_prev !== "catch") { const want = innerWidth < 1000; if (tubeMain !== want && FW) { tubeMain = want; if (!cMapOn && cList === "lines") drawRivers(FW); } else tubeMain = want;
     if (cMapOn || cList !== "lines") { cMapOn = false; cList = "lines"; if (FW) drawRivers(FW); } }   // the Catchments tab opens on the river lines
   cShowSync();
   fsSync(); syncKey();
