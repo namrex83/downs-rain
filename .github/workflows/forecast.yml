@@ -42,6 +42,11 @@ jobs:
         continue-on-error: true          # a problem here shouldn't stop the ECMWF maps going out
         run: python forecast_gfs.py
 
+      - name: Rain timing for all of Australia (GFS, 3-hourly)
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python -u gfs_timing.py
+
       - name: Get ECMWF storm ingredients
         continue-on-error: true          # a problem here shouldn't stop the rain forecast going out
         run: python storms_ecmwf.py

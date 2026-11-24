@@ -4876,23 +4876,35 @@ tpBind("fTp", k => {
 // AI: GFS, ECMWF and ECMWF AI weighted as on the map), how many of the models have rain in each 3 hours, and the
 // hours GFS flags for storms. The 3-hour blocks can be shown on the map: the day's rain shared out by when the
 // models have it at each point (data/om_frac.json, made by om_points.py).
-let fFrame = null, fFrameDay = null, fPlay = null, FRAC, STJ;
+let fFrame = null, fFrameDay = null, fPlay = null, FRAC, FAUS, STJ;   // FAUS: GFS's timing for all of Australia (data/frac_aus.json)
 const FR_CLOCK = ["10am", "1pm", "4pm", "7pm", "10pm", "1am", "4am", "7am", "10am"];
 const fDayNow = () => F && !fSumN ? F.days[+$("fDay").value] : null;
-function frameLabel(){ const d = fDayNow(); return d && fFrame != null && fFrameDay === d && FRAC ? `${FR_CLOCK[fFrame]}–${FR_CLOCK[fFrame + 1]} ${wd(fFrame < 5 ? addDays(d, -1) : d)} ${part(fFrame < 5 ? addDays(d, -1) : d, {month: "short"})}` : ""; }
+function frameLabel(){ const d = fDayNow(); return d && fFrame != null && fFrameDay === d && (FRAC || FAUS) ? `${FR_CLOCK[fFrame]}–${FR_CLOCK[fFrame + 1]} ${wd(fFrame < 5 ? addDays(d, -1) : d)} ${part(fFrame < 5 ? addDays(d, -1) : d, {month: "short"})}` : ""; }
 let FRMAP = null;   // for the current model grid: where each of its points is in om_frac.json (-1: outside)
 function frameFrac(){
-  const d = fDayNow(); if (!d || fFrame == null || fFrameDay !== d || !FRAC) return null;
-  const di = FRAC.days.indexOf(d); if (di < 0) return null;
+  // each map point: the seven-model timing inside the Downs/SEQ box, GFS's everywhere else in Australia
+  const d = fDayNow(); if (!d || fFrame == null || fFrameDay !== d || !(FRAC || FAUS)) return null;
+  const di = FRAC ? FRAC.days.indexOf(d) : -1, da = FAUS ? FAUS.days.indexOf(d) : -1;
+  if (di < 0 && da < 0) return null;
   if (!FRMAP || FRMAP.F !== F){
-    const nc = FRAC.lons.length, idx = new Int32Array(F.lats.length * F.lons.length); let k = 0;
+    const n = F.lats.length * F.lons.length, idx = new Int32Array(n).fill(-1), ia = new Int32Array(n).fill(-1); let k = 0;
+    const nc = FRAC ? FRAC.lons.length : 0;
     for (const la of F.lats) for (const lo of F.lons){
-      const r = FRAC.lats.findIndex(x => Math.abs(x - la) < 0.01), c = FRAC.lons.findIndex(x => Math.abs(x - lo) < 0.01);
-      idx[k++] = r < 0 || c < 0 ? -1 : (r * nc + c) * 8; }
-    FRMAP = {F, idx};
+      if (FRAC){ const r = FRAC.lats.findIndex(x => Math.abs(x - la) < 0.01), c = FRAC.lons.findIndex(x => Math.abs(x - lo) < 0.01);
+        if (r >= 0 && c >= 0) idx[k] = (r * nc + c) * 8; }
+      if (FAUS){ const r = Math.round((FAUS.lats_desc ? FAUS.lat0 - la : la - FAUS.lat0) / FAUS.step), c = Math.round((lo - FAUS.lon0) / FAUS.step);
+        if (r >= 0 && r < FAUS.nlat && c >= 0 && c < FAUS.nlon) ia[k] = (r * FAUS.nlon + c) * 8; }
+      k++; }
+    FRMAP = {F, idx, ia};
   }
-  const f = FRAC.f[di], out = new Array(FRMAP.idx.length);
-  for (let k = 0; k < out.length; k++){ const o = FRMAP.idx[k]; out[k] = o < 0 ? -1 : f[o + fFrame]; }
+  const f = di >= 0 ? FRAC.f[di] : null, fa = da >= 0 ? FAUS.f[da] : null, out = new Array(FRMAP.idx.length);
+  const dig = ch => parseInt(ch, 36);
+  for (let k = 0; k < out.length; k++){
+    const o = FRMAP.idx[k], oa = FRMAP.ia[k];
+    if (f && o >= 0) out[k] = f[o + fFrame];
+    else if (fa && oa >= 0) { let t = 0; for (let b = 0; b < 8; b++) t += dig(fa[oa + b]); out[k] = t ? 100 * dig(fa[oa + fFrame]) / t : 12.5; }
+    else out[k] = -1;
+  }
   return out;
 }
 function fSetFrame(b){
@@ -4935,6 +4947,7 @@ async function fTiming(){
   const td = timingData(d);
   if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
   if (FRAC === undefined) { FRAC = null; try { FRAC = await getJSON("data/om_frac.json"); } catch(e){} }
+  if (FAUS === undefined) { FAUS = null; try { FAUS = await getJSON("data/frac_aus.json"); } catch(e){} }
   if (STJ === undefined) { STJ = null; try { STJ = await getJSON("data/storms.json"); } catch(e){} }
   if (fDayNow() !== d) return;
   const at = FC.pinned || L.latLng(SPOT.ll[0], SPOT.ll[1]), where = FC.pinned ? "the pin" : SPOT.name;
@@ -4972,7 +4985,7 @@ async function fTiming(){
        + `<text x="${x + bw * 1.5}" y="${cy + 14}" text-anchor="middle" style="fill:${c / n > 0.55 ? "#fff" : "var(--ink-2)"}">${c}/${n}</text></g>`; });
   if (past) { const m = g.match(/<rect x="0" y="[^"]+" width="[^"]+" height="[^"]+" fill="var\(--panel\)"[^>]*\/><text[^>]*>now<\/text><line[^>]*\/>/); if (m) { g = g.replace(m[0], "") + m[0]; } }
   FR_CLOCK.forEach((t, b) => g += `<text x="${Math.min(Wd - 12, Math.max(12, b * bw * 3))}" y="${cy + ch + 13}" text-anchor="middle">${t}</text>`);
-  const canMap = FRAC && FRAC.days.includes(d);
+  const canMap = (FRAC && FRAC.days.includes(d)) || (FAUS && FAUS.days.includes(d));
   document.body.classList.add("fcdaily");
   const hBefore = box.hidden ? 0 : box.offsetHeight;
   box.hidden = false;
