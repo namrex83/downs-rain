@@ -17,7 +17,7 @@ import numpy as np
 import requests
 
 LAT_N, LAT_S = -9.0, -44.0          # all of Australia (Torres Strait to Tasmania)
-LON_W, LON_E = 112.0, 155.0
+LON_W, LON_E = 112.0, 160.0       # out past Lord Howe, so coastal systems show well out to sea
 DAYS = 16                         # GFS runs out to 384 hours
 TZ = dt.timedelta(hours=10)
 OUT = os.path.join("data", "forecast_gfs.json")

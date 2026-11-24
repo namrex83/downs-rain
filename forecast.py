@@ -19,7 +19,7 @@ import sys
 import numpy as np
 
 LAT_N, LAT_S = -9.0, -44.0          # all of Australia (Torres Strait to Tasmania)
-LON_W, LON_E = 112.0, 155.0
+LON_W, LON_E = 112.0, 160.0       # out past Lord Howe, so coastal systems show well out to sea
 TZ = dt.timedelta(hours=10)       # Queensland, no daylight saving
 GRIB = "tp.grib2"
 # "python forecast.py" is ECMWF's main model (IFS, out to 10 days); "python forecast.py aifs" is ECMWF's
