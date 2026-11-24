@@ -73,7 +73,7 @@ def run():
     if when.hour % 12:          # the 06z and 18z runs stop at 90 hours; use the 00z or 12z run before
         when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and json.load(open(OUT)).get("v") == 3 and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and json.load(open(OUT)).get("max_step") == MAX_STEP and json.load(open(OUT)).get("v") == 3 and json.load(open(OUT))["lons"][-1] >= LON_E - 1e-6 and "--force" not in sys.argv:
         print(f"Already have the {tag} run")
         return
     first = (24 - when.hour) % 24                 # first step that falls on 00z (10am Qld)

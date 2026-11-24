@@ -99,7 +99,7 @@ def run():
     if when is None:
         sys.exit("No complete GFS run found on NOMADS")
     tag = when.strftime("%Y-%m-%dT%HZ")
-    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and len(json.load(open(OUT))["days"]) >= DAYS - 1 and len(json.load(open(OUT))["lons"]) > 100 and "--force" not in sys.argv:
+    if os.path.exists(OUT) and json.load(open(OUT)).get("run") == tag and len(json.load(open(OUT))["days"]) >= DAYS - 1 and len(json.load(open(OUT))["lons"]) > 100 and json.load(open(OUT))["lons"][-1] >= LON_E - 1e-6 and "--force" not in sys.argv:
         print(f"Already have the GFS {tag} run")
         return
     steps = steps_for(when)
