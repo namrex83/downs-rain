@@ -811,7 +811,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <!-- smooths the Bureau's blocky radar pictures (Radar tab): blur, then firm the edge back up, so the rain areas get
        rounded, flowing outlines; the blur is set to the picture's pixel size on screen as the map zooms -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rsmooth" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
-    <feGaussianBlur id="rsmoothBlur" stdDeviation="1.5"/><feComponentTransfer><feFuncA type="linear" slope="2.6" intercept="-0.45"/></feComponentTransfer></filter></svg>
+    <!-- first drop the palest level (BOM's lightest, under about 0.5-1 mm/h: mostly drizzle or rain drying up before the ground) -->
+    <feColorMatrix in="SourceGraphic" type="matrix" result="lightmask" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  -2.5 -2.5 -2.5 0 7.3"/>
+    <feComposite in="SourceGraphic" in2="lightmask" operator="arithmetic" k1="1" k2="0" k3="0" k4="0" result="nolight"/>
+    <feGaussianBlur in="nolight" id="rsmoothBlur" stdDeviation="1.5"/><feComponentTransfer><feFuncA type="linear" slope="2.6" intercept="-0.45"/></feComponentTransfer></filter></svg>
   <div id="mapRow"><div id="map"></div><div class="fcOnly" hidden><div class="tap timing" id="fTiming" hidden></div></div><div class="tap fcOnly chartbox" id="fChart" hidden></div></div>
   <div class="tap rainOnly" id="tap">Tap the map to read the rainfall at any spot.</div>
   <div class="stats rainOnly" id="stats"></div>
@@ -5005,7 +5008,7 @@ function rPlay(on){
 function rSmooth(){
   const l = rLayers[rPos]; if (!l || !l._map) return;
   const b = l.getBounds(), w = map.latLngToContainerPoint(b.getNorthEast()).x - map.latLngToContainerPoint(b.getSouthWest()).x;
-  $("rsmoothBlur").setAttribute("stdDeviation", Math.max(0.6, Math.min(14, w / 512 * 0.75)).toFixed(2));
+  $("rsmoothBlur").setAttribute("stdDeviation", Math.max(0.5, Math.min(10, w / 512 * 0.55)).toFixed(2));
 }
 map.on("zoomend", () => { if (tab === "radar") rSmooth(); });
 function rClear(){
@@ -5016,7 +5019,7 @@ async function startRadar(fit){
   rClear();
   [...$("rRange").children].forEach(x => x.setAttribute("aria-pressed", +x.dataset.km === rRange));
   [...$("rSite").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.s === rSite));
-  $("rLegend").innerHTML = R_COLOURS.map((c, i) => `<div><i style="background:${c}"></i><span>${R_RATES[i]}${i === R_COLOURS.length - 1 ? "+" : ""}</span></div>`).join("");
+  $("rLegend").innerHTML = R_COLOURS.map((c, i) => i ? `<div><i style="background:${c}"></i><span>${R_RATES[i]}${i === R_COLOURS.length - 1 ? "+" : ""}</span></div>` : "").join("");   // the palest level isn't drawn
   if (!idx) { try { idx = await getJSON("data/index.json"); } catch(e){ return; } }
   if (ring) { ring.setLatLng([R_SITES[rSite].lat, R_SITES[rSite].lon]); ring.setRadius(rRange * 1000); }
   const newest = await rNewest();
