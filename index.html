@@ -396,7 +396,8 @@ details.discfold{text-align:left}
   #cControls .catchfield{flex:1 1 220px} #cControls .catchfield select{min-height:32px;padding-top:2px;padding-bottom:2px}
   body.ctable #secRiv>summary{font-size:.86rem;padding:2px 0} body.ctable #secRiv{padding:6px 10px}
   #cControls .seg button{white-space:nowrap;padding:0 9px}
-  body.ctable #riverTube{position:relative} body.ctable .tubesw{position:absolute;top:-30px;right:0;margin:0} body.ctable .tubesw button{min-height:26px;font-size:.76rem}
+  body.ctable #riverTube{position:relative} body.ctable .tubesw{position:absolute;top:-30px;right:0;margin:0}
+  body.ctable .tubesw.tubepart{right:auto;left:330px} body.ctable .tubesw button{min-height:26px;font-size:.76rem}
   /* tighter controls: the buttons and loop controls only as big as they need to be */
   .seg button{min-height:32px;padding:0 10px;font-size:.84rem}
   .transport{padding:2px 4px}
@@ -1874,7 +1875,7 @@ function streamColour(name){   // the same colour the stream has on the map
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TUBE_COL[h % TUBE_COL.length];
 }
-let tubeDetail = false;   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
+let tubeDetail = false, tubePart = "all";   // tubePart: the rail map's whole river, or its "up"per or lower ("dn") half   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
 let tubeMain = innerWidth < 1000;   // a phone opens on the main river only; a computer on the tube map with all the creeks   // the river lines open on the main river's gauges only; a button shows the creeks too
 function tubeDiagram(rows, nameOf, cell){
   const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
@@ -1905,7 +1906,20 @@ function tubeDiagram(rows, nameOf, cell){
     for (const kd of kids.filter(kd => kd.j === Infinity)) html += line(kd.k, deep + 1);
     return `<div class="tline${kids.some(kd => kd.j === Infinity) ? " tend" : ""}" style="--c:${streamColour(s)}"><span class="tlab">${s}${deep ? ` <small>→ ${parent[s].replace(/ (River|Creek)$/, "")}</small>` : ""}</span>${html}</div>`;
   };
-  if (innerWidth >= 1000 && !tubeDetail) return sw + tubeMap(items, streams, tops, parent, joinAt, cell);
+  if (innerWidth >= 1000 && !tubeDetail) {
+    // the whole river, or its upper or lower half with the creeks joining there (bigger, fits one screen)
+    const mainIt = items.filter(x => tops.includes(x.s)); let itP = items, stP = streams;
+    if (tubePart !== "all" && mainIt.length > 8 && !tubeMain) {
+      const mid = mainIt[Math.floor(mainIt.length / 2)].i, upper = tubePart === "up";
+      const rootOf2 = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf2(parent[c]);
+      const keepS = new Set(streams.filter(c => tops.includes(c) || (upper ? joinAt(rootOf2(c)) <= mid : joinAt(rootOf2(c)) > mid)));
+      const it2 = items.filter(x => tops.includes(x.s) ? (upper ? x.i <= mid : x.i >= mid) : keepS.has(x.s));
+      itP = it2; stP = streams.filter(c => keepS.has(c));
+    }
+    const nm = i => { const x = mainIt[i]; return x ? nameOf(x.r).replace(/^.* at /, "").replace(/ \(.*\)$/, "") : ""; };
+    const half = mainIt.length > 8 && !tubeMain ? `<div class="seg tubesw tubepart" role="group" aria-label="Which part"><button type="button" data-p="all" aria-pressed="${tubePart === "all"}">Whole river</button><button type="button" data-p="up" aria-pressed="${tubePart === "up"}">Upper (${nm(0)}–${nm(Math.floor(mainIt.length / 2))})</button><button type="button" data-p="dn" aria-pressed="${tubePart === "dn"}">Lower (${nm(Math.floor(mainIt.length / 2))}–${nm(mainIt.length - 1)})</button></div>` : "";
+    return sw + half + tubeMap(itP, stP, tops, parent, joinAt, cell);
+  }
   return sw + tops.map(t => line(t, 0)).join("");
 }
 // On a computer: a real tube-map. The river is one straight line across with its gauges as stations, names angled
@@ -2281,6 +2295,7 @@ function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || in
   document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * .9, 340)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
+  if (b.dataset.p) { tubePart = b.dataset.p; drawRivers(FW); return; }
   tubeDetail = b.dataset.m === "d"; tubeMain = b.dataset.m === "1"; drawRivers(FW); });
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
