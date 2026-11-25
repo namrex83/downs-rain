@@ -151,6 +151,16 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{flex:0 0 auto;width:max-content;max-width:100%;margin:0 10px 0 0;padding:2px 0 2px 8px;border:1px dashed var(--c);border-radius:10px;background:color-mix(in srgb,var(--c) 5%,transparent)}
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
+  .tmstrip{display:flex;flex-wrap:wrap;gap:6px 14px;margin:4px 0 2px}
+  .tmcr{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:.78rem}
+  .tmcr>b{color:#fff;border-radius:4px;padding:0 5px;font-size:.7rem} .tmcr>i{font-weight:600;color:var(--ink-2)}
+  .tmchip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:1px 8px;font:600 .76rem var(--body);color:var(--ink);cursor:pointer}
+  .tmchip code{font-family:var(--mono);color:var(--ink-2)} .tmchip.g1{border-color:#f0a020} .tmchip.g2,.tmchip.g3{border-color:#e00000;background:#fdecec} .tmchip.g4{border-color:#7a2db0}
+  .tubemap .tmst{cursor:pointer}
+  .tmpop{position:absolute;z-index:4000;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,30,60,.25);padding:10px 12px;font-size:.84rem}
+  .tmpop .tmx{float:right;border:0;background:none;font-size:1rem;cursor:pointer;color:var(--ink-3)}
+  .tmpop .tmpl{color:var(--ink-3);font-size:.76rem} .tmpop .tmph{margin:4px 0} .tmpop .tmph span{font:700 1.2rem var(--mono)}
+  .tmpop .tmpn{margin:4px 0;color:var(--ink-2)} .tmpop a{font-weight:600}
   .tmleg{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:.74rem;color:var(--ink-2);margin:2px 0}
   .tmleg b{display:inline-block;color:#fff;border-radius:4px;padding:0 4px;margin-right:4px;font-size:.68rem}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
@@ -1910,7 +1920,26 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
 // river (or the creek it runs into), all names angled like the river's. Each branch goes on the nearest free level
 // above or below the river, running upstream (left) where there's room, else right; nothing may cross a line or
 // run through another line's names. Creeks running into a creek branch off that creek's line the same way.
+let TM_INFO = [];
+document.addEventListener("click", e => {   // a station on the rail map: a box with everything about it
+  const pop = $("tmPop"), st = e.target.closest && e.target.closest(".tmst");
+  if (!st) { if (pop && !(e.target.closest && e.target.closest("#tmPop"))) pop.hidden = true; return; }
+  const i = TM_INFO[+st.dataset.tm]; if (!i) return;
+  const box = pop || Object.assign(document.body.appendChild(document.createElement("div")), {id: "tmPop", className: "tmpop"});
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const lvl = {g1: "Rising, below flood level", g2: "Minor flood", g3: "Moderate flood", g4: "Major flood"}[i.lvl] || "";
+  box.innerHTML = `<button type="button" class="tmx" aria-label="Close">✕</button><b>${esc(i.name)}</b><div class="tmpl">${esc(i.line || "")}</div>
+    <div class="tmph"><span>${esc(i.h)}</span> m${i.up ? " ▲ rising" : ""}${lvl ? ` · <b>${lvl}</b>` : ""}</div>
+    <div class="tmpn">${i.note ? esc(i.note).replace(/ · /g, "<br>") : "No rise expected."}</div>
+    ${i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">Bureau's river height graph ↗</a>` : ""}`;
+  box.hidden = false;
+  const r = st.getBoundingClientRect(), w = Math.min(300, innerWidth - 20);
+  box.style.width = w + "px"; box.style.left = Math.max(10, Math.min(innerWidth - w - 10, r.left + r.width / 2 - w / 2)) + scrollX + "px";
+  box.style.top = (r.bottom + 8 + scrollY) + "px";
+  box.querySelector(".tmx").onclick = () => box.hidden = true;
+});
 function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
+  if (W === 1300) TM_INFO = [];
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
     const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
     const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
@@ -1983,9 +2012,9 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   const spread = {};                                       // creeks joining at the same spot leave a little apart
   const order = [];                                        // parents before their creeks, bigger families first
   const famSize = c => st[c].length + (kids[c] || []).reduce((a, k) => a + famSize(k), 0);
-  const roots = creeks.filter(c => tops.includes(parent[c]) || !parent[c]).sort((a, b) => famSize(b) - famSize(a));
-  const walk = c => { order.push(c); (kids[c] || []).slice().sort((a, b) => famSize(b) - famSize(a)).forEach(walk); };
-  roots.forEach(walk);
+  // as lines: the creeks running straight into the river with 3 or more gauges; the rest are listed under the map
+  const roots = creeks.filter(c => (tops.includes(parent[c]) || !parent[c]) && st[c].length >= 3).sort((a, b) => famSize(b) - famSize(a));
+  roots.forEach(c => order.push(c));
   const unplaced = [];
   for (const c of order){
     const h = rowH(c), isRoot = tops.includes(parent[c]) || !parent[c];
@@ -2027,30 +2056,17 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
     if (best.k === levels[best.sd].length) levels[best.sd].push({h: best.h}); else levels[best.sd][best.k].h = best.h;
     placed.push(best.g);
   }
-  for (const c of unplaced.splice(0)){
-    const P = placed.find(o => o.c === parent[c]), isRoot = tops.includes(parent[c]) || !parent[c];
-    if (!isRoot && !P) { unplaced.push(c); continue; }
-    let jx, jy, sides;
-    if (isRoot){ const j = joinAt(c), nx = main.findIndex(x => x.i >= j); jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? xOf.get(main[0].i) - sp / 2 : xOf.get(main[nx].i) - sp / 2; jy = 0; sides = ["dn", "up"]; }
-    else { jx = P.xs[P.xs.length - 1] + (P.dir === "L" ? -1 : 1) * CSP / 2; jy = P.y; sides = [P.side]; }
-    let g = null;
-    const kmin = isRoot ? 0 : P.k + 1;
-    for (let k = kmin; !g && k <= Math.max(levels.up.length, levels.dn.length); k++) for (const sd of sides){
-      const isNew = k >= levels[sd].length; if (k > levels[sd].length) continue; if (isNew) levels[sd].push({h: RH});
-      for (const dir of ["L", "R"]){ const t = geom(c, sd, k, dir, jx, jy, RH); if (ok(t, true)) { g = t; break; } }
-      if (g) break; if (isNew) levels[sd].pop(); }
-    if (g) placed.push(g); else unplaced.push(c);
-  }
   // draw: y relative to the river, shifted down by the up side's height
   const upH = MZ + levels.up.reduce((a, l) => a + l.h + 16, 0), dnH = MZ + levels.dn.reduce((a, l) => a + l.h + 16, 0);
   const Y0 = upH + 8, H = Math.round(upH + dnH + 16);
-  const dot = (x, y, i, col, num) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
+  const reg = (i, line) => { TM_INFO.push({...i, line}); return TM_INFO.length - 1; };
+  const dot = (x, y, i, col, num, line) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
     const w = 10 + num.length * 5.6;
-    return `<g><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
+    return `<g class="tmst" data-tm="${reg(i, line)}"><title>${esc(i.name)}: ${esc(i.h)} m (tap for more)</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
       + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>${i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : ""}</g>`; };
   const lab = (x, y, i, up) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan>${i.up ? ' <tspan class="tmh">▲</tspan>' : ""}`;
     const el = up ? `<text transform="translate(${x + 4},${y - 12}) rotate(${-ANG})">${t}</text>` : `<text transform="translate(${x + 4},${y + 19}) rotate(${ANG})">${t}</text>`;
-    return i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">${el}</a>` : el; };
+    return `<g class="tmst" data-tm="${TM_INFO.length - 1}">${el}</g>`; };
   const bul = (x, y, cd, col, anchor) => { const w = 10 + cd.length * 7;
     return `<rect x="${anchor === "end" ? x - w : x}" y="${y - 8}" width="${w}" height="16" rx="4" fill="${col}"/><text x="${anchor === "end" ? x - w / 2 : x + w / 2}" y="${y + 4.5}" text-anchor="middle" class="tmbul" style="font-size:10.5px">${cd}</text>`; };
   let lines = "", dots = "", labs = "";
@@ -2060,17 +2076,22 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
     const col = streamColour(g.c), y = Y0 + g.y, n = g.xs.length, far = g.xs[n - 1], s = g.dir === "L" ? -1 : 1;
     const r0 = 12, vy = y - Math.sign(y - (Y0 + g.jy)) * r0;
     lines += `<path d="M${g.jx} ${Y0 + g.jy} V${vy} Q${g.jx} ${y} ${g.jx + s * r0} ${y} H${far + s * 10}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-    g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–"); labs += lab(x, y, z.i, g.side === "up"); });
+    g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–", g.c); labs += lab(x, y, z.i, g.side === "up"); });
     // the line's name at its far end
     labs += bul(far + s * 16, y, code[g.c], col, s < 0 ? "end" : "start");
   }
-  main.forEach((x, k) => { const i = mInfo[k]; dots += dot(xOf.get(x.i), Y0, i, streamColour(x.s), i.h || "–"); labs += lab(xOf.get(x.i), Y0, i, k % 2 === 0); });
+  main.forEach((x, k) => { const i = mInfo[k]; dots += dot(xOf.get(x.i), Y0, i, streamColour(x.s), i.h || "–", x.s); labs += lab(xOf.get(x.i), Y0, i, k % 2 === 0); });
   labs = bul(PAD - 14, Y0, code[tops[0]], streamColour(tops[0]), "start").replace('height="16"', 'height="22"').replace(`y="${Y0 - 8}"`, `y="${Y0 - 11}"`) + labs;
   labs += `<text x="${lastX + 16}" y="${Y0 + 4}" class="tmc" fill="${streamColour(tops[0])}">${esc(tops.join(" & "))} →</text>`;
+  const others = creeks.filter(c => !placed.some(g => g.c === c));
+  const jIdx = c => tops.includes(parent[c]) || !parent[c] ? joinAt(c) : jIdx(parent[c]) + .5;
+  const strip = others.length ? `<div class="tmstrip">${others.sort((a, b) => jIdx(a) - jIdx(b)).map(c => `<span class="tmcr"><b style="background:${streamColour(c)}">${code[c]}</b><i>${esc(c)}${tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</i>${st[c].map(z => { const k = reg(z.i, c), f = z.i.lvl;
+      return `<button type="button" class="tmst tmchip ${f || ""}" data-tm="${k}">${esc(z.i.name)} <code>${esc(z.i.h)}</code>${z.i.up ? " ▲" : ""}${z.i.ai ? " 🤖" : ""}</button>`; }).join("")}</span>`).join("")}</div>` : "";
+  unplaced.length = 0;
   const miss = unplaced.length ? `<p class="note" style="margin:2px 0 0">Not drawn here (no room): ${unplaced.map(esc).join(", ")} - see the Table.</p>` : "";
   const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</span>`).join("")}</div>`;
-  return {H, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${miss}
-    <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
+  return {H, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
+    <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Smaller creeks are listed under the map. Tap any station for its AI and Bureau peaks and the Bureau's graph. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
 function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
