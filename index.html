@@ -151,6 +151,8 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   body.clines .tline .tline{flex:0 0 auto;width:max-content;max-width:100%;margin:0 10px 0 0;padding:2px 0 2px 8px;border:1px dashed var(--c);border-radius:10px;background:color-mix(in srgb,var(--c) 5%,transparent)}
   body.clines .tline .tline{position:relative;padding-top:17px;min-width:150px}
   body.clines .tline .tline .tlab{position:absolute;top:2px;left:8px;width:auto;white-space:nowrap;font-size:.72rem;margin:0}
+  .tmleg{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:.74rem;color:var(--ink-2);margin:2px 0}
+  .tmleg b{display:inline-block;color:#fff;border-radius:4px;padding:0 4px;margin-right:4px;font-size:.68rem}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
   .tubemap text{font:600 13.5px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
   .tubemap .tmc{font:700 italic 13px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
@@ -1898,10 +1900,177 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const box = $("riverTube"), cw = Math.max(600, box.clientWidth || 1200), top = box.getBoundingClientRect().top || 300;
   const avail = Math.max(380, innerHeight - Math.max(60, Math.min(top, 330)) - 70);
   let best = null;
-  for (const W of [1300, 1450]){   // no wider: the names would be too small to read
-    const r = tubeMap1(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H);
+  for (const W of [1300, 1450, 1600]){   // no wider: the names would be too small to read
+    const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H) - (r.html.includes("Not drawn here") ? 1 : 0);
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
   return best.html;
+}
+// The transit-map layout (computer): the river a straight line across, every creek a branch that leaves it on a 45°
+// diagonal and then runs level, like a tube or Tokyo rail line, its stations in true order from where it meets the
+// river (or the creek it runs into), all names angled like the river's. Each branch goes on the nearest free level
+// above or below the river, running upstream (left) where there's room, else right; nothing may cross a line or
+// run through another line's names. Creeks running into a creek branch off that creek's line the same way.
+function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
+  const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
+    const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
+    const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
+    const note = [...t.content.querySelectorAll(".pkline,.tsai")].map(e => e.textContent.trim()).filter(Boolean).join(" · ");
+    const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
+    return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const PAD = 40, ANG = 32, TAN = Math.tan(ANG * Math.PI / 180), SIN = Math.sin(ANG * Math.PI / 180), COS = Math.cos(ANG * Math.PI / 180);
+  const CH = 7.1;                                         // width of a character of the names, about
+  const labLen = i => (i.name.length + (i.up ? 2 : 0)) * CH + 8;
+  const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
+  const sp = Math.max(40, Math.min(90, (W - PAD * 2 - 140) / Math.max(1, main.length - 1)));
+  const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + 22 + k * sp));
+  const lastX = PAD + 22 + (main.length - 1) * sp;
+  const code = {}, taken = new Set();
+  for (const st of [...tops, ...streams.filter(c => !tops.includes(c))]){
+    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + (w.split(" ")[1] || "")[0], w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
+    const c = cand.find(x => x && x.length && !taken.has(x)) || w.slice(0, 3); taken.add(c); code[st] = c; }
+  const mInfo = main.map(info);
+  const MZ = Math.max(70, ...mInfo.map(labLen)) * SIN + 24;   // room above and below the river for its names
+  // the creeks, each with its stations nearest the join first
+  const creeks = streams.filter(c => !tops.includes(c));
+  const st = {}; for (const c of creeks) st[c] = items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}));
+  // on a creek line, "Oakey (Weir Park)", "Oakey (Kingsthorpe Haden Road)"... show as just the part in brackets
+  for (const c of creeks){ const pre = st[c].map(z => (z.i.name.match(/^([^()]+?) \((.+)\)$/) || [])[1]).filter(Boolean);
+    const common = pre.find(p => pre.filter(q => q === p).length >= 2);
+    if (common) st[c].forEach(z => { const m = z.i.name.match(/^([^()]+?) \((.+)\)$/); if (m && m[1] === common) z.i = {...z.i, name: m[2]}; }); }
+  const kids = {}; for (const c of creeks) (kids[parent[c]] = kids[parent[c]] || []).push(c);
+  const CSP = 44;                                         // station spacing on a creek
+  const RH = Math.min(150, Math.max(46, ...creeks.flatMap(c => st[c].map(z => labLen(z.i)))) * SIN + 22);   // every level the same height
+  const rowH = c => RH;
+  // rows: up side y = -(MZ + offset), down side y = +(MZ + offset); each row's height is its tallest names
+  const placed = [];                                      // {c, side, y, dir, x0 (join x on parent), xs (station xs), box, segs}
+  const segX = (p1, p2, p3, p4) => { const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)); };
+  const inBox = ([x, y], [a, b, c, d]) => x > a && x < c && y > b && y < d;
+  const segBox = (p, q, bx) => { if (inBox(p, bx) || inBox(q, bx)) return true; const [a, b, c, d] = bx;
+    return [[[a, b], [c, b]], [[c, b], [c, d]], [[c, d], [a, d]], [[a, d], [a, b]]].some(([u, v]) => segX(p, q, u, v)); };
+  const boxX = (A, B) => A[0] < B[2] && B[0] < A[2] && A[1] < B[3] && B[1] < A[3];
+  // levels in use on each side: [{y, h}] from the river outward; a branch's level is chosen among these or a new one
+  const levels = {up: [], dn: []};
+  const levelY = (sd, k, h) => { let off = MZ; for (let j = 0; j < k; j++) off += levels[sd][j].h + 16; return sd === "up" ? -off : off; };
+  const geom = (c, sd, k, dir, jx, jy, h) => {
+    const y = levelY(sd, k, h), s = dir === "L" ? -1 : 1, x1 = jx;   // straight off the line, then a rounded turn
+    const n = st[c].length, xs = st[c].map((z, q) => x1 + s * (16 + q * CSP));
+    const far = xs[n - 1], nameW = (code[c].length * 7 + 24);   // the line's bullet at its far end
+    const xa = Math.min(x1, far) - (dir === "L" ? nameW : 8), xb = Math.max(x1, far) + (dir === "R" ? nameW : 8);
+    const lab = Math.max(...st[c].map(z => labLen(z.i))) * COS;
+    const top = sd === "up" ? y - h : y - 12, bot = sd === "up" ? y + 12 : y + h;
+    const box = [xa - 4, top, Math.max(xb, Math.max(...xs) + lab) + 4, bot];
+    const segs = [[[jx, jy], [x1, y]], [[x1, y], [far, y]]];
+    return {c, side: sd, k, y, dir, jx, jy, x1, xs, box, segs, h, nameW};
+  };
+  const ptSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)) : 0;
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+  const near = (a, b, c, d) => Math.min(ptSeg(a, c, d), ptSeg(b, c, d), ptSeg(c, a, b), ptSeg(d, a, b));
+  const ok = (g, relax) => {
+    if (g.box[0] < 2 || g.box[2] > W - 2) return false;
+    if (relax) return !placed.some(o => boxX(g.box, o.box));
+    for (const o of placed){
+      const fam = o.c === parent[g.c] || parent[o.c] === g.c;
+      if (boxX(g.box, o.box)) return false;
+      for (const s1 of g.segs){ if (!fam && segBox(s1[0], s1[1], o.box)) return false;
+        for (const s2 of o.segs) if (segX(s1[0], s1[1], s2[0], s2[1]) || (!fam && near(s1[0], s1[1], s2[0], s2[1]) < 16)) return false; }   // lines kept apart
+      for (const s2 of o.segs) if (!fam && segBox(s2[0], s2[1], g.box)) return false;
+    }
+    return true;
+  };
+  const spread = {};                                       // creeks joining at the same spot leave a little apart
+  const order = [];                                        // parents before their creeks, bigger families first
+  const famSize = c => st[c].length + (kids[c] || []).reduce((a, k) => a + famSize(k), 0);
+  const roots = creeks.filter(c => tops.includes(parent[c]) || !parent[c]).sort((a, b) => famSize(b) - famSize(a));
+  const walk = c => { order.push(c); (kids[c] || []).slice().sort((a, b) => famSize(b) - famSize(a)).forEach(walk); };
+  roots.forEach(walk);
+  const unplaced = [];
+  for (const c of order){
+    const h = rowH(c), isRoot = tops.includes(parent[c]) || !parent[c];
+    let jx, jy, sides;
+    if (isRoot){
+      const j = joinAt(c), nx = main.findIndex(x => x.i >= j);
+      jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? xOf.get(main[0].i) - sp / 2 : xOf.get(main[nx].i) - sp / 2;
+      const key = Math.round(jx); spread[key] = (spread[key] || 0) + 1; jx += (spread[key] - 1) * 10 * (spread[key] % 2 ? 1 : -1);
+      jy = 0; sides = ["up", "dn"];
+    } else {
+      const P = placed.find(o => o.c === parent[c]); if (!P) { unplaced.push(c); continue; }
+      // where it joins its parent: between the parent's station just downstream of the join and the next one up
+      const j = joinAt(c), pst = st[P.c], q = pst.findIndex(z => z.it.i >= j && (pst.indexOf(z) === pst.length - 1 || pst[pst.indexOf(z) + 1].it.i < j));
+      const qq = q < 0 ? pst.length - 1 : q, s = P.dir === "L" ? -1 : 1;
+      jx = qq + 1 < pst.length ? (P.xs[qq] + P.xs[qq + 1]) / 2 : P.xs[pst.length - 1] + s * CSP / 2;
+      jy = P.y; sides = [P.side];
+    }
+    let best = null;
+    for (const sd of sides){
+      const kmin = isRoot ? 0 : placed.find(o => o.c === parent[c]).k + 1;
+      for (let k = kmin; k <= levels[sd].length; k++){
+        const isNew = k === levels[sd].length, old = isNew ? null : levels[sd][k];
+        if (isNew) levels[sd].push({h}); const hold = levels[sd][k].h; levels[sd][k].h = Math.max(hold, h);
+        const grow = (isNew ? h : Math.max(0, h - hold));
+        // a taller level moves the levels beyond it: only allowed if nothing there yet
+        const movesOthers = !isNew && h > hold && placed.some(o => o.side === sd && o.k > k);
+        for (const dir of ["L", "R"]){
+          if (movesOthers) continue;
+          const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h);
+          if (!ok(g)) continue;
+          const score = grow * 10 + (dir === "R" ? 30 : 0) + k;
+          if (!best || score < best.score) best = {score, g, sd, k, h: levels[sd][k].h};
+        }
+        levels[sd][k].h = hold; if (isNew) levels[sd].pop();
+        if (best && best.score < 10) break;
+      }
+    }
+    if (!best) { unplaced.push(c); continue; }
+    if (best.k === levels[best.sd].length) levels[best.sd].push({h: best.h}); else levels[best.sd][best.k].h = best.h;
+    placed.push(best.g);
+  }
+  for (const c of unplaced.splice(0)){
+    const P = placed.find(o => o.c === parent[c]), isRoot = tops.includes(parent[c]) || !parent[c];
+    if (!isRoot && !P) { unplaced.push(c); continue; }
+    let jx, jy, sides;
+    if (isRoot){ const j = joinAt(c), nx = main.findIndex(x => x.i >= j); jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? xOf.get(main[0].i) - sp / 2 : xOf.get(main[nx].i) - sp / 2; jy = 0; sides = ["dn", "up"]; }
+    else { jx = P.xs[P.xs.length - 1] + (P.dir === "L" ? -1 : 1) * CSP / 2; jy = P.y; sides = [P.side]; }
+    let g = null;
+    const kmin = isRoot ? 0 : P.k + 1;
+    for (let k = kmin; !g && k <= Math.max(levels.up.length, levels.dn.length); k++) for (const sd of sides){
+      const isNew = k >= levels[sd].length; if (k > levels[sd].length) continue; if (isNew) levels[sd].push({h: RH});
+      for (const dir of ["L", "R"]){ const t = geom(c, sd, k, dir, jx, jy, RH); if (ok(t, true)) { g = t; break; } }
+      if (g) break; if (isNew) levels[sd].pop(); }
+    if (g) placed.push(g); else unplaced.push(c);
+  }
+  // draw: y relative to the river, shifted down by the up side's height
+  const upH = MZ + levels.up.reduce((a, l) => a + l.h + 16, 0), dnH = MZ + levels.dn.reduce((a, l) => a + l.h + 16, 0);
+  const Y0 = upH + 8, H = Math.round(upH + dnH + 16);
+  const dot = (x, y, i, col, num) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
+    const w = 10 + num.length * 5.6;
+    return `<g><title>${esc(i.name)}: ${esc(i.h)} m${i.note ? " · " + esc(i.note) : ""}</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
+      + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>${i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : ""}</g>`; };
+  const lab = (x, y, i, up) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan>${i.up ? ' <tspan class="tmh">▲</tspan>' : ""}`;
+    const el = up ? `<text transform="translate(${x + 4},${y - 12}) rotate(${-ANG})">${t}</text>` : `<text transform="translate(${x + 4},${y + 19}) rotate(${ANG})">${t}</text>`;
+    return i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">${el}</a>` : el; };
+  const bul = (x, y, cd, col, anchor) => { const w = 10 + cd.length * 7;
+    return `<rect x="${anchor === "end" ? x - w : x}" y="${y - 8}" width="${w}" height="16" rx="4" fill="${col}"/><text x="${anchor === "end" ? x - w / 2 : x + w / 2}" y="${y + 4.5}" text-anchor="middle" class="tmbul" style="font-size:10.5px">${cd}</text>`; };
+  let lines = "", dots = "", labs = "";
+  mains.forEach((m, k) => { if (!m.length) return; const xs = m.map(x => xOf.get(x.i));
+    lines += `<line x1="${xs[0]}" y1="${Y0}" x2="${xs[xs.length - 1]}" y2="${Y0}" stroke="${streamColour(tops[k])}" stroke-width="8" stroke-linecap="round"/>`; });
+  for (const g of placed){
+    const col = streamColour(g.c), y = Y0 + g.y, n = g.xs.length, far = g.xs[n - 1], s = g.dir === "L" ? -1 : 1;
+    const r0 = 12, vy = y - Math.sign(y - (Y0 + g.jy)) * r0;
+    lines += `<path d="M${g.jx} ${Y0 + g.jy} V${vy} Q${g.jx} ${y} ${g.jx + s * r0} ${y} H${far + s * 10}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–"); labs += lab(x, y, z.i, g.side === "up"); });
+    // the line's name at its far end
+    labs += bul(far + s * 16, y, code[g.c], col, s < 0 ? "end" : "start");
+  }
+  main.forEach((x, k) => { const i = mInfo[k]; dots += dot(xOf.get(x.i), Y0, i, streamColour(x.s), i.h || "–"); labs += lab(xOf.get(x.i), Y0, i, k % 2 === 0); });
+  labs = bul(PAD - 14, Y0, code[tops[0]], streamColour(tops[0]), "start").replace('height="16"', 'height="22"').replace(`y="${Y0 - 8}"`, `y="${Y0 - 11}"`) + labs;
+  labs += `<text x="${lastX + 16}" y="${Y0 + 4}" class="tmc" fill="${streamColour(tops[0])}">${esc(tops.join(" & "))} →</text>`;
+  const miss = unplaced.length ? `<p class="note" style="margin:2px 0 0">Not drawn here (no room): ${unplaced.map(esc).join(", ")} - see the Table.</p>` : "";
+  const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</span>`).join("")}</div>`;
+  return {H, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${miss}
+    <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Names link to the Bureau's graph; hover a station for the AI note. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
 function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
