@@ -2022,7 +2022,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   const near = (a, b, c, d) => Math.min(ptSeg(a, c, d), ptSeg(b, c, d), ptSeg(c, a, b), ptSeg(d, a, b));
   const ok = (g, relax) => {
     if (g.box[0] < 2 || g.box[2] > W - 2) return false;
-    if (relax) return !placed.some(o => boxX(g.box, o.box));
+    if (relax) return !placed.some(o => { const kin = parent[o.c] === parent[g.c] || o.c === parent[g.c] || parent[o.c] === g.c;   // branches of one creek may share a start
+      return boxX(g.box, o.box) || g.segs.some((s1, i) => o.segs.some((s2, j) => (segX(s1[0], s1[1], s2[0], s2[1]) && !(kin && i === 0 && j === 0)) || (!kin && near(s1[0], s1[1], s2[0], s2[1]) < 6))); });
     for (const o of placed){
       const fam = o.c === parent[g.c] || parent[o.c] === g.c;
       if (boxX(g.box, o.box)) return false;
@@ -2041,7 +2042,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   const walk = c => { order.push(c); (kids[c] || []).slice().sort((a, b) => famSize(b) - famSize(a)).forEach(walk); };
   roots.forEach(walk);
   const unplaced = [];
-  for (const c of order){
+  // a second go, a little looser, for any creek that found no room (its track may run close to another)
+  for (let pass = 0, list = order; pass < 2; pass++, list = unplaced.splice(0)) for (const c of list){
     const h = rowH(c), isRoot = tops.includes(parent[c]) || !parent[c];
     let jx, jy, sides;
     if (isRoot){
@@ -2071,7 +2073,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
           if (movesOthers) continue;
           if (Math.abs(off) + 14 > Math.abs(levelY(sd, k, levels[sd][k].h) - jy)) continue;
           const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h, off);
-          if (!ok(g)) continue;
+          if (!ok(g, pass === 1)) continue;
           const score = grow * 10 + (dir === "R" ? 30 : 0) + k + Math.abs(off) * .15;
           if (!best || score < best.score) best = {score, g, sd, k, h: levels[sd][k].h};
         }
