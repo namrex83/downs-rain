@@ -1883,6 +1883,15 @@ function streamColour(name){   // the same colour the stream has on the map
 }
 let tubeDetail = false, tubePart = "auto";   // tubePart: the rail map's whole river, or its "up"per or lower ("dn") half   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
 let tubeMain = innerWidth < 1000;   // a phone opens on the main river only; a computer on the tube map with all the creeks   // the river lines open on the main river's gauges only; a button shows the creeks too
+// where to split a river into upper and lower halves: the main-river station that leaves the gauges (its own and
+// the creeks joining above or below it) most evenly shared
+function tubeMid(mainIt, items, tops, joinAt, rootOf){
+  let best = null;
+  for (let k = 2; k < mainIt.length - 2; k++){ const mid = mainIt[k].i;
+    const up = items.filter(x => tops.includes(x.s) ? x.i <= mid : joinAt(rootOf(x.s)) <= mid).length, dn = items.length - up;
+    const d = Math.abs(up - dn); if (!best || d < best.d) best = {d, mid}; }
+  return best ? best.mid : mainIt[Math.floor(mainIt.length / 2)].i;
+}
 function tubeDiagram(rows, nameOf, cell){
   const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
   const items = rows.map((r, i) => ({r, i, s: streamOf(nameOf(r))}));
@@ -1921,14 +1930,17 @@ function tubeDiagram(rows, nameOf, cell){
     if (part === "auto") { whole = tubeMap(items, streams, tops, parent, joinAt, cell); part = TM_LAST.fits || !canSplit ? "all" : "up"; }
     if (part !== "all" && canSplit) {
       const tubePart = part;
-      const mid = mainIt[Math.floor(mainIt.length / 2)].i, upper = tubePart === "up";
+      const upper = tubePart === "up";
       const rootOf2 = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf2(parent[c]);
+      const mid = tubeMid(mainIt, items, tops, joinAt, rootOf2);
       const keepS = new Set(streams.filter(c => tops.includes(c) || (upper ? joinAt(rootOf2(c)) <= mid : joinAt(rootOf2(c)) > mid)));
       const it2 = items.filter(x => tops.includes(x.s) ? (upper ? x.i <= mid : x.i >= mid) : keepS.has(x.s));
       itP = it2; stP = streams.filter(c => keepS.has(c));
     }
+    const rootOf3 = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf3(parent[c]);
+    const midK = canSplit ? mainIt.findIndex(x => x.i === tubeMid(mainIt, items, tops, joinAt, rootOf3)) : 0;
     const nm = i => { const x = mainIt[i]; return x ? nameOf(x.r).replace(/^.* at /, "").replace(/ \(.*\)$/, "") : ""; };
-    const shown = part, half = canSplit ? `<div class="seg tubesw tubepart" role="group" aria-label="Which part"><button type="button" data-p="all" aria-pressed="${shown === "all"}">Whole river</button><button type="button" data-p="up" aria-pressed="${shown === "up"}">Upper (${nm(0)}–${nm(Math.floor(mainIt.length / 2))})</button><button type="button" data-p="dn" aria-pressed="${shown === "dn"}">Lower (${nm(Math.floor(mainIt.length / 2))}–${nm(mainIt.length - 1)})</button></div>` : "";
+    const shown = part, half = canSplit ? `<div class="seg tubesw tubepart" role="group" aria-label="Which part"><button type="button" data-p="all" aria-pressed="${shown === "all"}">Whole river</button><button type="button" data-p="up" aria-pressed="${shown === "up"}">Upper (${nm(0)}–${nm(midK)})</button><button type="button" data-p="dn" aria-pressed="${shown === "dn"}">Lower (${nm(midK)}–${nm(mainIt.length - 1)})</button></div>` : "";
     return sw + half + (part === "all" && whole ? whole : tubeMap(itP, stP, tops, parent, joinAt, cell));
   }
   return sw + tops.map(t => line(t, 0)).join("");
@@ -1987,7 +1999,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const CH = 7.1;                                         // width of a character of the names, about
   const labLen = i => (i.name.length + (i.up ? 2 : 0)) * CH + 8;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
-  const sp = Math.max(58, Math.min(100, (W - PAD * 2 - 140) / Math.max(1, main.length - 1)));
+  const sp = Math.max(58, Math.min(130, (W - PAD * 2 - 150) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + 22 + k * sp));
   const lastX = PAD + 22 + (main.length - 1) * sp;
   const code = {}, taken = new Set();
@@ -2030,7 +2042,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const lab = Math.max(...st[c].map(z => labLen(z.i))) * COS;
     const top = sd === "up" ? y - h : y - 12, bot = sd === "up" ? y + 12 : y + h;
     const box = [xa - 4, top, Math.max(xb, Math.max(...xs) + lab) + 4, bot];
-    const dy = sd === "up" ? -1 : 1, ky = jy + dy * 10, ky2 = ky + dy * Math.abs(off);
+    const dy = Math.sign(y - jy) || (sd === "up" ? -1 : 1), ky = jy + dy * 10, ky2 = ky + dy * Math.abs(off);
     const segs = off ? [[[jx, jy], [jx, ky]], [[jx, ky], [x1, ky2]], [[x1, ky2], [x1, y]], [[x1, y], [far, y]]] : [[[jx, jy], [x1, y]], [[x1, y], [far, y]]];
     return {c, side: sd, k, y, dir, jx, jy, x1, xs, box, segs, h, nameW, off, ky, ky2};
   };
@@ -2079,7 +2091,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     }
     let best = null;
     for (const sd of sides){
-      const kmin = isRoot ? 0 : placed.find(o => o.c === parent[c]).k + 1;
+      const kmin = 0, kPar = isRoot ? -1 : placed.find(o => o.c === parent[c]).k;   // a creek off a creek may sit on any other level, nearer the river too
       for (let k = kmin; k <= levels[sd].length; k++){
         const isNew = k === levels[sd].length, old = isNew ? null : levels[sd][k];
         if (isNew) levels[sd].push({h}); const hold = levels[sd][k].h; levels[sd][k].h = Math.max(hold, h);
@@ -2088,10 +2100,11 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
         const movesOthers = !isNew && h > hold && placed.some(o => o.side === sd && o.k > k);
         for (const dir of ["L", "R"]) for (const off of pass ? [0, -30, 30, -60, 60, -90, 90, -130, 130, -180, 180, -240, 240] : [0, -30, 30, -60, 60, -90, 90, -130, 130]){
           if (movesOthers) continue;
+          if (k === kPar) continue;
           if (Math.abs(off) + 14 > Math.abs(levelY(sd, k, levels[sd][k].h) - jy)) continue;
           const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h, off);
           if (!ok(g, pass === 1)) continue;
-          const score = grow * 10 + (dir === "R" ? 30 : 0) + k + Math.abs(off) * .15;
+          const score = grow * 10 + (dir === "R" ? 4 : 0) + k + Math.abs(off) * .15;
           if (!best || score < best.score) best = {score, g, sd, k, h: levels[sd][k].h};
         }
         levels[sd][k].h = hold; if (isNew) levels[sd].pop();
