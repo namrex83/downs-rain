@@ -1981,7 +1981,9 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + (w.split(" ")[1] || "")[0], w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
     const c = cand.find(x => x && x.length && !taken.has(x)) || w.slice(0, 3); taken.add(c); code[st] = c; }
   const mInfo = main.map(info);
-  const MZ = Math.max(70, ...mInfo.map(labLen)) * SIN + 24;   // room above and below the river for its names
+  // room above / below the river for its names (they alternate: even stations' names above, odd below)
+  const MZs = {up: Math.max(40, ...mInfo.filter((_, k) => k % 2 === 0).map(labLen)) * SIN + 22, dn: Math.max(40, ...mInfo.filter((_, k) => k % 2).map(labLen)) * SIN + 22};
+  const MZ = Math.max(MZs.up, MZs.dn);
   // the creeks, each with its stations nearest the join first
   const creeks = streams.filter(c => !tops.includes(c));
   const st = {}; for (const c of creeks) st[c] = items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}));
@@ -1991,8 +1993,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     if (common) st[c].forEach(z => { const m = z.i.name.match(/^([^()]+?) \((.+)\)$/); if (m && m[1] === common) z.i = {...z.i, name: m[2]}; }); }
   const kids = {}; for (const c of creeks) (kids[parent[c]] = kids[parent[c]] || []).push(c);
   const CSP = 44;                                         // station spacing on a creek
-  const RH = Math.min(150, Math.max(46, ...creeks.flatMap(c => st[c].map(z => labLen(z.i)))) * SIN + 22);   // every level the same height
-  const rowH = c => RH;
+  const RH = Math.min(130, Math.max(36, ...creeks.flatMap(c => st[c].map(z => labLen(z.i)))) * SIN + 16);
+  const rowH = c => RH;   // every level the same height (so a level can take more creeks later)
   // rows: up side y = -(MZ + offset), down side y = +(MZ + offset); each row's height is its tallest names
   const placed = [];                                      // {c, side, y, dir, x0 (join x on parent), xs (station xs), box, segs}
   const segX = (p1, p2, p3, p4) => { const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -2004,7 +2006,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const boxX = (A, B) => A[0] < B[2] && B[0] < A[2] && A[1] < B[3] && B[1] < A[3];
   // levels in use on each side: [{y, h}] from the river outward; a branch's level is chosen among these or a new one
   const levels = {up: [], dn: []};
-  const levelY = (sd, k, h) => { let off = MZ; for (let j = 0; j < k; j++) off += levels[sd][j].h + 16; return sd === "up" ? -off : off; };
+  const levelY = (sd, k, h) => { let off = MZs[sd]; for (let j = 0; j < k; j++) off += levels[sd][j].h + 13; return sd === "up" ? -off : off; };
   const geom = (c, sd, k, dir, jx, jy, h, off = 0) => {
     // off: the line jogs sideways on a 45° diagonal just after leaving its parent, to reach a free gap
     const y = levelY(sd, k, h), s = dir === "L" ? -1 : 1, x1 = jx + off;
@@ -2070,7 +2072,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
         const grow = (isNew ? h : Math.max(0, h - hold));
         // a taller level moves the levels beyond it: only allowed if nothing there yet
         const movesOthers = !isNew && h > hold && placed.some(o => o.side === sd && o.k > k);
-        for (const dir of ["L", "R"]) for (const off of [0, -30, 30, -60, 60, -90, 90, -130, 130]){
+        for (const dir of ["L", "R"]) for (const off of pass ? [0, -30, 30, -60, 60, -90, 90, -130, 130, -180, 180, -240, 240] : [0, -30, 30, -60, 60, -90, 90, -130, 130]){
           if (movesOthers) continue;
           if (Math.abs(off) + 14 > Math.abs(levelY(sd, k, levels[sd][k].h) - jy)) continue;
           const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h, off);
@@ -2087,7 +2089,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     placed.push(best.g);
   }
   // draw: y relative to the river, shifted down by the up side's height
-  const upH = MZ + levels.up.reduce((a, l) => a + l.h + 16, 0), dnH = MZ + levels.dn.reduce((a, l) => a + l.h + 16, 0);
+  const upH = MZs.up + levels.up.reduce((a, l) => a + l.h + 13, 0), dnH = MZs.dn + levels.dn.reduce((a, l) => a + l.h + 13, 0);
   const Y0 = upH + 8, H = Math.round(upH + dnH + 16);
   const reg = (i, line) => { TM_INFO.push({...i, line}); return TM_INFO.length - 1; };
   const dot = (x, y, i, col, num, line) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
