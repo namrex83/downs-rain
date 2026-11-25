@@ -1,0 +1,21 @@
+name: sat-probe
+on:
+  push:
+    paths: [".github/workflows/sat-probe.yml"]
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          python3 - <<'P'
+          from ftplib import FTP
+          f=FTP("ftp.bom.gov.au"); f.login()
+          f.cwd("/anon/gen/gms")
+          names=f.nlst()
+          print(len(names))
+          import collections
+          c=collections.Counter(n.split(".")[0] for n in names)
+          for k,v in sorted(c.items()): print(k, v)
+          print([n for n in names if n.startswith(("IDE00135","IDE00435","IDE00436","IDE00905","IDE00906","IDE00105"))][-12:])
+          P
