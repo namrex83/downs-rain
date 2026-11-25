@@ -335,7 +335,8 @@ table.slim .fchip{display:inline-block;margin:2px 0 0;padding:0 5px;font-size:.6
 #contactBtn:hover{opacity:1;background:rgba(255,255,255,.18)}
 /* crisp, not blurred, and the logo's coloured dots kept out from under it on a phone */
 #contactBtn{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;opacity:1!important;background:rgba(10,40,80,.45)!important;border-color:rgba(255,255,255,.4)!important;text-shadow:none!important}
-@media (max-width:999px){ header .rings circle[fill-opacity]{display:none} }
+@media (max-width:999px){ header .rings circle[fill-opacity], header .rings path{display:none} }   /* nothing pale under the Contact button */
+#contactBtn{background:#1d4f8a!important;border-color:rgba(255,255,255,.55)!important;color:#fff!important;font-weight:700!important}
 @media (min-width:601px){ body>.wrap>header,body header{padding-top:calc(28px + env(safe-area-inset-top,0px))} #contactBtn{top:calc(5px + env(safe-area-inset-top,0px));right:16px} }
 body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .timing{padding:10px 12px}
