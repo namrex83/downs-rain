@@ -1953,6 +1953,7 @@ document.addEventListener("click", e => {   // a station on the rail map: a box 
   const lvl = {g1: "Rising, below flood level", g2: "Minor flood", g3: "Moderate flood", g4: "Major flood"}[i.lvl] || "";
   box.innerHTML = `<button type="button" class="tmx" aria-label="Close">✕</button><b>${esc(i.name)}</b><div class="tmpl">${esc(i.line || "")}</div>
     <div class="tmph"><span>${esc(i.h)}</span> m${i.up ? " ▲ rising" : ""}${lvl ? ` · <b>${lvl}</b>` : ""}</div>
+    ${i.exp ? `<div class="tmpx" style="color:${{g2: "#c00000", g3: "#8a0000", g4: "#6a2a9a"}[i.exp.c]}">● <b>${i.exp.t[0].toUpperCase() + i.exp.t.slice(1)} flood expected within 2 days</b> (${i.exp.by}: ${i.exp.h.toFixed(2)} m${i.exp.t2 ? `, ${esc(i.exp.t2)}` : ""})</div>` : ""}
     <div class="tmpn">${i.note ? esc(i.note).replace(/ · /g, "<br>") : "No rise expected."}</div>
     ${i.href ? `<a href="${esc(i.href)}" target="_blank" rel="noopener">Bureau's river height graph ↗</a>` : ""}`;
   box.hidden = false;
@@ -1967,7 +1968,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
     const note = [...t.content.querySelectorAll(".pkline,.tsai")].map(e => e.textContent.trim()).filter(Boolean).join(" · ");
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
-    return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
+    return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl, exp: c.exp}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const PAD = 40, TAN = Math.tan(ANG * Math.PI / 180), SIN = Math.sin(ANG * Math.PI / 180), COS = Math.cos(ANG * Math.PI / 180);
   const CH = 7.1;                                         // width of a character of the names, about
@@ -2095,7 +2096,9 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const dot = (x, y, i, col, num, line) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
     const w = 10 + num.length * 5.6;
     return `<g class="tmst" data-tm="${reg(i, line)}"><title>${esc(i.name)}: ${esc(i.h)} m (tap for more)</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
-      + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>${i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : ""}</g>`; };
+      + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>`
+      + (i.exp ? `<circle class="tmexp" cx="${x + w / 2}" cy="${y - 10}" r="8.5" fill="${{g2: "#e00000", g3: "#a00000", g4: "#7a2db0"}[i.exp.c]}" stroke="#fff" stroke-width="1.5"><title>${i.exp.by} expects ${i.exp.t} flood (${i.exp.h.toFixed(2)} m) within 2 days - tap for details</title></circle>`
+        : i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : "") + `</g>`; };
   const lab = (x, y, i, up) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan>${i.up ? ' <tspan class="tmh">▲</tspan>' : ""}`;
     const el = up ? `<text transform="translate(${x + 4},${y - 12}) rotate(${-ANG})">${t}</text>` : `<text transform="translate(${x + 4},${y + 19}) rotate(${ANG})">${t}</text>`;
     return `<g class="tmst" data-tm="${TM_INFO.length - 1}">${el}</g>`; };
@@ -2124,7 +2127,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const miss = unplaced.length ? `<p class="note" style="margin:2px 0 0">Not drawn here (no room): ${unplaced.map(esc).join(", ")} - see the Table.</p>` : "";
   const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</span>`).join("")}</div>`;
   return {H, nOut, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
-    <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Smaller creeks are listed under the map. Tap any station for its AI and Bureau peaks and the Bureau's graph. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
+    <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Smaller creeks are listed under the map. Tap any station for its AI and Bureau peaks and the Bureau's graph. 🤖 = an AI peak estimate; a coloured box = rising or in flood now; a dot on a station = <b style="color:#e00000">●</b> minor, <b style="color:#a00000">●</b> moderate or <b style="color:#7a2db0">●</b> major flood expected within 2 days (AI or Bureau): tap it for the height and time.</p>`};
 }
 function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
@@ -2347,7 +2350,13 @@ function drawRivers(fw){
     const nm = g(r, iName), u = plotOf(nm), e = estFor(nm), L = lvl(r);
     const pk = fw.peaks ? Object.entries(fw.peaks).find(([k]) => nm === k || nm.startsWith(k + " ") || nm.startsWith(k + " (")) : null;
     const place = nm.includes(" at ") ? nm.split(" at ").slice(1).join(" at ") : nm;
-    return {lvl: L, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
+    // the worst flood class the AI or the Bureau expects here in the next 2 days (for the rail map's warning dot)
+    const soon = [];
+    if (e && !e.later && e.mid != null && e.how !== "peaked" && (!e.t_mid || Date.parse(e.t_mid) - Date.now() < 48 * 3600e3)) soon.push([e.mid, "AI", e.t_mid ? whenTxt(e.t_mid) : ""]);
+    if (e && e.wave2 && e.wave2.mid != null && (!e.wave2.t_mid || Date.parse(e.wave2.t_mid) - Date.now() < 48 * 3600e3)) soon.push([e.wave2.mid, "AI", e.wave2.t_mid ? whenTxt(e.wave2.t_mid) : ""]);
+    if (pk && !pk[1].past) soon.push([pk[1].h, "Bureau", pk[1].when || ""]);
+    let exp = null; for (const [h, by, t] of soon){ const f = floodWord(nm, h); if (f && /g[234]/.test(f.c) && (!exp || f.c > exp.c)) exp = {...f, h, by, t2: t}; }
+    return {lvl: L, exp, html: `<div class="tsn">${u ? `<a class="bomplot" href="${u}" target="_blank" rel="noopener" title="The Bureau's river height graph for this gauge">${place} <span aria-hidden="true">↗</span></a>` : place}</div>
       <div class="tsv"><b>${g(r, iH)}</b> m ${rising(r) ? '<span class="up">▲ rising</span>' : /falling/i.test(g(r, iT)) ? '<span class="dn">▼ falling</span>' : ""}${flood(r) ? `<span class="fchip ${L}">${g(r, iC)}</span>` : ""}</div>`
       + (pk ? `<div class="pkline">${pk[1].past ? `BOM: peaked ${pk[1].h.toFixed(2)} m` : `BOM forecast: ~${pk[1].h.toFixed(2)} m`}${floodChip(nm, pk[1].h)} ${pk[1].when}</div>` : "")
       + (!e ? "" : e.later ? `<div class="tsai q">AI: ${laterTxt(e)}</div>` : e.how === "rising" ? `<div class="tsai q">AI: rising, no past rise like this to match yet</div>` : e.how === "steady" ? `<div class="tsai q">AI: ${e.exp ? "not rising now" : "no rise expected"}</div>` : e.how === "peaked" ? `<div class="tsai q">Peaked ${e.mid.toFixed(2)} m${floodChip(nm, e.mid)}, ${whenTxt(e.t_mid)}</div>`
