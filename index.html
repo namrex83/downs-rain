@@ -1959,7 +1959,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   for (const W of [1300, 1450, 1600, 1800]) for (const ang of [32, 24, 18]){
     const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W, ang), sc = Math.min(cw / W, avail / r.H) - (r.nOut || 0) * .2;
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
-  TM_LAST = {fits: avail >= best.H * Math.min(1, cw / best.W) * .72};   // fits one screen (shrunk no more than the page allows)
+  TM_LAST = {fits: innerHeight - 170 >= best.H * Math.min(1, cw / best.W) * .74};   // the page may shrink it to .72 (tubeFit)   // fits one screen (shrunk no more than the page allows)
   return best.html;
 }
 // The transit-map layout (computer): the river a straight line across, every creek a branch that leaves it on a 45°
@@ -2011,12 +2011,24 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const MZs = {up: Math.max(40, ...mInfo.filter((_, k) => k % 2 === 0).map(labLen)) * SIN + 22, dn: Math.max(40, ...mInfo.filter((_, k) => k % 2).map(labLen)) * SIN + 22};
   const MZ = Math.max(MZs.up, MZs.dn);
   // the creeks, each with its stations nearest the join first
-  const creeks = streams.filter(c => !tops.includes(c));
+  let creeks = streams.filter(c => !tops.includes(c));
   const st = {}; for (const c of creeks) st[c] = items.filter(it => it.s === c).slice().reverse().map(it => ({it, i: info(it)}));
   // on a creek line, "Oakey (Weir Park)", "Oakey (Kingsthorpe Haden Road)"... show as just the part in brackets
   for (const c of creeks){ const pre = st[c].map(z => (z.i.name.match(/^([^()]+?) \((.+)\)$/) || [])[1]).filter(Boolean);
     const common = pre.find(p => pre.filter(q => q === p).length >= 2);
     if (common) st[c].forEach(z => { const m = z.i.name.match(/^([^()]+?) \((.+)\)$/); if (m && m[1] === common) z.i = {...z.i, name: m[2]}; }); }
+  // a small creek (1 or 2 gauges) running into another creek goes on that creek's line as its own coloured stations
+  // (like an interchange), instead of taking a whole level of the map: the deepest first
+  const depth = c => tops.includes(parent[c]) || !parent[c] ? 0 : 1 + depth(parent[c]);
+  const merged = {};
+  for (const c of creeks.slice().sort((a, b) => depth(b) - depth(a))){
+    if (tops.includes(parent[c]) || !parent[c] || !st[parent[c]] || st[c].length > 2 || creeks.some(k => parent[k] === c && !merged[k])) continue;
+    const pst = st[parent[c]], j = joinAt(c);
+    let q = pst.findIndex((z, n) => z.it.i >= j && (n === pst.length - 1 || pst[n + 1].it.i < j)); if (q < 0) q = pst.length - 1;
+    pst.splice(q + 1, 0, ...st[c].map(z => ({...z, from: z.from || c})));
+    merged[c] = parent[c];
+  }
+  creeks = creeks.filter(c => !merged[c]);
   const kids = {}; for (const c of creeks) (kids[parent[c]] = kids[parent[c]] || []).push(c);
   const CSP = 58;                                         // station spacing on a creek
   const RH = Math.min(130, Math.max(36, ...creeks.flatMap(c => st[c].map(z => labLen(z.i)))) * SIN + 16);
@@ -2138,7 +2150,9 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const r0 = 12, vy = y - Math.sign(y - (Y0 + g.jy)) * r0;
     const lead = g.off ? `M${g.jx} ${Y0 + g.jy} V${Y0 + g.ky} L${g.x1} ${Y0 + g.ky2}` : `M${g.jx} ${Y0 + g.jy}`;
     lines += `<path d="${lead} V${vy} Q${g.x1} ${y} ${g.x1 + s * r0} ${y} H${far + s * 24}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-    g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–", g.c); labs += lab(x, y, z.i, g.side === "up"); });
+    g.xs.forEach((x, q) => { const z = st[g.c][q], zc = z.from ? streamColour(z.from) : col;
+      dots += dot(x, y, z.i, zc, z.i.h || "–", z.from || g.c) + (z.from ? `<rect x="${x - 9}" y="${y + (g.side === "up" ? 12 : -24)}" width="${8 + code[z.from].length * 6}" height="12" rx="3" fill="${zc}"/><text x="${x - 5}" y="${y + (g.side === "up" ? 21.5 : -14.5)}" class="tmbul" style="font-size:8.5px">${code[z.from]}</text>` : "");
+      labs += lab(x, y, z.i, g.side === "up"); });
     // the line's name at its far end
     labs += bul(far + s * 30, y, code[g.c], col, s < 0 ? "end" : "start");
   }
@@ -2151,8 +2165,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
       return `<button type="button" class="tmst tmchip ${f || ""}" data-tm="${k}">${esc(z.i.name)} <code>${esc(z.i.h)}</code>${z.i.up ? " ▲" : ""}${z.i.ai ? " 🤖" : ""}</button>`; }).join("")}</span>`).join("")}</div>` : "";
   const nOut = others.length; unplaced.length = 0;
   const miss = unplaced.length ? `<p class="note" style="margin:2px 0 0">Not drawn here (no room): ${unplaced.map(esc).join(", ")} - see the Table.</p>` : "";
-  const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</span>`).join("")}</div>`;
-  return {H, nOut, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
+  const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c), ...Object.keys(merged)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}${merged[c] ? " (on its line)" : ""}`}</span>`).join("")}</div>`;
+  return {H, nOut, W, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
     <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Smaller creeks are listed under the map. Tap any station for its AI and Bureau peaks and the Bureau's graph. 🤖 = an AI peak estimate; a coloured box = rising or in flood now; a dot on a station = <b style="color:#e00000">●</b> minor, <b style="color:#a00000">●</b> moderate or <b style="color:#7a2db0">●</b> major flood expected within 2 days (AI or Bureau): tap it for the height and time.</p>`};
 }
 function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
