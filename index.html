@@ -4206,7 +4206,11 @@ function fChartDraw(){
 }
 // what the Namrex blend is made of right now, and how the models have done lately
 function namInfo(){
-  const pct = w => Object.entries(w).sort((a, b) => b[1] - a[1]).map(([m, x]) => `${F_NAME[m] || m} ${Math.round(x * 100)}%`).join(", ");
+  const pct = w => {   // whole percentages that add to exactly 100 (the biggest leftovers get the spare points)
+    const e = Object.entries(w), t = e.reduce((a, [, x]) => a + x, 0) || 1, raw = e.map(([m, x]) => [m, x / t * 100]);
+    const out = raw.map(([m, x]) => [m, Math.floor(x), x - Math.floor(x)]); let left = 100 - out.reduce((a, r) => a + r[1], 0);
+    out.slice().sort((a, b) => b[2] - a[2]).forEach(r => { if (left > 0) { r[1]++; left--; } });
+    return out.sort((a, b) => b[1] - a[1]).map(([m, x]) => `${F_NAME[m] || m} ${x}%`).join(", "); };
   const sk = SKILL && SKILL.map, lab = {A: "1–2 days ahead", B: "2–4 days ahead", C: "4+ days ahead"};
   if (!sk || !Object.keys(sk).length) return namLogo(16) + " <b>Namrex AI</b>: the models blended by how well each has done lately over the Downs. There are no scores yet, so for now all three count the same; the weights start moving as rain days are checked against the radar and gauges.";
   const rows = ["A", "B", "C"].filter(b => sk[b]).map(b => `<tr><td>${lab[b]}</td><td>${pct(sk[b].w)}</td><td class="n">${sk[b].n}</td></tr>`).join("");
