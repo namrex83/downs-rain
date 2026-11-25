@@ -5,17 +5,17 @@ on:
 jobs:
   p:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - run: sudo apt-get install -y -qq gdal-bin >/dev/null 2>&1; pip install -q pillow numpy
       - run: |
           python3 - <<'P'
           from ftplib import FTP
-          f=FTP("ftp.bom.gov.au"); f.login()
-          f.cwd("/anon/gen/gms")
-          names=f.nlst()
-          print(len(names))
-          import collections
-          c=collections.Counter(n.split(".")[0] for n in names)
-          for k,v in sorted(c.items()): print(k, v)
-          print([n for n in names if n.startswith(("IDE00135","IDE00435","IDE00436","IDE00905","IDE00906","IDE00105"))][-12:])
+          f=FTP("ftp.bom.gov.au"); f.login(); f.cwd("/anon/gen/gms")
+          names=sorted(f.nlst())
+          for code in ["IDE00135","IDE00401","IDE00405","IDE00420","IDE00421","IDE00425","IDE00426","IDE00430","IDE00431","IDE00435","IDE00436","IDE00437","IDE00105","IDE00005"]:
+            ns=[n for n in names if n.startswith(code)]
+            n=ns[-1]; open(n,"wb").write(b"") 
+            with open(n,"wb") as fh: f.retrbinary("RETR "+n, fh.write)
           P
+          for x in IDE*; do echo "== $x $(stat -c%s $x)"; gdalinfo $x 2>/dev/null | grep -E "Size is|Origin|Pixel Size|Band 1|Description|PROJCRS|GEOGCRS" | head -6; done
