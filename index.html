@@ -1881,7 +1881,7 @@ function streamColour(name){   // the same colour the stream has on the map
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TUBE_COL[h % TUBE_COL.length];
 }
-let tubeDetail = false, tubePart = "all";   // tubePart: the rail map's whole river, or its "up"per or lower ("dn") half   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
+let tubeDetail = false, tubePart = "auto";   // tubePart: the rail map's whole river, or its "up"per or lower ("dn") half   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
 let tubeMain = innerWidth < 1000;   // a phone opens on the main river only; a computer on the tube map with all the creeks   // the river lines open on the main river's gauges only; a button shows the creeks too
 function tubeDiagram(rows, nameOf, cell){
   const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
@@ -1915,7 +1915,12 @@ function tubeDiagram(rows, nameOf, cell){
   if (innerWidth >= 1000 && !tubeDetail) {
     // the whole river, or its upper or lower half with the creeks joining there (bigger, fits one screen)
     const mainIt = items.filter(x => tops.includes(x.s)); let itP = items, stP = streams;
-    if (tubePart !== "all" && mainIt.length > 8 && !tubeMain) {
+    const canSplit = mainIt.length > 8 && !tubeMain;
+    // "auto" (the opening choice): the whole river if it fits one screen, else its upper half
+    let part = tubePart, whole = null;
+    if (part === "auto") { whole = tubeMap(items, streams, tops, parent, joinAt, cell); part = TM_LAST.fits || !canSplit ? "all" : "up"; }
+    if (part !== "all" && canSplit) {
+      const tubePart = part;
       const mid = mainIt[Math.floor(mainIt.length / 2)].i, upper = tubePart === "up";
       const rootOf2 = c => tops.includes(parent[c]) || !parent[c] ? c : rootOf2(parent[c]);
       const keepS = new Set(streams.filter(c => tops.includes(c) || (upper ? joinAt(rootOf2(c)) <= mid : joinAt(rootOf2(c)) > mid)));
@@ -1923,8 +1928,8 @@ function tubeDiagram(rows, nameOf, cell){
       itP = it2; stP = streams.filter(c => keepS.has(c));
     }
     const nm = i => { const x = mainIt[i]; return x ? nameOf(x.r).replace(/^.* at /, "").replace(/ \(.*\)$/, "") : ""; };
-    const half = mainIt.length > 8 && !tubeMain ? `<div class="seg tubesw tubepart" role="group" aria-label="Which part"><button type="button" data-p="all" aria-pressed="${tubePart === "all"}">Whole river</button><button type="button" data-p="up" aria-pressed="${tubePart === "up"}">Upper (${nm(0)}–${nm(Math.floor(mainIt.length / 2))})</button><button type="button" data-p="dn" aria-pressed="${tubePart === "dn"}">Lower (${nm(Math.floor(mainIt.length / 2))}–${nm(mainIt.length - 1)})</button></div>` : "";
-    return sw + half + tubeMap(itP, stP, tops, parent, joinAt, cell);
+    const shown = part, half = canSplit ? `<div class="seg tubesw tubepart" role="group" aria-label="Which part"><button type="button" data-p="all" aria-pressed="${shown === "all"}">Whole river</button><button type="button" data-p="up" aria-pressed="${shown === "up"}">Upper (${nm(0)}–${nm(Math.floor(mainIt.length / 2))})</button><button type="button" data-p="dn" aria-pressed="${shown === "dn"}">Lower (${nm(Math.floor(mainIt.length / 2))}–${nm(mainIt.length - 1)})</button></div>` : "";
+    return sw + half + (part === "all" && whole ? whole : tubeMap(itP, stP, tops, parent, joinAt, cell));
   }
   return sw + tops.map(t => line(t, 0)).join("");
 }
@@ -1939,9 +1944,10 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   let best = null;
   TM_INFO = [];
   // try a few widths and name angles (flatter names = a shorter map) and keep the one that shows biggest
-  for (const W of [1300, 1450, 1600]) for (const ang of [32, 24, 18]){
+  for (const W of [1300, 1450, 1600, 1800]) for (const ang of [32, 24, 18]){
     const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W, ang), sc = Math.min(cw / W, avail / r.H) - (r.nOut || 0) * .2;
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
+  TM_LAST = {fits: avail >= best.H * Math.min(1, cw / best.W) * .72};   // fits one screen (shrunk no more than the page allows)
   return best.html;
 }
 // The transit-map layout (computer): the river a straight line across, every creek a branch that leaves it on a 45°
@@ -1949,7 +1955,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
 // river (or the creek it runs into), all names angled like the river's. Each branch goes on the nearest free level
 // above or below the river, running upstream (left) where there's room, else right; nothing may cross a line or
 // run through another line's names. Creeks running into a creek branch off that creek's line the same way.
-let TM_INFO = [];
+let TM_INFO = [], TM_LAST = {};
 document.addEventListener("click", e => {   // a station on the rail map: a box with everything about it
   const pop = $("tmPop"), st = e.target.closest && e.target.closest(".tmst");
   if (!st) { if (pop && !(e.target.closest && e.target.closest("#tmPop"))) pop.hidden = true; return; }
@@ -1986,7 +1992,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const lastX = PAD + 22 + (main.length - 1) * sp;
   const code = {}, taken = new Set();
   for (const st of [...tops, ...streams.filter(c => !tops.includes(c))]){
-    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + (w.split(" ")[1] || "")[0], w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
+    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + ((w.split(" ")[1] || "")[0] || ""), w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
     const c = cand.find(x => x && x.length && !taken.has(x)) || w.slice(0, 3); taken.add(c); code[st] = c; }
   const mInfo = main.map(info);
   // room above / below the river for its names (they alternate: even stations' names above, odd below)
@@ -2153,7 +2159,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
   // from the river end of a creek, or from the top of the river
   const code = {}, taken = new Set();
   for (const st of [...tops, ...streams.filter(c => !tops.includes(c))]){
-    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + (w.split(" ")[1] || "")[0], w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
+    const w = st.replace(/^(The|Mount|Mt) /, "").toUpperCase().replace(/[^A-Z ]/g, ""), cand = [w[0], w[0] + ((w.split(" ")[1] || "")[0] || ""), w.slice(0, 2), w[0] + w[2], w[0] + w[3]];
     const c = cand.find(x => x && x.length && !taken.has(x)) || w.slice(0, 3); taken.add(c); code[st] = c; }
   const numOf = new Map(); main.forEach((x, k) => numOf.set(x.i, `${code[x.s]}${String(k + 1).padStart(2, "0")}`));
   const dot = (x, y, i, col, num) => {
@@ -2307,7 +2313,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
 function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || innerWidth < 1000) return;
   const vb = sv.viewBox.baseVal, full = sv.parentElement.clientWidth / vb.width * vb.height;   // its height at full width
   const fit = innerHeight - sv.getBoundingClientRect().top - 10;
-  document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * (tubePart === "all" ? .9 : .78), 340)) + "px"); }
+  document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * .72, 300)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   if (b.dataset.p) { tubePart = b.dataset.p; drawRivers(FW); return; }
@@ -3003,7 +3009,7 @@ function setMore(open){
   fitMap();
 }
 $("rMoreBtn").onclick = () => setMore($("rMore").hidden);
-$("catchSel").onchange = () => pickCatch(true);
+$("catchSel").onchange = () => { tubePart = "auto"; pickCatch(true); };
 // Table / Map view on the Catchments tab: it opens on the table (the map is busy); the map is a button away
 function cShowSync(){
   const t = tab === "catch" && !cMapOn;
