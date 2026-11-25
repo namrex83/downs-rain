@@ -458,6 +458,8 @@ details.discfold{text-align:left}
   section.panel.rainOnly .tablewrap{max-height:max(220px,calc(100vh - 540px));overflow:auto}
   section.panel.rainOnly #gauges thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 }
+/* Safari draws a faint line where map tiles meet at in-between zooms: overlap each tile by half a pixel */
+.leaflet-tile-container img.leaflet-tile{width:256.6px!important;height:256.6px!important;margin:-.3px 0 0 -.3px}
 #calDlg{border:0;border-radius:16px;padding:12px 12px 10px;max-height:calc(100dvh - 24px);overflow-y:auto;max-width:420px;width:calc(100% - 20px);background:var(--panel);color:var(--ink);box-shadow:0 10px 40px rgba(0,30,60,.3)}
 #calDlg::backdrop{background:rgba(10,30,50,.45)}
 .calhead{display:flex;justify-content:space-between;align-items:center}
