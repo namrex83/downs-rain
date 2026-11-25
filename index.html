@@ -1931,8 +1931,10 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const box = $("riverTube"), cw = Math.max(600, box.clientWidth || 1200), top = box.getBoundingClientRect().top || 300;
   const avail = Math.max(380, innerHeight - Math.max(60, Math.min(top, 330)) - 70);
   let best = null;
-  for (const W of [1300, 1450, 1600]){   // no wider: the names would be too small to read
-    const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H) - (r.nOut || 0) * .2;
+  TM_INFO = [];
+  // try a few widths and name angles (flatter names = a shorter map) and keep the one that shows biggest
+  for (const W of [1300, 1450, 1600]) for (const ang of [32, 24, 18]){
+    const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W, ang), sc = Math.min(cw / W, avail / r.H) - (r.nOut || 0) * .2;
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
   return best.html;
 }
@@ -1959,8 +1961,7 @@ document.addEventListener("click", e => {   // a station on the rail map: a box 
   box.style.top = (r.bottom + 8 + scrollY) + "px";
   box.querySelector(".tmx").onclick = () => box.hidden = true;
 });
-function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
-  if (W === 1300) TM_INFO = [];
+function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
     const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
     const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
@@ -1968,7 +1969,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
     const ai = /AI peak|near its peak|2nd wave|BOM forecast/.test(note);
     return {name: nm.replace("↗", "").trim(), href: a ? a.getAttribute("href") : null, h, up, note, ai, lvl: c.lvl}; };
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const PAD = 40, ANG = 32, TAN = Math.tan(ANG * Math.PI / 180), SIN = Math.sin(ANG * Math.PI / 180), COS = Math.cos(ANG * Math.PI / 180);
+  const PAD = 40, TAN = Math.tan(ANG * Math.PI / 180), SIN = Math.sin(ANG * Math.PI / 180), COS = Math.cos(ANG * Math.PI / 180);
   const CH = 7.1;                                         // width of a character of the names, about
   const labLen = i => (i.name.length + (i.up ? 2 : 0)) * CH + 8;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
@@ -2294,7 +2295,7 @@ function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
 function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || innerWidth < 1000) return;
   const vb = sv.viewBox.baseVal, full = sv.parentElement.clientWidth / vb.width * vb.height;   // its height at full width
   const fit = innerHeight - sv.getBoundingClientRect().top - 10;
-  document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * .9, 340)) + "px"); }
+  document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * (tubePart === "all" ? .9 : .78), 340)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
   if (b.dataset.p) { tubePart = b.dataset.p; drawRivers(FW); return; }
