@@ -2,20 +2,29 @@ name: sat-probe
 on:
   push:
     paths: [".github/workflows/sat-probe.yml"]
+permissions:
+  contents: write
 jobs:
   p:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - run: sudo apt-get install -y -qq gdal-bin >/dev/null 2>&1; pip install -q pillow numpy
+      - run: pip install -q pillow numpy tifffile imagecodecs
       - run: |
           python3 - <<'P'
           from ftplib import FTP
+          import numpy as np, tifffile
+          from PIL import Image
           f=FTP("ftp.bom.gov.au"); f.login(); f.cwd("/anon/gen/gms")
           names=sorted(f.nlst())
-          for code in ["IDE00135","IDE00401","IDE00405","IDE00420","IDE00421","IDE00425","IDE00426","IDE00430","IDE00431","IDE00435","IDE00436","IDE00437","IDE00105","IDE00005"]:
-            ns=[n for n in names if n.startswith(code)]
-            n=ns[-1]; open(n,"wb").write(b"") 
+          for code in ["IDE00430","IDE00436","IDE00437"]:
+            n=[x for x in names if x.startswith(code)][-1]
             with open(n,"wb") as fh: f.retrbinary("RETR "+n, fh.write)
+            a=tifffile.imread(n); print(code, n, a.shape, a.dtype)
+            r0=int((20-(-24.9))/0.018); r1=int((20-(-29.6))/0.018); c0=int((149.4-85)/0.018); c1=int((154.6-85)/0.018)
+            sub=a[r0:r1, c0:c1]
+            print(" crop", sub.shape, "min", sub.min(), "max", sub.max(), "mean", round(float(sub.mean()),1), "pct", np.percentile(sub,[5,50,95]))
+            Image.fromarray(sub if sub.ndim==2 else sub[...,:3]).save(code+".png")
           P
-          for x in IDE*; do echo "== $x $(stat -c%s $x)"; gdalinfo $x 2>/dev/null | grep -E "Size is|Origin|Pixel Size|Band 1|Description|PROJCRS|GEOGCRS" | head -6; done
+          git config user.name probe; git config user.email probe@users.noreply.github.com
+          git checkout -q --orphan sat-probe-out; git rm -rqf . ; git add IDE*.png; git commit -qm probe; git push -qf origin sat-probe-out
