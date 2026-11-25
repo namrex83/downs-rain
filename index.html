@@ -1874,6 +1874,7 @@ function streamColour(name){   // the same colour the stream has on the map
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TUBE_COL[h % TUBE_COL.length];
 }
+let tubeDetail = false;   // computer: every gauge with its height, AI and Bureau notes, in rows (the rail map's details all shown)
 let tubeMain = innerWidth < 1000;   // a phone opens on the main river only; a computer on the tube map with all the creeks   // the river lines open on the main river's gauges only; a button shows the creeks too
 function tubeDiagram(rows, nameOf, cell){
   const streamOf = n => /^Condamine River/i.test(n) ? "Condamine River" : n.includes(" at ") ? n.split(" at ")[0] : n.replace(/ (HG|TW|Tm|Alert)$/, "");
@@ -1882,7 +1883,7 @@ function tubeDiagram(rows, nameOf, cell){
   let tops = streams.filter(s => / River$/.test(s) && !streams.includes(TUBE_PARENT[s]));
   if (!tops.length) tops = [streams.slice().sort((a, b) => at(b).length - at(a).length)[0]];
   const side = streams.length - tops.length, mainName = tops.map(t => t.replace(/ (River|Creek)$/, "")).join(" & ");
-  const sw = side ? `<div class="seg tubesw" role="group" aria-label="Which gauges"><button type="button" data-m="1" aria-pressed="${tubeMain}">${mainName} only</button><button type="button" data-m="0" aria-pressed="${!tubeMain}">All creeks too (${side})</button></div>` : "";
+  const sw = side ? `<div class="seg tubesw" role="group" aria-label="Which gauges"><button type="button" data-m="1" aria-pressed="${tubeMain}">${mainName} only</button><button type="button" data-m="0" aria-pressed="${!tubeMain && !(tubeDetail && innerWidth >= 1000)}">All creeks too (${side})</button>${innerWidth >= 1000 ? `<button type="button" data-m="d" aria-pressed="${tubeDetail}">📋 Full details</button>` : ""}</div>` : "";
   if (tubeMain && side) { for (let k = items.length - 1; k >= 0; k--) if (!tops.includes(items[k].s)) items.splice(k, 1); streams.splice(0, streams.length, ...tops); }
   // the end of a creek's first run of gauges: its last gauge before the river below shows up again
   const runEnd = (s, stop) => { const own = at(s); let e = own[0];
@@ -1904,7 +1905,7 @@ function tubeDiagram(rows, nameOf, cell){
     for (const kd of kids.filter(kd => kd.j === Infinity)) html += line(kd.k, deep + 1);
     return `<div class="tline${kids.some(kd => kd.j === Infinity) ? " tend" : ""}" style="--c:${streamColour(s)}"><span class="tlab">${s}${deep ? ` <small>→ ${parent[s].replace(/ (River|Creek)$/, "")}</small>` : ""}</span>${html}</div>`;
   };
-  if (innerWidth >= 1000) return sw + tubeMap(items, streams, tops, parent, joinAt, cell);
+  if (innerWidth >= 1000 && !tubeDetail) return sw + tubeMap(items, streams, tops, parent, joinAt, cell);
   return sw + tops.map(t => line(t, 0)).join("");
 }
 // On a computer: a real tube-map. The river is one straight line across with its gauges as stations, names angled
@@ -2273,7 +2274,7 @@ function tubeFit(){ const sv = document.querySelector(".tubemap"); if (!sv || in
   document.documentElement.style.setProperty("--tubeH", Math.round(Math.max(fit, full * .9, 340)) + "px"); }
 addEventListener("resize", () => setTimeout(tubeFit, 0));
 $("riverTube").addEventListener("click", e => { const b = e.target.closest(".tubesw button"); if (!b || !FW) return;
-  tubeMain = b.dataset.m === "1"; drawRivers(FW); });
+  tubeDetail = b.dataset.m === "d"; tubeMain = b.dataset.m === "1"; drawRivers(FW); });
 function drawRivers(fw){
   const rv = fw.rivers || {}, hd = rv.headers || [], allRows = rv.rows || [];
   const plotOf = n => (rv.plots || {})[n];   // the gauge's river height graph on the Bureau's site
