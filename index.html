@@ -1883,7 +1883,7 @@ function tubeDiagram(rows, nameOf, cell){
   let tops = streams.filter(s => / River$/.test(s) && !streams.includes(TUBE_PARENT[s]));
   if (!tops.length) tops = [streams.slice().sort((a, b) => at(b).length - at(a).length)[0]];
   const side = streams.length - tops.length, mainName = tops.map(t => t.replace(/ (River|Creek)$/, "")).join(" & ");
-  const sw = side ? `<div class="seg tubesw" role="group" aria-label="Which gauges"><button type="button" data-m="1" aria-pressed="${tubeMain}">${mainName} only</button><button type="button" data-m="0" aria-pressed="${!tubeMain && !(tubeDetail && innerWidth >= 1000)}">All creeks too (${side})</button>${innerWidth >= 1000 ? `<button type="button" data-m="d" aria-pressed="${tubeDetail}">📋 Full details</button>` : ""}</div>` : "";
+  const sw = side ? `<div class="seg tubesw" role="group" aria-label="Which gauges"><button type="button" data-m="1" aria-pressed="${tubeMain}">${mainName} only</button><button type="button" data-m="0" aria-pressed="${!tubeMain && !(tubeDetail && innerWidth >= 1000)}">All creeks too (${side})</button></div>` : "";
   if (tubeMain && side) { for (let k = items.length - 1; k >= 0; k--) if (!tops.includes(items[k].s)) items.splice(k, 1); streams.splice(0, streams.length, ...tops); }
   // the end of a creek's first run of gauges: its last gauge before the river below shows up again
   const runEnd = (s, stop) => { const own = at(s); let e = own[0];
@@ -1918,7 +1918,7 @@ function tubeMap(items, streams, tops, parent, joinAt, cell){
   const avail = Math.max(380, innerHeight - Math.max(60, Math.min(top, 330)) - 70);
   let best = null;
   for (const W of [1300, 1450, 1600]){   // no wider: the names would be too small to read
-    const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H) - (r.html.includes("Not drawn here") ? 1 : 0);
+    const r = tubeMapT(items, streams, tops, parent, joinAt, cell, W), sc = Math.min(cw / W, avail / r.H) - (r.nOut || 0) * .2;
     if (!best || sc > best.sc + .01) best = {...r, sc}; }
   return best.html;
 }
@@ -1990,16 +1990,18 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   // levels in use on each side: [{y, h}] from the river outward; a branch's level is chosen among these or a new one
   const levels = {up: [], dn: []};
   const levelY = (sd, k, h) => { let off = MZ; for (let j = 0; j < k; j++) off += levels[sd][j].h + 16; return sd === "up" ? -off : off; };
-  const geom = (c, sd, k, dir, jx, jy, h) => {
-    const y = levelY(sd, k, h), s = dir === "L" ? -1 : 1, x1 = jx;   // straight off the line, then a rounded turn
+  const geom = (c, sd, k, dir, jx, jy, h, off = 0) => {
+    // off: the line jogs sideways on a 45° diagonal just after leaving its parent, to reach a free gap
+    const y = levelY(sd, k, h), s = dir === "L" ? -1 : 1, x1 = jx + off;
     const n = st[c].length, xs = st[c].map((z, q) => x1 + s * (16 + q * CSP));
     const far = xs[n - 1], nameW = (code[c].length * 7 + 24);   // the line's bullet at its far end
     const xa = Math.min(x1, far) - (dir === "L" ? nameW : 8), xb = Math.max(x1, far) + (dir === "R" ? nameW : 8);
     const lab = Math.max(...st[c].map(z => labLen(z.i))) * COS;
     const top = sd === "up" ? y - h : y - 12, bot = sd === "up" ? y + 12 : y + h;
     const box = [xa - 4, top, Math.max(xb, Math.max(...xs) + lab) + 4, bot];
-    const segs = [[[jx, jy], [x1, y]], [[x1, y], [far, y]]];
-    return {c, side: sd, k, y, dir, jx, jy, x1, xs, box, segs, h, nameW};
+    const dy = sd === "up" ? -1 : 1, ky = jy + dy * 10, ky2 = ky + dy * Math.abs(off);
+    const segs = off ? [[[jx, jy], [jx, ky]], [[jx, ky], [x1, ky2]], [[x1, ky2], [x1, y]], [[x1, y], [far, y]]] : [[[jx, jy], [x1, y]], [[x1, y], [far, y]]];
+    return {c, side: sd, k, y, dir, jx, jy, x1, xs, box, segs, h, nameW, off, ky, ky2};
   };
   const ptSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)) : 0;
     return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
@@ -2011,7 +2013,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
       const fam = o.c === parent[g.c] || parent[o.c] === g.c;
       if (boxX(g.box, o.box)) return false;
       for (const s1 of g.segs){ if (!fam && segBox(s1[0], s1[1], o.box)) return false;
-        for (const s2 of o.segs) if (segX(s1[0], s1[1], s2[0], s2[1]) || (!fam && near(s1[0], s1[1], s2[0], s2[1]) < 16)) return false; }   // lines kept apart
+        for (const s2 of o.segs) { const both = s1[0][1] === 0 && s2[0][1] === 0 && s1[0] !== s2[0];   // both leaving the river
+          if (segX(s1[0], s1[1], s2[0], s2[1]) || (!fam && near(s1[0], s1[1], s2[0], s2[1]) < (both ? 9 : 16))) return false; } }   // lines kept apart
       for (const s2 of o.segs) if (!fam && segBox(s2[0], s2[1], g.box)) return false;
     }
     return true;
@@ -2020,8 +2023,9 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   const order = [];                                        // parents before their creeks, bigger families first
   const famSize = c => st[c].length + (kids[c] || []).reduce((a, k) => a + famSize(k), 0);
   // as lines: the creeks running straight into the river with 3 or more gauges; the rest are listed under the map
-  const roots = creeks.filter(c => (tops.includes(parent[c]) || !parent[c]) && st[c].length >= 3).sort((a, b) => famSize(b) - famSize(a));
-  roots.forEach(c => order.push(c));
+  const roots = creeks.filter(c => tops.includes(parent[c]) || !parent[c]).sort((a, b) => famSize(b) - famSize(a));
+  const walk = c => { order.push(c); (kids[c] || []).slice().sort((a, b) => famSize(b) - famSize(a)).forEach(walk); };
+  roots.forEach(walk);
   const unplaced = [];
   for (const c of order){
     const h = rowH(c), isRoot = tops.includes(parent[c]) || !parent[c];
@@ -2029,7 +2033,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
     if (isRoot){
       const j = joinAt(c), nx = main.findIndex(x => x.i >= j);
       jx = nx < 0 ? lastX + sp / 2 : nx === 0 ? xOf.get(main[0].i) - sp / 2 : xOf.get(main[nx].i) - sp / 2;
-      const key = Math.round(jx); spread[key] = (spread[key] || 0) + 1; jx += (spread[key] - 1) * 10 * (spread[key] % 2 ? 1 : -1);
+      const same = roots.filter(r2 => { const j2 = joinAt(r2), n2 = main.findIndex(x => x.i >= j2); return n2 === nx; }).sort((a2, b2) => joinAt(a2) - joinAt(b2));
+      const m = same.length, gap = Math.min(18, sp / (m + 1)); jx += (same.indexOf(c) - (m - 1) / 2) * gap;
       jy = 0; sides = ["up", "dn"];
     } else {
       const P = placed.find(o => o.c === parent[c]); if (!P) { unplaced.push(c); continue; }
@@ -2048,11 +2053,12 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
         const grow = (isNew ? h : Math.max(0, h - hold));
         // a taller level moves the levels beyond it: only allowed if nothing there yet
         const movesOthers = !isNew && h > hold && placed.some(o => o.side === sd && o.k > k);
-        for (const dir of ["L", "R"]){
+        for (const dir of ["L", "R"]) for (const off of [0, -30, 30, -60, 60, -90, 90, -130, 130]){
           if (movesOthers) continue;
-          const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h);
+          if (Math.abs(off) + 14 > Math.abs(levelY(sd, k, levels[sd][k].h) - jy)) continue;
+          const g = geom(c, sd, k, dir, jx, jy, levels[sd][k].h, off);
           if (!ok(g)) continue;
-          const score = grow * 10 + (dir === "R" ? 30 : 0) + k;
+          const score = grow * 10 + (dir === "R" ? 30 : 0) + k + Math.abs(off) * .15;
           if (!best || score < best.score) best = {score, g, sd, k, h: levels[sd][k].h};
         }
         levels[sd][k].h = hold; if (isNew) levels[sd].pop();
@@ -2082,7 +2088,8 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   for (const g of placed){
     const col = streamColour(g.c), y = Y0 + g.y, n = g.xs.length, far = g.xs[n - 1], s = g.dir === "L" ? -1 : 1;
     const r0 = 12, vy = y - Math.sign(y - (Y0 + g.jy)) * r0;
-    lines += `<path d="M${g.jx} ${Y0 + g.jy} V${vy} Q${g.jx} ${y} ${g.jx + s * r0} ${y} H${far + s * 10}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const lead = g.off ? `M${g.jx} ${Y0 + g.jy} V${Y0 + g.ky} L${g.x1} ${Y0 + g.ky2}` : `M${g.jx} ${Y0 + g.jy}`;
+    lines += `<path d="${lead} V${vy} Q${g.x1} ${y} ${g.x1 + s * r0} ${y} H${far + s * 10}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
     g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–", g.c); labs += lab(x, y, z.i, g.side === "up"); });
     // the line's name at its far end
     labs += bul(far + s * 16, y, code[g.c], col, s < 0 ? "end" : "start");
@@ -2094,10 +2101,10 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W){
   const jIdx = c => tops.includes(parent[c]) || !parent[c] ? joinAt(c) : jIdx(parent[c]) + .5;
   const strip = others.length ? `<div class="tmstrip">${others.sort((a, b) => jIdx(a) - jIdx(b)).map(c => `<span class="tmcr"><b style="background:${streamColour(c)}">${code[c]}</b><i>${esc(c)}${tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</i>${st[c].map(z => { const k = reg(z.i, c), f = z.i.lvl;
       return `<button type="button" class="tmst tmchip ${f || ""}" data-tm="${k}">${esc(z.i.name)} <code>${esc(z.i.h)}</code>${z.i.up ? " ▲" : ""}${z.i.ai ? " 🤖" : ""}</button>`; }).join("")}</span>`).join("")}</div>` : "";
-  unplaced.length = 0;
+  const nOut = others.length; unplaced.length = 0;
   const miss = unplaced.length ? `<p class="note" style="margin:2px 0 0">Not drawn here (no room): ${unplaced.map(esc).join(", ")} - see the Table.</p>` : "";
   const legend = `<div class="tmleg">${[tops[0], ...placed.map(g => g.c)].map(c => `<span><b style="background:${streamColour(c)}">${code[c]}</b>${esc(c)}${tops.includes(c) || tops.includes(parent[c]) ? "" : ` → ${esc((parent[c] || "").replace(/ (River|Creek)$/, ""))}`}</span>`).join("")}</div>`;
-  return {H, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
+  return {H, nOut, html: `<svg class="tubemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="River line diagram">${lines}${dots}${labs}</svg>${legend}${strip}${miss}
     <p class="note" style="margin:2px 0 0">Like a rail map: each creek leaves the Condamine (or the creek it runs into) and its stations run in order from there; the box at each station is its height (m). Smaller creeks are listed under the map. Tap any station for its AI and Bureau peaks and the Bureau's graph. 🤖 = an AI peak estimate; a coloured box = rising or in flood (key below).</p>`};
 }
 function tubeMap1(items, streams, tops, parent, joinAt, cell, W){
