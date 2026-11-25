@@ -924,7 +924,11 @@ jobs:
               if not os.path.exists(p):
                   return out
               secret = public_pos = None
-              for line in open(p):
+              # a plain name that is also a DDCGI gauge's name (e.g. "Macalister" beside "Macalister (DDCGI)") is a
+              # different station: it must not take the DDCGI gauge's position from the secret
+              lines = list(open(p))
+              ddcgi = {site_key(ln.split(",")[1]) for ln in lines if ln.count(",") == 4 and "(ddcgi)" in ln.split(",")[1].lower()}
+              for line in lines:
                   parts = [x.strip() for x in line.split(",")]
                   if len(parts) != 5 or parts[0] != day:
                       continue
@@ -946,6 +950,9 @@ jobs:
                       if site_key(parts[1]) not in secret and site_key(parts[1]) in public_pos:
                           lat, lon = public_pos[site_key(parts[1])]
                           out.append({"name": parts[1], "lat": lat, "lon": lon, "mm": mm, "source": "mine", "private": True})
+                          continue
+                      if site_key(parts[1]) in ddcgi and "(ddcgi)" not in parts[1].lower():
+                          out.append({"name": parts[1], "lat": None, "lon": None, "mm": mm, "source": "mine", "private": True, "unplaced": True})
                           continue
                       if site_key(parts[1]) in secret:
                           lat, lon = secret[site_key(parts[1])]
