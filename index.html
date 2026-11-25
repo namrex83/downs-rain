@@ -171,7 +171,7 @@ body.ctable #mapRow, body.ctable #side, body.ctable #leftCol, body.ctable .cMapO
   .tmleg b{display:inline-block;color:#fff;border-radius:4px;padding:0 4px;margin-right:4px;font-size:.68rem}
   .tubemap{display:block;width:100%;height:auto;overflow:visible;max-height:var(--tubeH,none);margin:0 auto}
   .tubemap text{font:600 13.5px var(--body);fill:var(--ink)} .tubemap .tmh{font-family:var(--mono);font-weight:700;fill:var(--ink-2)}
-  .tubemap .tmc{font:700 italic 13px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 8.5px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
+  .tubemap .tmc{font:700 italic 13px var(--body)} .tubemap text{paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round} .tubemap .tmai{font-size:9px} .tubemap .tmno{font:800 11px var(--mono);stroke:none} .tubemap .tmbul{font:800 12px var(--body);fill:#fff;stroke:none}
   .tubemap a:hover .tmn{text-decoration:underline}
   body.clines .tsn{font-size:.84rem} body.clines .tsv{font-size:.8rem} body.clines .tsai{font-size:.72rem}
 }
@@ -1963,6 +1963,7 @@ document.addEventListener("click", e => {   // a station on the rail map: a box 
   box.querySelector(".tmx").onclick = () => box.hidden = true;
 });
 function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
+  W = Math.max(W, 220 + (items.filter(x => tops.includes(x.s)).length - 1) * 58);   // room for the bigger station boxes
   const info = x => { const c = cell(x.r), t = document.createElement("template"); t.innerHTML = c.html;
     const a = t.content.querySelector(".tsn a"), nm = (t.content.querySelector(".tsn") || {}).textContent || "";
     const h = (t.content.querySelector(".tsv b") || {}).textContent || "", up = /rising/.test((t.content.querySelector(".tsv") || {}).textContent || "");
@@ -1974,7 +1975,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const CH = 7.1;                                         // width of a character of the names, about
   const labLen = i => (i.name.length + (i.up ? 2 : 0)) * CH + 8;
   const mains = tops.map(t => items.filter(x => x.s === t)), main = mains.flat();
-  const sp = Math.max(40, Math.min(90, (W - PAD * 2 - 140) / Math.max(1, main.length - 1)));
+  const sp = Math.max(58, Math.min(100, (W - PAD * 2 - 140) / Math.max(1, main.length - 1)));
   const xOf = new Map(); main.forEach((x, k) => xOf.set(x.i, PAD + 22 + k * sp));
   const lastX = PAD + 22 + (main.length - 1) * sp;
   const code = {}, taken = new Set();
@@ -1993,7 +1994,7 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const common = pre.find(p => pre.filter(q => q === p).length >= 2);
     if (common) st[c].forEach(z => { const m = z.i.name.match(/^([^()]+?) \((.+)\)$/); if (m && m[1] === common) z.i = {...z.i, name: m[2]}; }); }
   const kids = {}; for (const c of creeks) (kids[parent[c]] = kids[parent[c]] || []).push(c);
-  const CSP = 44;                                         // station spacing on a creek
+  const CSP = 58;                                         // station spacing on a creek
   const RH = Math.min(130, Math.max(36, ...creeks.flatMap(c => st[c].map(z => labLen(z.i)))) * SIN + 16);
   const rowH = c => RH;   // every level the same height (so a level can take more creeks later)
   // rows: up side y = -(MZ + offset), down side y = +(MZ + offset); each row's height is its tallest names
@@ -2094,10 +2095,10 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
   const Y0 = upH + 8, H = Math.round(upH + dnH + 16);
   const reg = (i, line) => { TM_INFO.push({...i, line}); return TM_INFO.length - 1; };
   const dot = (x, y, i, col, num, line) => { const fill = i.lvl === "g1" ? "#f0a020" : i.lvl === "g2" ? "#e00000" : i.lvl === "g3" ? "#a00000" : i.lvl === "g4" ? "#7a2db0" : "#fff", ink = fill === "#fff" ? "#1c2621" : "#fff";
-    const w = 10 + num.length * 5.6;
-    return `<g class="tmst" data-tm="${reg(i, line)}"><title>${esc(i.name)}: ${esc(i.h)} m (tap for more)</title><rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="5" fill="${fill}" stroke="${col}" stroke-width="3"/>`
-      + `<text x="${x}" y="${y + 3.6}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>`
-      + (i.exp ? `<circle class="tmexp" cx="${x + w / 2}" cy="${y - 10}" r="8.5" fill="${{g2: "#e00000", g3: "#a00000", g4: "#7a2db0"}[i.exp.c]}" stroke="#fff" stroke-width="1.5"><title>${i.exp.by} expects ${i.exp.t} flood (${i.exp.h.toFixed(2)} m) within 2 days - tap for details</title></circle>`
+    const w = 12 + num.length * 6.9;   // big enough to read the height
+    return `<g class="tmst" data-tm="${reg(i, line)}"><title>${esc(i.name)}: ${esc(i.h)} m (tap for more)</title><rect x="${x - w / 2}" y="${y - 11}" width="${w}" height="22" rx="6" fill="${fill}" stroke="${col}" stroke-width="3"/>`
+      + `<text x="${x}" y="${y + 4}" text-anchor="middle" class="tmno" style="fill:${ink}">${num}</text>`
+      + (i.exp ? `<circle class="tmexp" cx="${x + w / 2}" cy="${y - 12}" r="8.5" fill="${{g2: "#e00000", g3: "#a00000", g4: "#7a2db0"}[i.exp.c]}" stroke="#fff" stroke-width="1.5"><title>${i.exp.by} expects ${i.exp.t} flood (${i.exp.h.toFixed(2)} m) within 2 days - tap for details</title></circle>`
         : i.ai ? `<text x="${x + w / 2 + 1}" y="${y - 8}" class="tmai">🤖</text>` : "") + `</g>`; };
   const lab = (x, y, i, up) => { const t = `<tspan class="tmn">${esc(i.name)}</tspan>${i.up ? ' <tspan class="tmh">▲</tspan>' : ""}`;
     const el = up ? `<text transform="translate(${x + 4},${y - 12}) rotate(${-ANG})">${t}</text>` : `<text transform="translate(${x + 4},${y + 19}) rotate(${ANG})">${t}</text>`;
@@ -2111,10 +2112,10 @@ function tubeMapT(items, streams, tops, parent, joinAt, cell, W, ANG = 32){
     const col = streamColour(g.c), y = Y0 + g.y, n = g.xs.length, far = g.xs[n - 1], s = g.dir === "L" ? -1 : 1;
     const r0 = 12, vy = y - Math.sign(y - (Y0 + g.jy)) * r0;
     const lead = g.off ? `M${g.jx} ${Y0 + g.jy} V${Y0 + g.ky} L${g.x1} ${Y0 + g.ky2}` : `M${g.jx} ${Y0 + g.jy}`;
-    lines += `<path d="${lead} V${vy} Q${g.x1} ${y} ${g.x1 + s * r0} ${y} H${far + s * 10}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    lines += `<path d="${lead} V${vy} Q${g.x1} ${y} ${g.x1 + s * r0} ${y} H${far + s * 24}" fill="none" stroke="${col}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
     g.xs.forEach((x, q) => { const z = st[g.c][q]; dots += dot(x, y, z.i, col, z.i.h || "–", g.c); labs += lab(x, y, z.i, g.side === "up"); });
     // the line's name at its far end
-    labs += bul(far + s * 16, y, code[g.c], col, s < 0 ? "end" : "start");
+    labs += bul(far + s * 30, y, code[g.c], col, s < 0 ? "end" : "start");
   }
   main.forEach((x, k) => { const i = mInfo[k]; dots += dot(xOf.get(x.i), Y0, i, streamColour(x.s), i.h || "–", x.s); labs += lab(xOf.get(x.i), Y0, i, k % 2 === 0); });
   labs = bul(PAD - 14, Y0, code[tops[0]], streamColour(tops[0]), "start").replace('height="16"', 'height="22"').replace(`y="${Y0 - 8}"`, `y="${Y0 - 11}"`) + labs;
