@@ -226,3 +226,11 @@
 2026-11-25,Daandine (DDCGI),,,0
 # 2026-11-25: the owner judges the Bureau's Miles gauge (16.6 mm, radar 0.2 mm) a faulty reading: left out ("x" = leave this gauge's reading out that day)
 2026-11-25,Miles,,,x
+# 2026-11-26: Oz Forecast list (Millmerran/Brookstead area) photographed 5:35am Thu, ">9am Yest." column all "-" with 7-day totals unchanged (no rain since 9am Wed), so 0 for the rain day to 9am Thu; the owner says the radar's rain around Millmerran is false
+2026-11-26,Brookstead (DDCGI),,,0
+2026-11-26,Yandilla (DDCGI),,,0
+2026-11-26,Tyunga (DDCGI),,,0
+2026-11-26,Bongeen (DDCGI),,,0
+2026-11-26,Norwin (DDCGI),,,0
+2026-11-26,Horraine (DDCGI),,,0
+2026-11-26,Jondaryan (DDCGI),,,0
