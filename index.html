@@ -120,6 +120,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
   #rightCol>*{flex-shrink:0}
   body{padding-bottom:8px}
 }
+@media (min-width:601px) and (max-width:999px){   /* iPad upright: the tabs get their own full-width row under the title */
+  header{flex-wrap:wrap;row-gap:10px}
+  header>div:first-child{flex:1 1 100%}
+  body header .seg{flex:1 1 100%;width:100%;max-width:none}
+  body header .seg button{flex:1 1 0;min-width:0;padding:0 2px;font-size:.78rem}
+}
 @media (min-width:1000px) and (max-height:760px){   /* short laptop windows: a slimmer header */
   body header{padding-top:calc(6px + env(safe-area-inset-top,0px))!important;padding-bottom:6px!important}
   header h1{font-size:1.55rem}
