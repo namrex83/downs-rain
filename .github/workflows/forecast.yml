@@ -67,7 +67,12 @@ jobs:
         continue-on-error: true          # a problem here shouldn't stop the other maps going out
         run: python bom_fc.py
 
-      - name: The chart's seven models, kept on the site
+      - name: Google WeatherNext 3 rain map (about twice a day)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python -u weathernext.py
+
+      - name: The chart's models, kept on the site
         continue-on-error: true
         timeout-minutes: 8
         run: python -u om_points.py
