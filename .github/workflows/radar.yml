@@ -129,10 +129,10 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
-          CORRECT_VERSION = 5        # bump when correct() changes, so recent days with your readings are redone
+          CORRECT_VERSION = 6        # bump when correct() changes, so recent days with your readings are redone
           DRY_KM = 60.0              # dry area: gauges reading nothing count within about this distance...
-          DRY_LIGHT_MM = 10.0        # ...and turn the radar's rain there down to near nothing up to this much,
-          DRY_FADE_MM = 15.0         # fading out by this much (heavier falls are left to the usual correction)
+          DRY_LIGHT_MM = 15.0        # ...and turn the radar's rain there down to near nothing up to this much,
+          DRY_FADE_MM = 25.0         # fading out by this much (heavier falls are left to the usual correction)
           GAUGE_HOLD_KM = 3.0        # the map is pulled to each gauge's reading within about this distance
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
           FAR_RADAR_MM = 15.0        # a gauge is also ignored if the radar shows at least this over it
