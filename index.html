@@ -942,7 +942,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel fcOnly" hidden>
     <p class="note" style="color:var(--ink-2)" id="fInfo"></p>
-    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All eight models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), JMA (Japan) and Google AI (Google DeepMind's WeatherNext 3), are read hourly for the spot from Open-Meteo (CC BY 4.0), with GFS, ECMWF and ECMWF AI scaled so each day matches the maps above (Open-Meteo only decides when in the day the rain falls). The dotted green <b>BOM</b> line is the Bureau of Meteorology's own forecast for the nearest town (within 40 km), stepping up at each midnight by the amount BOM gives a 50% chance of reaching; touch the chart for BOM's range and chance for that day. It comes from the BOM app's data feed, for personal use. Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
+    <p class="note"><b>Rain chart:</b> each model's rain at the pin (or Toowoomba), hour by hour, in mm, with the dashed median of all of them: the running total, or the rain in each 3 hours to see whether it's a morning, afternoon or overnight fall (night is shaded). All eight models, GFS, ECMWF, ECMWF AI, ACCESS-G (the Bureau's model), UK Met Office (UKMO), ICON (Germany), JMA (Japan) and Google AI (Google DeepMind's WeatherNext 3, from its daily map, timed through each day like the others), are read hourly for the spot from Open-Meteo (CC BY 4.0), with GFS, ECMWF and ECMWF AI scaled so each day matches the maps above (Open-Meteo only decides when in the day the rain falls). The dotted green <b>BOM</b> line is the Bureau of Meteorology's own forecast for the nearest town (within 40 km), stepping up at each midnight by the amount BOM gives a 50% chance of reaching; touch the chart for BOM's range and chance for that day. It comes from the BOM app's data feed, for personal use. Each line stops where its model run ends; when the lines bunch together the forecast is more certain.</p>
     <p class="note">Each forecast is the model's rain on its own grid of squares about 25 km across, smoothed for the map. It shows the broad pattern for the district, not differences between paddocks, and storm rain in particular can land well away from where the model puts it. Forecast days run 10am to 10am, the model's nearest times to 9am. Contains modified Copernicus/ECMWF data, © ECMWF, licensed under CC BY 4.0.</p>
   </section>
   <section class="panel windOnly" hidden>
@@ -3746,10 +3746,9 @@ async function omHourly2(lat, lon, key){
     }
     return null;
   };
-  let ids = [...Object.values(H_IDS), ...Object.keys(OM_MODELS)];
+  let ids = [...Object.values(H_IDS), ...Object.keys(OM_MODELS)].filter(x => x !== WN3);   // Google's comes from its map (anchorToMaps)
   let j = await ask(ids);
-  if (!j) { ids = ids.filter(x => x !== WN3); j = await ask(ids); }   // in case Open-Meteo doesn't know an AI model
-  if (!j) { ids = ids.filter(x => x !== H_IDS.aifs); j = await ask(ids); }
+  if (!j) { ids = ids.filter(x => x !== H_IDS.aifs); j = await ask(ids); }   // in case Open-Meteo doesn't know the AI model
   if (!j) throw new Error("no hourly data");
   const series = {}, t = j.hourly.time;
   const add = (m, v) => {
@@ -3890,6 +3889,17 @@ function anchorToMaps(series, at){
       if (sum[d] > 0.05) return [t, mm * daily[d] / sum[d]];
       return [t, daily[d] / hrs[d]];   // Open-Meteo dry but the map has rain: spread it over the day
     });
+  }
+  // Google AI (WeatherNext 3): Open-Meteo only has its daily totals, so its hours are its map's day spread the way
+  // the other models (on average) time that day's rain
+  const o = F_ALL.wn3, others = Object.keys(out).filter(k => k !== "wn3" && out[k] && out[k].length);
+  if (o && others.length && !(out.wn3 && out.wn3.length)) {
+    const daily = {}; o.days.forEach((d, k) => { const v = gSample(o, o.mm10[k], at.lat, at.lng); if (v != null) daily[d] = v; });
+    const avg = {}; for (const k of others) for (const [t, mm] of out[k]) avg[t] = (avg[t] || 0) + mm / others.length;
+    const ts = Object.keys(avg).map(Number).sort((a, b) => a - b), dayOf = t => new Date(Math.ceil(t / 86400) * 86400000).toISOString().slice(0, 10);
+    const sum = {}, hrs = {}; for (const t of ts){ const d = dayOf(t); sum[d] = (sum[d] || 0) + avg[t]; hrs[d] = (hrs[d] || 0) + 1; }
+    const keep = ts.filter(t => dayOf(t) in daily && hrs[dayOf(t)] >= 20);
+    if (keep.length) out.wn3 = keep.map(t => { const d = dayOf(t); return [t, sum[d] > .05 ? avg[t] * daily[d] / sum[d] : daily[d] / hrs[d]]; });
   }
   return out;
 }
@@ -4255,7 +4265,7 @@ async function startForecast(){
   const run = new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z"));
   if (fModel === "avg") $("fInfo").textContent = `${F.model}: at each spot the middle one of the models (with four, halfway between the middle two), so one model far wetter or drier than the others can't pull the map its way (an average can). All of them for the first ${F.used.filter(u => u.length >= 3).length} days, then halfway between ${F.used.length && F.used[F.used.length - 1].length === 2 ? F.used[F.used.length - 1].map(m => F_NAME[m]).join(" and ") : "the rest"}. For several days, each model's own total is worked out first and the middle total shown. Newest run ${new Date(F.run.replace(/T(\d\d)Z/, "T$1:00:00Z")).toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time.`;
   else if (fModel === "namrex") $("fInfo").innerHTML = namInfo();
-  else if (fModel === "wn3") $("fInfo").textContent = `${F.model}: Google DeepMind's newest AI weather model (hourly, about 10 km), the average of its 64-member ensemble, via Open-Meteo (CC BY 4.0). Out to 15 days over southern and central Queensland, northern NSW and the sea off the coast (elsewhere the blends use the other models); fetched twice a day, last at ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. Part of the Median and Namrex AI like the others: until it has its own record of rain days checked against the radar and gauges it counts the same as the rest.`;
+  else if (fModel === "wn3") $("fInfo").textContent = `${F.model}: Google DeepMind's newest AI weather model (hourly, about 10 km), the average of its 64-member ensemble, via Open-Meteo (CC BY 4.0). About two weeks ahead over southern and central Queensland, northern NSW and the sea off the coast (elsewhere the blends use the other models); fetched twice a day, last at ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. Part of the Median and Namrex AI like the others: until it has its own record of rain days checked against the radar and gauges it counts the same as the rest.`;
   else $("fInfo").textContent = `${F.model}, model run of ${run.toLocaleString("en-AU", {timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric"})} Qld time. ${fModel === "gfs" ? "Out to 16 days. Updated four times a day. GFS data from NOAA (US government, public domain)."
     : fModel === "aifs" ? "ECMWF's AI (machine-learning) model, trained on decades of past weather; out to 15 days. Updated twice a day."
     : "Out to 9 or 10 days, so it's left off the 15-day total. Updated twice a day, at about 6:30am and 6:30pm."}`;

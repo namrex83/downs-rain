@@ -19,8 +19,8 @@ OUT = os.path.join("data", "forecast_wn3.json")
 MODEL_ID = "google_weathernext3_ensemble_mean"
 LATS = [round(-21.0 - 0.5 * i, 2) for i in range(25)]      # -21 (Mackay) to -33 (Newcastle)
 LONS = [round(144.0 + 0.5 * j, 2) for j in range(27)]      # 144 (Longreach) to 157 (well out to sea)
-CHUNK = 100
-PAUSE = 20                                                 # seconds between requests
+CHUNK = 50
+PAUSE = 10                                                 # seconds between requests
 URLS = ["https://api.open-meteo.com/v1/forecast", "https://ensemble-api.open-meteo.com/v1/ensemble"]
 EVERY_H = 11
 
