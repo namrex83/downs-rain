@@ -5126,6 +5126,10 @@ tpBind("rTp", k => { if (!rFrames.length) return; rPlay(false); rShow(tpMove(k, 
 const OUTLOOK_LINKS = [
   {title: "Rainfall outlook", text: "Chance of above-median rainfall over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/rainfall/median/seasonal/1"},
   {title: "Maximum temperature outlook", text: "Chance of above-median daytime temperatures over the coming months", url: "https://www.bom.gov.au/climate/outlooks/#/temperature/maximum/median/seasonal/0"},
+  {heading: "Seasonal outlooks: other models"},
+  {title: "ECMWF seasonal forecast (Copernicus C3S)", text: "ECMWF SEAS5 and the other European seasonal models: rain and temperature anomaly maps for the coming months", url: "https://climate.copernicus.eu/charts/packages/c3s_seasonal/"},
+  {title: "ECMWF long-range charts", text: "ECMWF's own seasonal rainfall and temperature anomaly charts, including Niño 3.4 plumes", url: "https://charts.ecmwf.int/?facets=%7B%22Product%20type%22%3A%5B%22Long%20range%22%5D%7D"},
+  {title: "IRI multi-model seasonal forecast", text: "Columbia University's IRI probability of above, near or below normal rain for the next seasons (the CCSR/IRI map)", url: "https://iri.columbia.edu/our-expertise/climate/forecasts/seasonal-climate-forecasts/"},
   {heading: "Other forecasts"},
   {title: "Dalby rain trend, ECMWF ensemble (Meteologix)", text: "Rain totals from every run of the European ensemble over the coming two weeks: shows how much the runs agree", url: "https://meteologix.com/au/forecast/2169535-dalby/xltrend/euro/precipitation-total"},
   {title: "Local Weather Pro (Agweather)", text: "Agweather's local forecast and weather for your spot", url: "https://agweather.com/v3/local_wx_pro"},
@@ -5134,6 +5138,8 @@ const OUTLOOK_LINKS = [
   {title: "El Niño / La Niña (ENSO)", text: "Current reading: NINO 3.4 sea-surface temperature index graph (BOM)", url: "https://www.bom.gov.au/climate/enso/indices.shtml?bookmark=nino34"},
   {title: "Indian Ocean Dipole (IOD)", text: "Current reading: IOD index graph (BOM)", url: "https://www.bom.gov.au/climate/enso/indices.shtml?bookmark=iod"},
   {title: "Southern Annular Mode (SAM)", text: "Current reading: daily SAM index graph and 2-week forecast (NOAA, where it's called the Antarctic Oscillation)", url: "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_ao_index/aao/aao.shtml"},
+  {title: "El Niño status (NOAA)", text: "NOAA's ENSO update, with the weekly Niño 3.4 sea temperatures and forecasts", url: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml"},
+  {title: "Daily sea temperatures (NOAA OISST)", text: "Daily world sea-surface temperature anomaly maps and the Niño 3.4 graph (Climate Reanalyzer, University of Maine)", url: "https://climatereanalyzer.org/clim/sst_daily/"},
   {title: "Madden–Julian Oscillation (MJO)", text: "The tropical pulse of cloud and rain that passes every 30 to 60 days", url: "https://www.bom.gov.au/climate/mjo/"},
 ];
 $("outLinks").innerHTML = OUTLOOK_LINKS.map(l => l.heading ? `<div class="eyebrow" style="margin-top:6px">${l.heading}</div>`
