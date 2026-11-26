@@ -385,6 +385,14 @@ body.mapfull.agrotab .agrofs:not(:empty){display:block}
 .unitsw button[aria-pressed=true]{background:#1f6fbf;color:#fff}
 body.extrastab .pin, body.extrastab .pinlabel{display:none}
 body:not(.agrohere) .leaflet-agro-pane, body:not(.agrohere) .leaflet-agro-pane *{pointer-events:none!important}
+body.agrodrawing .leaflet-agro-pane, body.agrodrawing .leaflet-agro-pane *{pointer-events:none!important}
+body.agrodrawing #map{cursor:crosshair}
+.agrodraw{background:rgba(255,255,255,.96);color:#1c2621;border-radius:12px;padding:6px 8px;box-shadow:0 2px 10px rgba(0,0,0,.3);font:600 .76rem var(--body);max-width:calc(100vw - 100px);margin-bottom:22px!important}
+.agrodraw .dhint{margin-bottom:4px;line-height:1.25} .agrodraw .dhint b{font-size:.88rem}
+.leaflet-bottom.leaflet-left:has(.agrodraw) .agrofs{display:none!important}
+.agrodraw .dbtns{display:flex;flex-wrap:wrap;gap:5px}
+.agrodraw button{border:1px solid #1f6fbf;color:#1f6fbf;background:#fff;border-radius:999px;padding:5px 8px;font:600 .74rem var(--body);cursor:pointer}
+.agrodraw button.go{background:#1f6fbf;color:#fff} .agrodraw button:disabled{opacity:.4}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -939,10 +947,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <section class="panel outOnly" hidden>
     <div id="agroPane">
       <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ / SHP<input type="file" id="agroFile" multiple hidden></label>
+        <button type="button" class="agrofile" id="agroDrawBtn">✏️ Draw a paddock</button>
         <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label>
         <label class="agroop"><input type="checkbox" id="agroAll"> On all maps</label></div>
       <div id="agroList"></div>
-      <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
+      <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Or <b>draw a paddock</b> yourself: tap its corners on the satellite map (or stand at each corner and tap <b>📍 Here</b>), then <b>Done</b> to name and save it, with its area in hectares; it's kept on this phone only. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
     </div>
     <div id="linksPane" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
@@ -3025,7 +3034,7 @@ function setPin(label){
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
 const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : tab === "catch" ? null : readTap();
-map.on("click", ev => { if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
+map.on("click", ev => { if (agroDrawing) { agroDrawAdd(ev.latlng); return; } if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
 
 // Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
 // several spots can be compared (or screenshotted) at once. They follow the day or view picked; Clear removes them.
@@ -5708,6 +5717,7 @@ async function agroAdd(name, buf, id, on = true, geo = null){
   let bounds = null;
   group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
   const L1 = {id, name, layer: group, bounds, on, stats, hide: []};
+  if (geo && String(id).startsWith("drawn-")) { const ha = ((geo.features || [])[0] || {}).properties?.["Area (ha)"]; if (ha != null) stats.label = `drawn · ${ha >= 100 ? Math.round(ha) : (+ha).toFixed(1)} ha`; }
   try { L1.hide = JSON.parse(localStorage.getItem("agroHide:" + id) || "[]"); L1.mm = localStorage.getItem("agroMM:" + id) === "1"; } catch(e){}
   if (stats.legend && L1.hide.length) stats.legend.layer.setHidden(L1.hide);
   AGRO.push(L1); if (on) agroGroup.addLayer(group);
@@ -5799,6 +5809,69 @@ async function agroShow(){
   if (first) { const vis = AGRO.filter(a => a.on); if (vis.length) agroZoom(vis[vis.length - 1]); }
   if (!AGRO.some(a => a.on)) { const c = MYLL || [-27.18, 151.26]; map.setView(c, MYLL ? 13 : 9, {animate: false}); }   // nothing open: your area (or Dalby)
 }
+// Draw a paddock: tap its corners on the map (or stand at each one and use your GPS spot); Done names it and saves it
+// on this phone only, like an opened file, with its area. Undo takes off the last corner; Cancel throws it away.
+let agroDrawing = null, agroDrawCtl = null;
+const AgroDrawBox = L.Control.extend({ options: {position: "bottomleft"},
+  onAdd(){ const d = L.DomUtil.create("div", "agrodraw"); L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d); return d; } });
+function ringHa(pts){   // area on the earth's surface, in hectares
+  if (pts.length < 3) return 0;
+  const R = 6378137, rad = Math.PI / 180; let a = 0;
+  for (let i = 0; i < pts.length; i++){ const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+    a += (p2.lng - p1.lng) * rad * (2 + Math.sin(p1.lat * rad) + Math.sin(p2.lat * rad)); }
+  return Math.abs(a * R * R / 2) / 1e4;
+}
+function agroDrawStart(){
+  if (agroDrawing) return;
+  if (!map.getPane("agro")) { map.createPane("agro", ROT_PANE); map.getPane("agro").style.zIndex = 450; }
+  agroDrawing = {pts: [], shape: L.polygon([], {pane: "agro", color: "#ff5722", weight: 3, fillColor: "#ff5722", fillOpacity: .15, dashArray: "6 5", interactive: false}).addTo(map),
+                 dots: L.layerGroup().addTo(map)};
+  document.body.classList.add("agrodrawing"); map.doubleClickZoom.disable();
+  if (!agroDrawCtl) agroDrawCtl = new AgroDrawBox(); agroDrawCtl.addTo(map);
+  agroDrawPanel();
+}
+function agroDrawAdd(ll){ if (Date.now() - (agroDrawing.btnAt || 0) < 400) return; agroDrawing.pts.push(ll); agroDrawRedraw(); }
+function agroDrawRedraw(){
+  const d = agroDrawing; d.shape.setLatLngs(d.pts); d.dots.clearLayers();
+  d.pts.forEach((p, i) => L.circleMarker(p, {pane: "agro", radius: i === 0 ? 7 : 5, color: "#fff", weight: 2, fillColor: "#ff5722", fillOpacity: 1, interactive: false}).addTo(d.dots));
+  agroDrawPanel();
+}
+function agroDrawPanel(){
+  const d = agroDrawing, box = agroDrawCtl.getContainer(), n = d.pts.length, ha = ringHa(d.pts);
+  box.innerHTML = `<div class="dhint">${n < 3 ? `✏️ Tap each corner${n ? ` (${n})` : ""}` : `<b>${ha >= 100 ? Math.round(ha) : ha.toFixed(1)} ha</b> · ${n} corners`}</div>`
+    + `<div class="dbtns"><button type="button" data-d="here">📍 Here</button><button type="button" data-d="undo" ${n ? "" : "disabled"}>Undo</button>`
+    + `<button type="button" data-d="cancel">Cancel</button><button type="button" class="go" data-d="done" ${n >= 3 ? "" : "disabled"}>Done</button></div>`;
+  // (the panel's buttons mustn't also count as a tap on the map: the click is stopped, and map taps just after are ignored)
+  box.querySelectorAll("button").forEach(b => b.onclick = e => { L.DomEvent.stop(e); agroDrawing.btnAt = Date.now();
+    setTimeout(() => ({here: agroDrawHere, undo: () => { d.pts.pop(); agroDrawRedraw(); }, cancel: agroDrawStop, done: agroDrawDone})[b.dataset.d](), 0); });
+}
+function agroDrawHere(){
+  if (!navigator.geolocation) { alert("This phone can't give its location."); return; }
+  navigator.geolocation.getCurrentPosition(p => { if (!agroDrawing) return;
+    const ll = L.latLng(p.coords.latitude, p.coords.longitude); agroDrawing.pts.push(ll); agroDrawRedraw();
+    if (!map.getBounds().contains(ll)) map.panTo(ll);
+    if (p.coords.accuracy > 15) setTimeout(() => alert(`GPS is only good to about ${Math.round(p.coords.accuracy)} m here; wait a moment and try again, or tap the corner on the map instead.`), 50); },
+    () => alert("Couldn't get your location: check location is allowed for this site in the phone's settings."), {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+}
+function agroDrawStop(){
+  if (!agroDrawing) return;
+  map.removeLayer(agroDrawing.shape); map.removeLayer(agroDrawing.dots); agroDrawing = null;
+  document.body.classList.remove("agrodrawing"); map.doubleClickZoom.enable();
+  if (agroDrawCtl) agroDrawCtl.remove();
+}
+async function agroDrawDone(){
+  const d = agroDrawing; if (!d || d.pts.length < 3) return;
+  const ha = ringHa(d.pts), nm = (prompt(`Name this paddock (${ha.toFixed(1)} ha):`, `Paddock ${AGRO.length + 1}`) || "").trim();
+  if (!nm) return;   // back to drawing
+  const ring = d.pts.map(p => [+p.lng.toFixed(7), +p.lat.toFixed(7)]); ring.push(ring[0]);
+  const geo = {type: "FeatureCollection", features: [{type: "Feature", properties: {Name: nm, "Area (ha)": +ha.toFixed(2), Drawn: new Date().toLocaleDateString("en-AU")},
+    geometry: {type: "Polygon", coordinates: [ring]}}]};
+  const id = "drawn-" + Date.now();
+  agroDrawStop();
+  const a = await agroAdd(nm, null, id, true, geo);
+  await agroStore("put", {id, name: nm, geo, on: true});
+  agroListDraw(); agroSync();
+}
 function agroHide(){ document.body.classList.remove("agrotab"); agroSync(); }
 // Your paddock layers on every map (Rainfall, Forecast, Radar, Storms...), not just Paddock layers, unless "On all maps"
 // is turned off. They're only ever on this phone or computer. Elsewhere they can't be tapped, so tapping the map still
@@ -5814,6 +5887,7 @@ async function agroLoad(){
 }
 function agroSync(){
   const here = tab === "outlook" && aMode === "agro";
+  if (!here) agroDrawStop();
   document.body.classList.toggle("agrohere", here);
   if (here || (agroAll && tab !== "outlook" && tab !== "wind" && AGRO.some(a => a.on))) agroGroup.addTo(map); else map.removeLayer(agroGroup);
 }
@@ -5821,6 +5895,7 @@ $("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return
   $("map").hidden = aMode !== "agro"; if (aMode === "agro") { fitMap(); map.invalidateSize(); } agroShow(); };
 $("agroOp").oninput = agroOpacity;
 $("agroAll").checked = agroAll;
+$("agroDrawBtn").onclick = () => { agroDrawStart(); $("map").scrollIntoView({block: "nearest", behavior: "smooth"}); };
 $("agroAll").onchange = () => { agroAll = $("agroAll").checked; try { localStorage.setItem("agroAll", agroAll ? "1" : "0"); } catch(e){} agroSync(); };
 setTimeout(() => agroLoad().then(agroSync).catch(() => {}), 1500);   // your saved paddock layers, onto whichever map is showing
 $("agroFile").onchange = async e => {
