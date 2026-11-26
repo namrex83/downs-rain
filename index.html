@@ -5641,7 +5641,7 @@ function geoLayer(geo){
   const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const group = L.featureGroup(), stats = {shapes: 0, pictures: 0};
   L.geoJSON(geo, {pane: "agro",
-    style: () => ({color: "#ffd400", weight: 2, fillColor: "#ffd400", fillOpacity: .2}),
+    style: f => /Point/.test((f.geometry || {}).type) ? {radius: 7, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1} : {color: "#ffd400", weight: 2, fillColor: "#ffd400", fillOpacity: .2},
     pointToLayer: (f, ll) => L.circleMarker(ll, {radius: 6, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1, pane: "agro"}),
     onEachFeature: (f, l) => { stats.shapes++; const pr = f.properties || {}, rows = Object.entries(pr).filter(([, v]) => v !== null && v !== "").slice(0, 14);
       if (rows.length) l.bindPopup(`<div class="agropop"><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>`); }
@@ -5768,7 +5768,7 @@ $("agroFile").onchange = async e => {
       const a = await agroAdd(base, null, id, true, geo);
       await agroStore("put", {id, name: base, geo, on: true});
       agroZoom(a);
-      if (!set.prj) alert(`${base}: opened without its .prj file, so it's assumed to be in latitude/longitude. If it lands in the wrong place, pick the .prj with the .shp and .dbf.`);
+      const bb = a.bounds; if (!set.prj && !(bb && Math.abs(bb.getNorth()) <= 90 && Math.abs(bb.getEast()) <= 180)) alert(`${base}: opened without its .prj file, so it's assumed to be in latitude/longitude. If it lands in the wrong place, pick the .prj with the .shp and .dbf.`);
     } catch(err){ alert(`Couldn't open ${base}: ${err.message === "shp" ? "the shapefile reader didn't load (check the internet connection)" : err.message}.`); }
   }
   for (const f of all.filter(f => !["shp", "dbf", "prj", "shx", "cpg"].includes(ext(f)))){
