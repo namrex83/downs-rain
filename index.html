@@ -3050,7 +3050,18 @@ function addDot(ll){
     .bindTooltip(dotLabel(ll), {permanent: true, direction: "top", offset: [0, -7], className: "pinlabel dotlabel"});
   dots.push({ll, m}); m.addTo(dotLayer); dotLayer.addTo(map); $("dotClear").hidden = false; fsSync();
 }
+// your marks (Paddock layers) show the rain at them after their name on the Rainfall map, for the day or span showing
+function markLabels(){
+  for (const a of (typeof AGRO !== "undefined" ? AGRO : [])){
+    if (!String(a.id).startsWith("mark-")) continue;
+    a.layer.eachLayer(l => { const nm = l.feature && l.feature.properties && l.feature.properties.Name; if (!nm || !l.getTooltip()) return;
+      const v = tab === "rain" && l.getLatLng ? valueAt(l.getLatLng().lat, l.getLatLng().lng) : null;
+      const esc3 = x => String(x).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+      l.setTooltipContent(tab === "rain" ? `${esc3(nm)} · <b>${v == null ? "–" : fmt(v) + " mm"}</b>` : esc3(nm)); });
+  }
+}
 function refreshDots(){
+  markLabels();
   if (tab !== "rain") { map.removeLayer(dotLayer); return; }
   for (const d of dots) d.m.setTooltipContent(dotLabel(d.ll));
   if (dots.length) dotLayer.addTo(map);
@@ -5924,6 +5935,7 @@ function agroSync(){
   if (!here) agroDrawStop();
   document.body.classList.toggle("agrohere", here);
   if (here || (agroAll && tab !== "outlook" && tab !== "wind" && AGRO.some(a => a.on))) agroGroup.addTo(map); else map.removeLayer(agroGroup);
+  markLabels();
 }
 $("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; aMode = b.dataset.m;
   $("map").hidden = aMode !== "agro"; if (aMode === "agro") { fitMap(); map.invalidateSize(); } agroShow(); };
