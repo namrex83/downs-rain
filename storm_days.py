@@ -7,7 +7,9 @@ import json
 import math
 import os
 
-OUT = os.path.join("data", "storm_days.json")
+OUT = os.path.join("data", "storm_days.json")   # (old, both models in one file)
+# each model in its own file, so the GFS and ECMWF jobs (which publish separately) can't put back each other's old days
+FILE = lambda key: os.path.join("data", f"storm_days_{key}.json")
 
 
 def category(li, cape, sh, cin):   # li is x10, cape J/kg, sh knots, cin J/kg (the same rule as the page)
@@ -33,13 +35,10 @@ def update(key, run, lats, lons, times, li, cape, sh, cin):
             c = category(li[h][k], cape[h][k], sh[h][k], cin[h][k] if cin else None)
             if c > row[k]:
                 row[k] = c
-    try:
-        out = json.load(open(OUT))
-    except Exception:
-        out = {}
+    out = {}
     out[key] = {"run": run, "lats": [float(x) for x in lats], "lons": [float(x) for x in lons],
                 "days": {d: "".join(str(c) for c in v) for d, v in sorted(days.items())}}
     os.makedirs("data", exist_ok=True)
-    with open(OUT, "w") as f:
-        json.dump(out, f, separators=(",", ":"))
-    print(f"{OUT}: {key} worst category by day " + ", ".join(f"{d} {max(int(c) for c in s)}" for d, s in out[key]["days"].items()))
+    with open(FILE(key), "w") as f:
+        json.dump(out[key], f, separators=(",", ":"))
+    print(f"{FILE(key)}: {key} worst category by day " + ", ".join(f"{d} {max(int(c) for c in s)}" for d, s in out[key]["days"].items()))

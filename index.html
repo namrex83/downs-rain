@@ -1750,7 +1750,14 @@ const kmBetween = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 * 
 const CAT_NAME = ["no storms", "storms possible", "organised storms", "severe", "significant severe", "high-end severe"];
 const SM_NAME = {gfs: "GFS", ecmwf: "ECMWF"};
 async function stormFlags(){
-  if (!SDAYS) { try { SDAYS = await getJSON("data/storm_days.json"); } catch(e){ SDAYS = null; return; } }
+  if (!SDAYS) {   // each storm model's own file (data/storm_days_gfs.json, _ecmwf.json); the old shared file if they're not there yet
+    const one = async k => { try { return await getJSON(`data/storm_days_${k}.json`); } catch(e){ return null; } };
+    const [g, e] = await Promise.all([one("gfs"), one("ecmwf")]);
+    let old = null; if (!g || !e) { try { old = await getJSON("data/storm_days.json"); } catch(_){} }
+    SDAYS = {}; const gg = g || (old && old.gfs), ee = e || (old && old.ecmwf);
+    if (gg) SDAYS.gfs = gg; if (ee) SDAYS.ecmwf = ee;
+    if (!gg && !ee) { SDAYS = null; return; }
+  }
   const [lat, lon] = MYLL || SPOT.ll, where = MYLL ? "you" : SPOT.name;
   const today = qDate(Date.now() / 1000), last = addDays(today, 3), byDay = {};
   for (const d of [...new Set(Object.values(SDAYS).flatMap(m => Object.keys(m.days || {})))]){
