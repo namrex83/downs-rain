@@ -129,7 +129,7 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
-          CORRECT_VERSION = 6        # bump when correct() changes, so recent days with your readings are redone
+          CORRECT_VERSION = 7        # bump when correct() changes, so recent days with your readings are redone
           DRY_KM = 60.0              # dry area: gauges reading nothing count within about this distance...
           DRY_LIGHT_MM = 15.0        # ...and turn the radar's rain there down to near nothing up to this much,
           DRY_FADE_MM = 25.0         # fading out by this much (heavier falls are left to the usual correction)
@@ -1081,8 +1081,8 @@ jobs:
                           wet += w * min(1.0, g["mm"] / 3.0)   # a light shower (under 3 mm) only partly counts
                   # "light" is judged on the radar's own figure, before any scaling by far-off gauges
                   light = np.clip((DRY_FADE_MM - radar) / (DRY_FADE_MM - DRY_LIGHT_MM), 0, 1)
-                  damp = np.clip(dry * 1.5, 0, 1) * (1 - np.clip(wet * 2, 0, 1)) * light
-                  field = field * (1 - 0.95 * damp)
+                  damp = np.clip(dry * 2.5, 0, 1) * (1 - np.clip(wet * 2, 0, 1)) * light
+                  field = field * (1 - 0.97 * damp)
                   # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
                   # so the map at a gauge matches what it measured even where the radar changes quickly.
                   # All gauges are blended at once, the nearest counting by far the most, so a gauge a few km
