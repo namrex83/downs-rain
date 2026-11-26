@@ -5806,7 +5806,7 @@ function agroHide(){ document.body.classList.remove("agrotab"); agroSync(); }
 let agroAll = true; try { agroAll = localStorage.getItem("agroAll") !== "0"; } catch(e){}
 async function agroLoad(){
   if (agroLoaded) return; agroLoaded = true;
-  if (!map.getPane("agro")) { map.createPane("agro"); map.getPane("agro").style.zIndex = 450; }
+  if (!map.getPane("agro")) { map.createPane("agro", ROT_PANE); map.getPane("agro").style.zIndex = 450; }   // turns with the map when following your heading
   try { const v = localStorage.getItem("agroOp"); if (v) $("agroOp").value = v; } catch(e){}
   agroOpacity();
   for (const f of (await agroStore("all")) || []) { try { await agroAdd(f.name, f.buf, f.id, f.on !== false, f.geo || null); } catch(e){} }
