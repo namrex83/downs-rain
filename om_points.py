@@ -24,8 +24,9 @@ import requests
 OUT = os.path.join("data", "om")
 LATS = [round(-25.5 - 0.25 * i, 2) for i in range(16)]       # -25.5 to -29.25
 LONS = [round(149.5 + 0.25 * j, 2) for j in range(17)]       # 149.5 to 153.5
-H_IDS = {"gfs": "gfs_seamless", "ecmwf": "ecmwf_ifs025", "aifs": "ecmwf_aifs025_single"}
-OM_MODELS = ["bom_access_global", "ukmo_seamless", "icon_seamless", "jma_seamless", "google_weathernext3_ensemble_mean"]
+H_IDS = {"gfs": "gfs_seamless", "ecmwf": "ecmwf_ifs025", "aifs": "ecmwf_aifs025_single",
+         "wn3": "google_weathernext3_ensemble_mean"}
+OM_MODELS = ["bom_access_global", "ukmo_seamless", "icon_seamless", "jma_seamless"]
 NEW = ["ecmwf_aifs025_single", "google_weathernext3_ensemble_mean"]   # left out if Open-Meteo refuses them
 CHUNK = 12
 URL = "https://api.open-meteo.com/v1/forecast"

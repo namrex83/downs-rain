@@ -3,7 +3,7 @@ Namrex forecast: how well each rain model has been doing lately over the Downs, 
 
 Run by .github/workflows/forecast.yml after the model forecasts are fetched:
 
-  1. archive  Each model run's daily rain (GFS, ECMWF, ECMWF AI) over the radar's area is kept in
+  1. archive  Each model run's daily rain (GFS, ECMWF, ECMWF AI, Google WeatherNext 3) over the radar's area is kept in
               data/skill/archive.json, by the day it's for and how far ahead it was made (lead):
               A = the day ends within 2 days of the run, B = 2 to 4 days, C = further out.
   2. score    Once a day is over and its gauge-corrected rain map is in (data/<day>.json, or SILO's map for days
@@ -16,7 +16,8 @@ Run by .github/workflows/forecast.yml after the model forecasts are fetched:
 Error: the average difference between forecast and observed rain on a square-root scale (so a 5 mm miss on a dry
 day counts for more than on a 60 mm day, and big storms don't swamp everything), over the days with rain or rain
 forecast. Weight: in proportion to 1 / error (gentle: rain scores are noisy), shrunk towards equal weights until there are enough rain days
-(K_SHRINK), and never under MIN_W.
+(K_SHRINK), and never under MIN_W. A model newly added, with no rain days scored yet, counts the same as the
+others until it has some (its weight then moves with its own record).
 """
 import datetime as dt
 import json
@@ -36,9 +37,10 @@ POINTS = os.path.join(SKILL_DIR, "points.json")          # Open-Meteo past runs 
 OUT = os.path.join(DATA, "skill.json")
 QLD = dt.timezone(dt.timedelta(hours=10))
 BOX = (-29.5, -25.0, 149.5, 153.5)                         # south, north, west, east: inside the radar maps
-GRID_MODELS = {"gfs": "forecast_gfs.json", "ecmwf": "forecast.json", "aifs": "forecast_aifs.json"}
+GRID_MODELS = {"gfs": "forecast_gfs.json", "ecmwf": "forecast.json", "aifs": "forecast_aifs.json",
+               "wn3": "forecast_wn3.json"}                   # wn3: Google DeepMind's WeatherNext 3 (half-degree grid)
 OM_IDS = {"gfs": "gfs_seamless", "ecmwf": "ecmwf_ifs025", "aifs": "ecmwf_aifs025_single", "bom_access_global": "bom_access_global",
-          "ukmo_seamless": "ukmo_seamless", "icon_seamless": "icon_seamless", "jma_seamless": "jma_seamless"}
+          "ukmo_seamless": "ukmo_seamless", "icon_seamless": "icon_seamless", "jma_seamless": "jma_seamless", "wn3": "google_weathernext3_ensemble_mean"}
 OM_LEAD = {"A": 1, "B": 2, "C": 4}                        # previous_dayN for each lead bucket
 KEEP_DAYS = 75
 WINDOW = 45                                               # days of scores the weights are worked out from
@@ -112,6 +114,24 @@ def err(f, o):
     return abs(math.sqrt(max(f, 0)) - math.sqrt(max(o, 0)))
 
 
+def sample(f, vals, points):
+    """A grid's values (mm x 10) read at other points, in between its own points; None if any point is off the grid."""
+    lats, lons = f["lats"], f["lons"]
+    nr, nc = len(lats), len(lons)
+    dlat, dlon = lats[0] - lats[1], lons[1] - lons[0]
+    out = []
+    for la, lo in points:
+        fy, fx = (lats[0] - la) / dlat, (lo - lons[0]) / dlon
+        if fy < 0 or fx < 0 or fy > nr - 1 or fx > nc - 1:
+            return None
+        r, c = min(int(fy), nr - 2), min(int(fx), nc - 2)
+        dy, dx = fy - r, fx - c
+        v = (vals[r * nc + c] * (1 - dy) * (1 - dx) + vals[r * nc + c + 1] * (1 - dy) * dx
+             + vals[(r + 1) * nc + c] * dy * (1 - dx) + vals[(r + 1) * nc + c + 1] * dy * dx)
+        out.append(round(v))
+    return out
+
+
 # ------------------------------------------------------------------ 1. archive the gridded forecasts
 def archive():
     arc = jload(ARCHIVE, {"points": None, "days": {}})
@@ -125,9 +145,7 @@ def archive():
         pts = [[lats[i], lons[j]] for i in ri for j in ci]
         if arc["points"] is None:
             arc["points"] = pts
-        if pts != arc["points"]:
-            print(f"  {m}: grid differs from the archive's, skipped", flush=True)
-            continue
+        regrid = pts != arc["points"]   # a different grid (WeatherNext 3): read it at the archive's points
         run = dt.datetime.strptime(f["run"], "%Y-%m-%dT%HZ").replace(tzinfo=dt.timezone.utc)
         nl = len(lons)
         for k, d in enumerate(f["days"]):
@@ -136,7 +154,9 @@ def archive():
             if hours < 12:
                 continue
             b = bucket(hours)
-            vals = [f["mm10"][k][i * nl + j] for i in ri for j in ci]
+            vals = sample(f, f["mm10"][k], arc["points"]) if regrid else [f["mm10"][k][i * nl + j] for i in ri for j in ci]
+            if vals is None:
+                continue
             slot = arc["days"].setdefault(d, {}).setdefault(m, {})
             # the latest run that's still in this lead bucket stands for it
             if b not in slot or slot[b]["run"] <= f["run"]:
@@ -258,27 +278,47 @@ def history(force=False):
 
 
 # ------------------------------------------------------------------ 4. weights
+def finish(stats, models, n):
+    """Weights from each model's (average error, rain days scored). A model with few or no scored days is pulled
+    towards an equal share, and one with none counts the same as the others until it has some."""
+    eq = 1 / len(models)
+    raw = {m: 1 / max(stats[m][0], .05) for m in stats}
+    tot = sum(raw.values()) or 1
+    w = {}
+    for m in models:
+        k = stats[m][1] if m in stats else 0
+        share = raw[m] / tot * len(stats) / len(models) if m in stats else eq
+        w[m] = max(MIN_W, (k * share + K_SHRINK * eq) / (k + K_SHRINK))
+    t2 = sum(w.values())
+    return {"n": n, "nm": {m: stats[m][1] for m in stats}, "mae": {m: round(stats[m][0], 3) for m in stats},
+            "w": {m: round(x / t2, 3) for m, x in w.items()}}
+
+
 def weights_from(days, models, b):
-    """Each model's average error over the recent rain days they all have a score for, and the weights."""
+    """Each model's average error over the recent rain days (the days the established models all have a score for),
+    and the weights. A model added later (fewer scores) is scored on the days it has."""
+    recent = sorted(days)[-WINDOW:]
+    cnt = {m: sum(1 for d in recent if b in (days[d]["m"].get(m) or {})) for m in models}
+    top = max(cnt.values() or [0])
+    core = [m for m in models if cnt[m] and cnt[m] >= 0.6 * top]
+    if not core:
+        return None
     use = []
-    for d in sorted(days)[-WINDOW:]:
+    for d in recent:
         v = days[d]
-        if not all(m in v["m"] and b in v["m"][m] for m in models):
+        if not all(b in (v["m"].get(m) or {}) for m in core):
             continue
         wet = (v.get("obs") or 0) >= 0.5 or any((v["fc"].get(m) or {}).get(b, 0) >= 1 for m in models)
         if wet:
             use.append(v)
-    n = len(use)
-    if not n:
+    if not use:
         return None
-    mae = {m: sum(v["m"][m][b] for v in use) / n for m in models}
-    raw = {m: 1 / max(mae[m], .05) for m in models}
-    tot = sum(raw.values())
-    eq = 1 / len(models)
-    w = {m: (n * raw[m] / tot + K_SHRINK * eq) / (n + K_SHRINK) for m in models}
-    w = {m: max(MIN_W, x) for m, x in w.items()}
-    t2 = sum(w.values())
-    return {"n": n, "mae": {m: round(x, 3) for m, x in mae.items()}, "w": {m: round(x / t2, 3) for m, x in w.items()}}
+    stats = {}
+    for m in models:
+        e = [v["m"][m][b] for v in use if b in (v["m"].get(m) or {})]
+        if e:
+            stats[m] = (sum(e) / len(e), len(e))
+    return finish(stats, models, len(use))
 
 
 def weights():
@@ -291,16 +331,16 @@ def weights():
         # map: the site's own gridded forecasts once there are enough of them, otherwise the spot scores for the same models
         g = weights_from(sc, grid_models, b)
         p = weights_from(pts, grid_models, b)
-        pick = g if g and g["n"] >= 10 else (p if p else g)
+        pick, source = (g, "site") if g and g["n"] >= 10 else ((p, "spots") if p else (g, "site"))
         if g and p and g["n"] < 10:   # both: the spot scores carry the weights until the site's own archive builds up
-            n = g["n"] + p["n"]
-            pick = {"n": n, "mae": {m: round((g["mae"][m] * g["n"] + p["mae"][m] * p["n"]) / n, 3) for m in grid_models}}
-            raw = {m: 1 / max(pick["mae"][m], .05) for m in grid_models}
-            tot = sum(raw.values()); eq = 1 / len(grid_models)
-            w = {m: max(MIN_W, (n * raw[m] / tot + K_SHRINK * eq) / (n + K_SHRINK)) for m in grid_models}
-            pick["w"] = {m: round(x / sum(w.values()), 3) for m, x in w.items()}
+            stats = {}
+            for m in grid_models:
+                a, c = (g["mae"].get(m), g["nm"].get(m, 0)), (p["mae"].get(m), p["nm"].get(m, 0))
+                if a[1] + c[1]:
+                    stats[m] = (((a[0] or 0) * a[1] + (c[0] or 0) * c[1]) / (a[1] + c[1]), a[1] + c[1])
+            pick, source = finish(stats, grid_models, g["n"] + p["n"]), "both"
         if pick:
-            out["map"][b] = {**pick, "source": "site" if pick is g else "spots" if pick is p else "both"}
+            out["map"][b] = {**pick, "source": source}
         # chart: every model with spot scores for this lead
         have = sorted({m for v in pts.values() for m in v["m"] if b in v["m"][m]})
         counts = {m: sum(1 for v in pts.values() if b in (v["m"].get(m) or {})) for m in have}
