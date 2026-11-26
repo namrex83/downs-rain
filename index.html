@@ -393,6 +393,8 @@ body.agrodrawing #map{cursor:crosshair}
 .agrodraw .dbtns{display:flex;flex-wrap:wrap;gap:5px}
 .agrodraw button{border:1px solid #1f6fbf;color:#1f6fbf;background:#fff;border-radius:999px;padding:5px 8px;font:600 .74rem var(--body);cursor:pointer}
 .agrodraw button.go{background:#1f6fbf;color:#fff} .agrodraw button:disabled{opacity:.4}
+.leaflet-tooltip.marktip{background:rgba(255,255,255,.92);border:0;border-radius:6px;padding:1px 6px;font:700 .72rem var(--body);color:#1c2621;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.leaflet-tooltip.marktip::before{display:none}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -948,10 +950,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div id="agroPane">
       <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ / SHP<input type="file" id="agroFile" multiple hidden></label>
         <button type="button" class="agrofile" id="agroDrawBtn">✏️ Draw a paddock</button>
+        <button type="button" class="agrofile" id="agroMarkBtn">📍 Add a mark</button>
         <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label>
         <label class="agroop"><input type="checkbox" id="agroAll"> On all maps</label></div>
       <div id="agroList"></div>
-      <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Or <b>draw a paddock</b> yourself: tap its corners on the satellite map (or stand at each corner and tap <b>📍 Here</b>), then <b>Done</b> to name and save it, with its area in hectares; it's kept on this phone only. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
+      <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Or <b>draw a paddock</b> yourself: tap its corners on the satellite map (or stand at each corner and tap <b>📍 Here</b>), then <b>Done</b> to name and save it, with its area in hectares; it's kept on this phone only. <b>Add a mark</b> puts a named dot on the map (tap the spot, or <b>📍 Here</b> for where you are): a gate, tank, bore, trap or anything else you want to find again. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
     </div>
     <div id="linksPane" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
@@ -3034,7 +3037,7 @@ function setPin(label){
 }
 // on Radar the pictures can't be read, so the pin just marks the spot (your location or a tapped place) to watch the rain against
 const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : tab === "catch" ? null : readTap();
-map.on("click", ev => { if (agroDrawing) { agroDrawAdd(ev.latlng); return; } if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
+map.on("click", ev => { if (agroDrawing) { agroDrawing.mark ? agroMarkAt(ev.latlng) : agroDrawAdd(ev.latlng); return; } if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
 
 // Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
 // several spots can be compared (or screenshotted) at once. They follow the day or view picked; Clear removes them.
@@ -5706,7 +5709,9 @@ function geoLayer(geo){
   L.geoJSON(geo, {pane: "agro",
     style: f => /Point/.test((f.geometry || {}).type) ? {radius: 7, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1} : {color: "#ffd400", weight: 2, fillColor: "#ffd400", fillOpacity: .2},
     pointToLayer: (f, ll) => L.circleMarker(ll, {radius: 6, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1, pane: "agro"}),
-    onEachFeature: (f, l) => { stats.shapes++; const pr = f.properties || {}, rows = Object.entries(pr).filter(([, v]) => v !== null && v !== "").slice(0, 14);
+    onEachFeature: (f, l) => { stats.shapes++; const pr = f.properties || {};
+      if (pr.Mark && pr.Name) l.bindTooltip(esc(pr.Name), {permanent: true, direction: "right", offset: [8, 0], className: "marktip"});
+      const rows = Object.entries(pr).filter(([, v]) => v !== null && v !== "").slice(0, 14);
       if (rows.length) l.bindPopup(`<div class="agropop"><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>`); }
   }).eachLayer(l => l.addTo(group));
   if (!stats.shapes) throw new Error("no shapes in it");
@@ -5717,6 +5722,7 @@ async function agroAdd(name, buf, id, on = true, geo = null){
   let bounds = null;
   group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
   const L1 = {id, name, layer: group, bounds, on, stats, hide: []};
+  if (geo && String(id).startsWith("mark-")) stats.label = "mark";
   if (geo && String(id).startsWith("drawn-")) { const ha = ((geo.features || [])[0] || {}).properties?.["Area (ha)"]; if (ha != null) stats.label = `drawn · ${ha >= 100 ? Math.round(ha) : (+ha).toFixed(1)} ha`; }
   try { L1.hide = JSON.parse(localStorage.getItem("agroHide:" + id) || "[]"); L1.mm = localStorage.getItem("agroMM:" + id) === "1"; } catch(e){}
   if (stats.legend && L1.hide.length) stats.legend.layer.setHidden(L1.hide);
@@ -5822,13 +5828,39 @@ function ringHa(pts){   // area on the earth's surface, in hectares
   return Math.abs(a * R * R / 2) / 1e4;
 }
 function agroDrawStart(){
-  if (agroDrawing) return;
+  if (agroDrawing) { if (!agroDrawing.mark) return; agroDrawStop(); }
   if (!map.getPane("agro")) { map.createPane("agro", ROT_PANE); map.getPane("agro").style.zIndex = 450; }
   agroDrawing = {pts: [], shape: L.polygon([], {pane: "agro", color: "#ff5722", weight: 3, fillColor: "#ff5722", fillOpacity: .15, dashArray: "6 5", interactive: false}).addTo(map),
                  dots: L.layerGroup().addTo(map)};
   document.body.classList.add("agrodrawing"); map.doubleClickZoom.disable();
   if (!agroDrawCtl) agroDrawCtl = new AgroDrawBox(); agroDrawCtl.addTo(map);
   agroDrawPanel();
+}
+// Add a mark: one named dot, saved like a drawn paddock (on this phone only)
+function agroMarkStart(){
+  if (agroDrawing) agroDrawStop();
+  if (!map.getPane("agro")) { map.createPane("agro", ROT_PANE); map.getPane("agro").style.zIndex = 450; }
+  agroDrawing = {mark: true, pts: [], shape: L.layerGroup().addTo(map), dots: L.layerGroup().addTo(map)};
+  document.body.classList.add("agrodrawing"); map.doubleClickZoom.disable();
+  if (!agroDrawCtl) agroDrawCtl = new AgroDrawBox(); agroDrawCtl.addTo(map);
+  const box = agroDrawCtl.getContainer();
+  box.innerHTML = `<div class="dhint">📍 Tap the map where the mark goes</div><div class="dbtns"><button type="button" data-d="here">📍 Here</button><button type="button" data-d="cancel">Cancel</button></div>`;
+  box.querySelectorAll("button").forEach(b => b.onclick = e => { L.DomEvent.stop(e); agroDrawing.btnAt = Date.now();
+    setTimeout(() => b.dataset.d === "here" ? agroDrawHere() : agroDrawStop(), 0); });
+}
+async function agroMarkAt(ll){
+  const d = agroDrawing; if (!d || Date.now() - (d.btnAt || 0) < 400) return;
+  d.dots.clearLayers(); L.circleMarker(ll, {pane: "agro", radius: 8, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1, interactive: false}).addTo(d.dots);
+  await new Promise(r => setTimeout(r, 30));
+  const nm = (prompt("Name this mark (e.g. Gate, Tank, Trap 3):", `Mark ${AGRO.filter(a => String(a.id).startsWith("mark-")).length + 1}`) || "").trim();
+  if (!nm) { d.dots.clearLayers(); return; }   // still marking: tap somewhere else, or Cancel
+  const geo = {type: "FeatureCollection", features: [{type: "Feature", properties: {Name: nm, Mark: 1, Added: new Date().toLocaleDateString("en-AU")},
+    geometry: {type: "Point", coordinates: [+ll.lng.toFixed(7), +ll.lat.toFixed(7)]}}]};
+  const id = "mark-" + Date.now();
+  agroDrawStop();
+  await agroAdd(nm, null, id, true, geo);
+  await agroStore("put", {id, name: nm, geo, on: true});
+  agroListDraw(); agroSync();
 }
 function agroDrawAdd(ll){ if (Date.now() - (agroDrawing.btnAt || 0) < 400) return; agroDrawing.pts.push(ll); agroDrawRedraw(); }
 function agroDrawRedraw(){
@@ -5848,7 +5880,9 @@ function agroDrawPanel(){
 function agroDrawHere(){
   if (!navigator.geolocation) { alert("This phone can't give its location."); return; }
   navigator.geolocation.getCurrentPosition(p => { if (!agroDrawing) return;
-    const ll = L.latLng(p.coords.latitude, p.coords.longitude); agroDrawing.pts.push(ll); agroDrawRedraw();
+    const ll = L.latLng(p.coords.latitude, p.coords.longitude);
+    if (agroDrawing.mark) { agroDrawing.btnAt = 0; if (!map.getBounds().contains(ll)) map.panTo(ll); agroMarkAt(ll); return; }
+    agroDrawing.pts.push(ll); agroDrawRedraw();
     if (!map.getBounds().contains(ll)) map.panTo(ll);
     if (p.coords.accuracy > 15) setTimeout(() => alert(`GPS is only good to about ${Math.round(p.coords.accuracy)} m here; wait a moment and try again, or tap the corner on the map instead.`), 50); },
     () => alert("Couldn't get your location: check location is allowed for this site in the phone's settings."), {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
@@ -5895,6 +5929,7 @@ $("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return
   $("map").hidden = aMode !== "agro"; if (aMode === "agro") { fitMap(); map.invalidateSize(); } agroShow(); };
 $("agroOp").oninput = agroOpacity;
 $("agroAll").checked = agroAll;
+$("agroMarkBtn").onclick = () => { agroMarkStart(); $("map").scrollIntoView({block: "nearest", behavior: "smooth"}); };
 $("agroDrawBtn").onclick = () => { agroDrawStart(); $("map").scrollIntoView({block: "nearest", behavior: "smooth"}); };
 $("agroAll").onchange = () => { agroAll = $("agroAll").checked; try { localStorage.setItem("agroAll", agroAll ? "1" : "0"); } catch(e){} agroSync(); };
 setTimeout(() => agroLoad().then(agroSync).catch(() => {}), 1500);   // your saved paddock layers, onto whichever map is showing
