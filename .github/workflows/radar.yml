@@ -129,7 +129,10 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
-          CORRECT_VERSION = 2        # bump when correct() changes, so recent days with your readings are redone
+          CORRECT_VERSION = 3        # bump when correct() changes, so recent days with your readings are redone
+          DRY_KM = 25.0              # dry area: gauges reading nothing count within about this distance...
+          DRY_LIGHT_MM = 10.0        # ...and turn the radar's rain there down to near nothing up to this much,
+          DRY_FADE_MM = 15.0         # fading out by this much (heavier falls are left to the usual correction)
           GAUGE_HOLD_KM = 3.0        # the map is pulled to each gauge's reading within about this distance
           DEAD_RADAR_MM = 10.0       # a dry gauge (<1 mm) is ignored if the radar shows at least this over it...
           FAR_RADAR_MM = 15.0        # a gauge is also ignored if the radar shows at least this over it
@@ -1035,12 +1038,19 @@ jobs:
               overall = float(clamp((sum(g["mm"] for g in pairs) + BIAS_PRIOR_MM)
                                     / (sum(g["radar_mm"] for g in pairs) + BIAS_PRIOR_MM)))
               # local factor: nearby gauges count most, fading out over ~BIAS_RADIUS_KM; with no
-              # gauges nearby it falls back to the overall factor
-              num = np.full(radar.shape, BIAS_PRIOR_MM * overall, np.float32)
-              den = np.full(radar.shape, BIAS_PRIOR_MM, np.float32)
+              # gauges nearby it falls back to the overall factor, but never scales the radar UP far from the
+              # gauges that set it (e.g. Gold Coast storms reading high shouldn't raise the Downs' light rain)
+              wsum = np.zeros(radar.shape, np.float32)
+              ws = []
               for g in pairs:
                   c, r = g["_px"]
                   w = np.exp(-(np.hypot(xx - c, yy - r) * k / BIAS_RADIUS_KM) ** 2)
+                  ws.append(w); wsum += w
+              near = np.clip(wsum / 0.3, 0, 1)
+              prior = overall * near + min(overall, 1.0) * (1 - near)
+              num = (BIAS_PRIOR_MM * prior).astype(np.float32)
+              den = np.full(radar.shape, BIAS_PRIOR_MM, np.float32)
+              for g, w in zip(pairs, ws):
                   num += w * g["mm"]
                   den += w * g["radar_mm"]
               scale = clamp(num / den)
@@ -1056,6 +1066,22 @@ jobs:
                       num += w * (g["mm"] - g["radar_mm"] * scale[int(r), int(c)])
                       den += w
                   field = np.maximum(0, field + num / den)
+                  # dry area: where the gauges around read nothing and none nearby caught rain, the radar's light
+                  # rain is turned down to near nothing (high cloud whose rain dries out before it lands - virga -
+                  # or false echoes, as around Jandowae, Millmerran and Cecil Plains in Nov 2026). Heavier falls
+                  # and anywhere near a gauge that did catch rain are left alone.
+                  dry = np.zeros_like(radar)
+                  wet = np.zeros_like(radar)
+                  for g in used:
+                      c, r = g["_px"]
+                      w = np.exp(-(np.hypot(xx - c, yy - r) * k / DRY_KM) ** 2)
+                      if g["mm"] < 0.2:
+                          dry += w
+                      elif g["mm"] >= 0.5:
+                          wet += w
+                  light = np.clip((DRY_FADE_MM - field) / (DRY_FADE_MM - DRY_LIGHT_MM), 0, 1)
+                  damp = np.clip(dry * 1.5, 0, 1) * (1 - np.clip(wet * 2, 0, 1)) * light
+                  field = field * (1 - 0.95 * damp)
                   # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
                   # so the map at a gauge matches what it measured even where the radar changes quickly.
                   # All gauges are blended at once, the nearest counting by far the most, so a gauge a few km
