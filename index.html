@@ -90,6 +90,13 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
   .tlmid .tltime, .tlmid input, .tlmid .tlticks{grid-column:2}
 }
 .chartbox:empty{display:none}
+#fChart{position:relative} #fChart .chead{padding-right:36px}
+#fChart .cfs{position:absolute;top:5px;right:6px;width:30px;height:30px;padding:4px;border:1px solid var(--line,#d5dcd8);border-radius:8px;background:var(--panel,#fff);cursor:pointer;z-index:2;display:grid;place-items:center}
+#fChart .cfs svg{width:18px;height:18px;cursor:pointer} #fChart .cfs path{stroke:var(--ink)}
+#fChart.full{position:fixed!important;inset:0!important;z-index:3000;margin:0!important;border-radius:0!important;overflow:auto;max-height:none!important;
+  padding:calc(8px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))!important;background:var(--panel,#fff)}
+body.chartfull{overflow:hidden} body.chartfull #contactBtn{display:none!important}
+@media (max-height:520px){#fChart.full .cfoot>span{display:none} #fChart.full .ck{grid-template-columns:repeat(6,auto);font-size:.7rem} #fChart.full .chead{font-size:.8rem}}   /* phone sideways: more room for the chart */
 .chartbox svg{display:block;width:100%;height:auto}
 .chartbox .ck{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:2px 10px;font-size:.74rem;margin-top:2px;color:var(--ink-2)}
 .chartbox .cwrap{position:relative}
@@ -438,8 +445,9 @@ details.discfold{text-align:left}
   .timing .tmhead span{display:none} .timing .tmsum{font-size:.8rem;line-height:1.3}
   .timing .tmhead b{font-size:.86rem}
   /* the chart's Running total / Daily / Both buttons up in its heading row, small */
-  #fChart{position:relative} #fChart .chead{padding-right:250px}
-  #fChart .cmode{position:absolute;top:5px;right:8px;margin:0}
+  #fChart{position:relative} #fChart .chead{padding-right:290px}
+  #fChart .cmode{position:absolute;top:5px;right:42px;margin:0}
+  #fChart .cfs{width:26px;height:26px;top:4px}
   #fChart .cmode button{min-height:24px;padding:0 8px;font-size:.72rem}
   /* rain timing: the play button, the map note and the key on one line */
   .timing .tmbtns{display:inline-flex;margin:2px 10px 0 0;vertical-align:middle;font-size:.74rem}
@@ -3922,9 +3930,27 @@ const hWhen = t => `${hDay(t)}, ${hHour(t)}`;
 const fcButtons = () => `<div class="seg cmode"><button data-c="cum" aria-pressed="${fcMode === "cum"}">Running total</button><button data-c="bars" aria-pressed="${fcMode === "bars"}">Daily</button><button data-c="both" aria-pressed="${fcMode === "both"}">Both</button></div>`;
 // on a computer, how tall the chart drawing should be so the chart box ends level with the bottom of the map
 // (between 300 and 560 px): the map's bottom, less the box's top and everything in it besides the drawing
+// Full screen chart: the chart fills the whole screen (turn a phone sideways for the widest view); the same button,
+// or Escape, brings it back. The button is put back each time the chart is redrawn.
+const fcFull = () => $("fChart").classList.contains("full");
+function fcSetFull(on){
+  $("fChart").classList.toggle("full", on); document.body.classList.toggle("chartfull", on);
+  fChartDraw(); if (!on) setTimeout(() => $("fChart").scrollIntoView({block: "nearest"}), 50);
+}
+new MutationObserver(() => {
+  const box = $("fChart"); if (box.querySelector(".cfs") || !box.firstChild) return;
+  const b = document.createElement("button"); b.className = "cfs"; b.type = "button";
+  const on = fcFull(); b.innerHTML = on ? FS_CLOSE : FS_OPEN; b.title = on ? "Back to the page" : "Full screen chart"; b.setAttribute("aria-label", b.title);
+  b.onclick = () => fcSetFull(!fcFull()); box.prepend(b);
+}).observe($("fChart"), {childList: true});
+addEventListener("keydown", e => { if (e.key === "Escape" && fcFull()) fcSetFull(false); });
+addEventListener("resize", () => { if (fcFull()) { clearTimeout(fcSetFull.t); fcSetFull.t = setTimeout(fChartDraw, 150); } });
 function fcChartPx(){
+  if (fcFull()) { const box = $("fChart"), svg = box.querySelector(".cwrap svg");
+    const other = box.scrollHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
+    return Math.max(150, Math.round(innerHeight - other - 6)); }
   if (innerWidth < 1000) return 300;
-  const box = $("fChart"), svg = box.querySelector("svg:not(.namlogo)"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
+  const box = $("fChart"), svg = box.querySelector(".cwrap svg"), m = $("map").getBoundingClientRect(), c = box.getBoundingClientRect();
   if (!m.height || !c.height) return 300;
   const other = box.offsetHeight - (svg ? svg.getBoundingClientRect().height : 0) || 170;
   return Math.max(105, Math.min(560, Math.round(m.bottom - c.top - other - 2)));
@@ -3932,7 +3958,7 @@ function fcChartPx(){
 // after drawing, if the box still doesn't end level with the map (its text wrapped differently), draw once more
 setTimeout(() => { const draw0 = fChartDraw;
   fChartDraw = function(){ draw0();
-    if (innerWidth < 1000 || fChartDraw.again || $("fChart").hidden) return;
+    if (innerWidth < 1000 || fChartDraw.again || $("fChart").hidden || fcFull()) return;
     const d = $("fChart").getBoundingClientRect().bottom - $("map").getBoundingClientRect().bottom;
     if (Math.abs(d) > 6) { fChartDraw.again = true; try { draw0(); } finally { fChartDraw.again = false; } } };
 }, 0);
@@ -3962,8 +3988,8 @@ function fChartDrawBars(){
     const x = bom.days.find(x => x.min != null && Math.abs(bomEnd(x.d) - e) <= 12 * 3600); return x || null; };
   const top = Math.max(2, ...shown.flatMap(m => tot[m].filter(v => v != null)), ...[...Array(nD)].map((_, k) => (bomDay(k) || {}).min || 0));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 12, B0 = 20;
+  const cw = fcFull() ? $("fChart").clientWidth - 24 : $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 || fcFull() ? Math.round(230 * fpx / 300) : 128;
+  const W0 = innerWidth >= 1000 || fcFull() ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 12, B0 = 20;
   let anySev = false;
   const slot = (W0 - L0 - R0) / nD, X = k => L0 + slot * (k + .5), Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax), bw = Math.min(34, slot * .62);
   let g = "";
@@ -4009,7 +4035,7 @@ function fChartDrawBars(){
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${sum(m) != null ? fmt(sum(m)) : "–"}</b></span>`).join("")}<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 5px)"></i>Median <b>${fmt(med.reduce((a, b) => a + (b || 0), 0))}</b></span><span>${namLogo(11, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(nam.reduce((a, b) => a + (b || 0), 0))}</b></span>${bom ? `<span><i style="background:${BOM_COL};border-radius:50%"></i>BOM ${bom.name}</span>` : ""}</div>
     <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). " : "Each day's rain, 10am to 10am. "}Dashed = median; gold = Namrex AI (models weighted by recent skill); green = BOM (days end at midnight). Dots over a day: storms from ${{ecmwf: "ECMWF", gfs: "GFS", both: "GFS / ECMWF"}[stormSrc()]} (chosen in Daily's rain timing) - <span style="color:#f2c94c">●</span> possible, <span style="color:#f08a24">●</span> organised, <span style="color:#dc2626">●</span> severe within ${SEV_KM} km; about 4 days ahead. Key: totals over the ${nD} day${nD > 1 ? "s" : ""}${shown.some(m => sum(m) == null) ? " (– stops sooner)" : ""}. Tap a day for numbers.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
-  const svg = $("fChart").querySelector("svg"), tip = $("fChart").querySelector(".ctip");
+  const svg = $("fChart").querySelector(".cwrap svg"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
     const r = svg.getBoundingClientRect(), xx = (ev.clientX - r.left) / r.width * W0, k = Math.max(0, Math.min(nD - 1, Math.floor((xx - L0) / slot)));
     const d = qDate(t0 + (k + 1) * 86400 - 1), rows = shown.map(m => [m, tot[m][k]]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]), b = bomDay(k);
@@ -4075,8 +4101,8 @@ function fChartDrawHourly(){
   const bomSum = cum ? bomDays.reduce((a, x) => a + x.min, 0) : 0;   // so the BOM line fits too
   const top = Math.max(cum ? 5 : 1, bomSum, ...shown.flatMap(m => vals[m].map(p => p[1])));
   const step = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
-  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
+  const cw = fcFull() ? $("fChart").clientWidth - 24 : $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 || fcFull() ? Math.round(230 * fpx / 300) : 128;
+  const W0 = innerWidth >= 1000 || fcFull() ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = 8, T0 = 8, B0 = 20;
   const X = t => L0 + (W0 - L0 - R0) * (t - t0) / (t1 - t0), Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax + 1e-9; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${+v.toFixed(1)}</text>`;
@@ -4119,7 +4145,7 @@ function fChartDrawHourly(){
     <div class="ck">${shown.map(m => `<span><i style="background:${hCol(m)}"></i>${hName(m)} <b>${fmt(Math.max(...vals[m].map(p => p[1])))}</b></span>`).join("")}${lastMed != null ? `<span><i style="background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)"></i>${MED} <b>${fmt(lastMed)}</b></span>` : ""}${nam.length ? `<span>${namLogo(11, "namlogo nk")}<b>Namrex AI</b> <b>${fmt(nam[nam.length - 1][1])}</b></span>` : ""}${bomTot != null ? `<span title="Bureau of Meteorology forecast for ${bom.name}"><i style="background:repeating-linear-gradient(90deg,${BOM_COL} 0 2px,transparent 2px 5px)"></i>BOM ${bom.name} <b>${fmt(bomTot)}</b></span>` : ""}${none.length ? `<span style="grid-column:1/-1">${none.join(", ")}: no data from Open-Meteo just now</span>` : ""}</div>
     <div class="cfoot"><span>${cum ? "Running total, hour by hour (shaded = night)" : "Rain in each 3 hours; key shows each model's wettest 3 hours"}.${shortNames.length ? ` Not shown: ${shortNames.join(", ")} (${shortNames.length > 1 ? "their forecasts stop" : "its forecast stops"} before the end of these ${days > 1 ? `${days} days` : "this day"}).` : ""} ${useAvg ? `Average of ${medModels.map(hName).join(" and ")}, the only model${medModels.length > 1 ? "s" : ""} that run${medModels.length > 1 ? "" : "s"} the whole span` : `Median of the ${medModels.length} models that run the whole span${medModels.length < shown.length ? ` (not ${shown.filter(m => !medModels.includes(m)).map(hName).join(", ")}, which stop sooner)` : ""}`}.</span>${fcButtons()}</div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
-  const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
+  const svg = $("fChart").querySelector(".cwrap svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
     const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W0;
     const tx = t0 + (x - L0) / (W0 - L0 - R0) * (t1 - t0);
@@ -4158,9 +4184,9 @@ function fChartDraw(){
   const top = Math.max(cum ? 5 : 2, ...vals.flatMap(x => Object.values(x)));
   const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(x => top / x <= 5) || 500, ymax = Math.ceil(top / step) * step;
   // on a phone 340 wide; on a computer the chart is as wide as its column but about 300 px tall
-  const cw = $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 ? Math.round(230 * fpx / 300) : 128;
+  const cw = fcFull() ? $("fChart").clientWidth - 24 : $("fChart").parentElement.clientWidth || 340, fpx = fcChartPx(), H0 = innerWidth >= 1000 || fcFull() ? Math.round(230 * fpx / 300) : 128;
   const both = fcMode === "both";   // the daily bars with the running totals over them (right-hand scale)
-  const W0 = innerWidth >= 1000 ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 8, B0 = 20;
+  const W0 = innerWidth >= 1000 || fcFull() ? Math.max(340, Math.round((cw - 20) * H0 / fpx)) : 340, L0 = 30, R0 = both ? 30 : 8, T0 = 8, B0 = 20;
   const X = i => L0 + (W0 - L0 - R0) * (i + (cum ? 1 : 0.5)) / days.length, Y = v => T0 + (H0 - T0 - B0) * (1 - v / ymax);
   let g = "";
   for (let v = 0; v <= ymax; v += step) g += `<line x1="${L0}" x2="${W0 - R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" stroke-opacity=".15"/><text x="${L0 - 5}" y="${Y(v) + 3.5}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity=".7">${v}</text>`;
@@ -4217,7 +4243,7 @@ function fChartDraw(){
     <div class="cfoot"><span>${both ? "Lines: running total (right scale). Bars: each day's rain (left scale). Dashed = median; gold = Namrex AI." : cum ? (fSumN ? `Totals over the ${days.length} days` : "Totals to the end of each run") : (fSumN ? `Wettest day of the ${days.length}` : "Wettest day in each run")}</span><div class="seg cmode"><button data-c="cum" aria-pressed="${cum}">Running total</button><button data-c="bars" aria-pressed="${!cum && !both}">Daily</button><button data-c="both" aria-pressed="${both}">Both</button></div></div>`;
   $("fChart").querySelector(".cmode").onclick = e => { const b = e.target.closest("button"); if (b && b.dataset.c !== fcMode) { fcMode = b.dataset.c; fChartDraw(); } };
   // touch / hover readout
-  const svg = $("fChart").querySelector("svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
+  const svg = $("fChart").querySelector(".cwrap svg"), cur = svg.querySelector(".fcur"), tip = $("fChart").querySelector(".ctip");
   const at = ev => {
     const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W0;
     const i = Math.max(0, Math.min(days.length - 1, Math.round((x - L0) / (W0 - L0 - R0) * days.length - (cum ? 1 : 0.5))));
