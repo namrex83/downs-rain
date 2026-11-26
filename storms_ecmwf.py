@@ -25,7 +25,7 @@ from helicity import srh
 
 LAT_N, LAT_S = -23.0, -32.0       # same area as the GFS storm maps
 LON_W, LON_E = 146.0, 155.0
-STEPS = list(range(0, 91, 3))     # every 3 hours out to 90 hours (as far as the 06 and 18 UTC runs go)
+STEPS = list(range(0, 133, 3))    # every 3 hours out to 132 hours (5.5 days; the 00 and 12 UTC runs, which go further)
 OUT = os.path.join("data", "storms_ecmwf.json")
 KT = 1.94384                      # m/s to knots
 
@@ -140,9 +140,11 @@ def run():
     from ecmwf.opendata import Client
     client = Client(source="ecmwf")
     when = client.latest(type="fc", stream="oper", param="2t", step=90)
+    if when.hour % 12:   # the 06 and 18 UTC runs stop at 90 hours: the 00 or 12 UTC run before reaches further
+        when -= dt.timedelta(hours=6)
     tag = when.strftime("%Y-%m-%dT%HZ")
     old = json.load(open(OUT)) if os.path.exists(OUT) else {}
-    if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and old.get("helicity_v") == 1 and "--force" not in sys.argv:   # files made before the cap was added are redone
+    if old.get("run") == tag and any(v is not None for v in (old.get("cin") or [[None]])[0]) and old.get("helicity_v") == 1 and len(old.get("times") or []) >= len(STEPS) - 2 and "--force" not in sys.argv:   # files made before the cap was added are redone
         print(f"Already have the {tag} storm run")
         try:   # the severe-storm summary, if it hasn't got this model yet
             from storm_days import OUT as SD_OUT, update

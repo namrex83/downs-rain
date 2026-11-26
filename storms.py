@@ -30,7 +30,7 @@ from helicity import srh
 LAT_N, LAT_S = -23.0, -32.0       # Emerald/Rocky down to Port Macquarie
 LON_W, LON_E = 146.0, 155.0       # west of Roma out to the coast
 STEP = 0.5                        # degrees between grid points (about 50 km)
-HOURS = 108                       # forecast hours to keep (four days ahead from any run, for the severe-storm dots)
+HOURS = 132                       # forecast hours to keep (5.5 days ahead, about as far as the ECMWF storm maps)
 CHUNK = 100                       # grid points per request
 URL = "https://api.open-meteo.com/v1/gfs"
 MODELS = ["gfs_global", "gfs_seamless"]   # GFS 0.25°; fall back to the blended set
