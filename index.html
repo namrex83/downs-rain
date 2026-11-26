@@ -929,10 +929,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   </section>
   <section class="panel outOnly" hidden>
     <div id="agroPane">
-      <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ<input type="file" id="agroFile" multiple hidden></label>
+      <div class="agrobtns"><label class="primary agrofile">📂 Open KML / KMZ / SHP<input type="file" id="agroFile" multiple hidden></label>
         <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label></div>
       <div id="agroList"></div>
-      <p class="note">Open a Google Earth file (KML or KMZ, e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
+      <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
     </div>
     <div id="linksPane" hidden>
     <div class="eyebrow">Long-range outlooks · Bureau of Meteorology</div>
@@ -5624,8 +5624,33 @@ async function agroParse(name, buf){
   }
   return {group, stats};
 }
-async function agroAdd(name, buf, id, on = true){
-  const {group, stats} = await agroParse(name, buf);
+// Shapefiles (paddock boundaries, zones, scouting points): the .shp with its .dbf (names and values) and .prj (which
+// map projection), picked together, or zipped. Read on the phone with shpjs, turned into map shapes; kept as GeoJSON.
+let SHPJS = null;
+function loadShp(){
+  return SHPJS || (SHPJS = new Promise((ok, no) => { const sc = document.createElement("script");
+    sc.src = "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"; sc.onload = () => ok(window.shp); sc.onerror = () => { SHPJS = null; no(new Error("shp")); }; document.head.appendChild(sc); }));
+}
+async function shpToGeo(parts){   // parts: {shp, dbf, prj, cpg} ArrayBuffers/strings; or {zip}
+  const shp = await loadShp();
+  if (parts.zip) { const g = await shp(parts.zip); return Array.isArray(g) ? {type: "FeatureCollection", features: g.flatMap(x => x.features)} : g; }
+  if (!parts.shp) throw new Error("the .shp file is missing - pick the .shp, .dbf and .prj together");
+  return shp.combine([shp.parseShp(parts.shp, parts.prj), parts.dbf ? shp.parseDbf(parts.dbf, parts.cpg) : []]);
+}
+function geoLayer(geo){
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const group = L.featureGroup(), stats = {shapes: 0, pictures: 0};
+  L.geoJSON(geo, {pane: "agro",
+    style: () => ({color: "#ffd400", weight: 2, fillColor: "#ffd400", fillOpacity: .2}),
+    pointToLayer: (f, ll) => L.circleMarker(ll, {radius: 6, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1, pane: "agro"}),
+    onEachFeature: (f, l) => { stats.shapes++; const pr = f.properties || {}, rows = Object.entries(pr).filter(([, v]) => v !== null && v !== "").slice(0, 14);
+      if (rows.length) l.bindPopup(`<div class="agropop"><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>`); }
+  }).eachLayer(l => l.addTo(group));
+  if (!stats.shapes) throw new Error("no shapes in it");
+  return {group, stats};
+}
+async function agroAdd(name, buf, id, on = true, geo = null){
+  const {group, stats} = geo ? geoLayer(geo) : await agroParse(name, buf);
   let bounds = null;
   group.eachLayer(l => { const b = l.getBounds ? l.getBounds() : l.getLatLng ? L.latLngBounds([l.getLatLng()]) : null; if (b && b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast()); });
   const L1 = {id, name, layer: group, bounds, on, stats, hide: []};
@@ -5720,7 +5745,7 @@ async function agroShow(){
   agroOpacity();
   agroGroup.addTo(map); agroFsDraw();
   if (!agroLoaded) { agroLoaded = true;
-    for (const f of (await agroStore("all")) || []) { try { await agroAdd(f.name, f.buf, f.id, f.on !== false); } catch(e){} }
+    for (const f of (await agroStore("all")) || []) { try { await agroAdd(f.name, f.buf, f.id, f.on !== false, f.geo || null); } catch(e){} }
     agroListDraw();
     const vis = AGRO.filter(a => a.on); if (vis.length) agroZoom(vis[vis.length - 1]);
   }
@@ -5731,13 +5756,32 @@ $("aMode").onclick = e => { const b = e.target.closest("button"); if (!b) return
   $("map").hidden = aMode !== "agro"; if (aMode === "agro") { fitMap(); map.invalidateSize(); } agroShow(); };
 $("agroOp").oninput = agroOpacity;
 $("agroFile").onchange = async e => {
-  for (const f of [...e.target.files]){
+  const all = [...e.target.files], ext = f => (f.name.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase() || "";
+  // shapefile parts, grouped by name (7.shp + 7.dbf + 7.prj...)
+  const shpSets = {};
+  for (const f of all) if (["shp", "dbf", "prj", "shx", "cpg"].includes(ext(f))) (shpSets[f.name.replace(/\.[^.]+$/, "")] = shpSets[f.name.replace(/\.[^.]+$/, "")] || {})[ext(f)] = f;
+  for (const [base, set] of Object.entries(shpSets)){
+    try {
+      const parts = {}; for (const k of ["shp", "dbf"]) if (set[k]) parts[k] = await set[k].arrayBuffer();
+      for (const k of ["prj", "cpg"]) if (set[k]) parts[k] = await set[k].text();
+      const geo = await shpToGeo(parts), id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const a = await agroAdd(base, null, id, true, geo);
+      await agroStore("put", {id, name: base, geo, on: true});
+      agroZoom(a);
+      if (!set.prj) alert(`${base}: opened without its .prj file, so it's assumed to be in latitude/longitude. If it lands in the wrong place, pick the .prj with the .shp and .dbf.`);
+    } catch(err){ alert(`Couldn't open ${base}: ${err.message === "shp" ? "the shapefile reader didn't load (check the internet connection)" : err.message}.`); }
+  }
+  for (const f of all.filter(f => !["shp", "dbf", "prj", "shx", "cpg"].includes(ext(f)))){
+    if (ext(f) === "zip") {   // a zipped shapefile (or a KMZ renamed .zip)
+      try { const buf = await f.arrayBuffer(), geo = await shpToGeo({zip: buf}), id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, nm = f.name.replace(/\.zip$/i, "");
+        const a = await agroAdd(nm, null, id, true, geo); await agroStore("put", {id, name: nm, geo, on: true}); agroZoom(a); continue; } catch(err){}
+    }
     try {
       const buf = await f.arrayBuffer(), id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const a = await agroAdd(f.name.replace(/\.(kml|kmz)$/i, ""), buf, id);
       await agroStore("put", {id, name: a.name, buf, on: true});
       agroZoom(a);
-    } catch(err){ alert(`Couldn't open ${f.name}: ${err.message === "zip" ? "the KMZ reader didn't load (check the internet connection)" : err.message}. It needs to be a KML or KMZ file.`); }
+    } catch(err){ alert(`Couldn't open ${f.name}: ${err.message === "zip" ? "the KMZ reader didn't load (check the internet connection)" : err.message}. It needs to be a KML, KMZ or shapefile (.shp with its .dbf and .prj).`); }
   }
   e.target.value = ""; agroListDraw();
 };
