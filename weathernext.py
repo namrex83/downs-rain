@@ -2,9 +2,10 @@
 Google DeepMind's WeatherNext 3 rain forecast map, from Open-Meteo (its ensemble mean, hourly, about 10 km, 15 days).
 
 Run by .github/workflows/forecast.yml. Asks Open-Meteo for each 10am-to-10am Queensland day's rain (00z to 00z) on a
-half-degree grid over Queensland, NSW and the sea off the coast, and writes data/forecast_wn3.json in the same layout as
+half-degree grid over southern and central Queensland, northern NSW and the sea off the coast, and writes data/forecast_wn3.json in the same layout as
 the ECMWF map (forecast.py): {"run", "made", "model", "lats", "lons", "days", "mm10": [[mm x 10 per point] per day],
-"total"}. Only fetched about twice a day (each fetch is a couple of thousand points of Open-Meteo's free allowance).
+"total"}. Only fetched about twice a day, slowly (Open-Meteo's free allowance is about 600 point-requests a minute,
+and the page's chart and the other jobs share it).
 """
 import datetime as dt
 import json
@@ -16,19 +17,24 @@ import requests
 
 OUT = os.path.join("data", "forecast_wn3.json")
 MODEL_ID = "google_weathernext3_ensemble_mean"
-LATS = [round(-10.0 - 0.5 * i, 2) for i in range(57)]      # -10 to -38
-LONS = [round(140.0 + 0.5 * j, 2) for j in range(37)]      # 140 to 158 (out to sea past the coast)
+LATS = [round(-21.0 - 0.5 * i, 2) for i in range(25)]      # -21 (Mackay) to -33 (Newcastle)
+LONS = [round(144.0 + 0.5 * j, 2) for j in range(27)]      # 144 (Longreach) to 157 (well out to sea)
 CHUNK = 100
+PAUSE = 20                                                 # seconds between requests
 URLS = ["https://api.open-meteo.com/v1/forecast", "https://ensemble-api.open-meteo.com/v1/ensemble"]
 EVERY_H = 11
 
 
 def fetch(url, points):
     params = {"latitude": ",".join(f"{a:.2f}" for a, _ in points), "longitude": ",".join(f"{b:.2f}" for _, b in points),
-              "daily": "precipitation_sum", "models": MODEL_ID, "forecast_days": 16, "timezone": "GMT"}
+              "daily": "precipitation_sum", "models": MODEL_ID, "forecast_days": 15, "timezone": "GMT"}
     for attempt in range(3):
         try:
             r = requests.get(url, params=params, timeout=120)
+            if r.status_code == 429:   # too many requests: wait out the minute
+                print("  busy, waiting a minute", flush=True)
+                time.sleep(65)
+                continue
             if r.status_code == 400:
                 print(f"  {url} refused: {r.text[:200]}", flush=True)
                 return None
@@ -54,9 +60,13 @@ def main():
     pts = [(la, lo) for la in LATS for lo in LONS]
     url = None
     for u in URLS:   # whichever Open-Meteo address knows the model
-        if fetch(u, pts[:2]):
-            url = u
-            break
+        t = fetch(u, pts[:1])
+        if t:
+            d = t[0].get("daily") or {}
+            print(f"  {u}: {[k for k in d if k != 'time']}, {d.get('time', [])[:2]}...", flush=True)
+            if any(v is not None for k, v2 in d.items() if k != "time" for v in v2):
+                url = u
+                break
     if not url:
         print("Open-Meteo doesn't have WeatherNext 3 just now")
         return
@@ -74,7 +84,7 @@ def main():
                 continue
             dates = dates or d["time"]
             vals[p] = d.get(f"precipitation_sum_{MODEL_ID}") or d.get("precipitation_sum") or []
-        time.sleep(2)
+        time.sleep(PAUSE)
     if not dates or len(vals) < len(pts) * 0.8:
         print(f"Only {len(vals)} of {len(pts)} points came; keeping the old map")
         return
