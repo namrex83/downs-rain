@@ -91,6 +91,12 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 }
 .chartbox:empty{display:none}
 #fChart{position:relative} #fChart .chead{padding-right:36px}
+#fTiming{position:relative} #fTiming .tmhead{padding-right:36px}
+#fTiming .cfs{position:absolute;top:5px;right:6px;width:30px;height:30px;padding:4px;border:1px solid var(--line,#d5dcd8);border-radius:8px;background:var(--panel,#fff);cursor:pointer;z-index:2;display:grid;place-items:center}
+#fTiming .cfs svg{width:18px;height:18px;max-height:none!important} #fTiming .cfs path{stroke:var(--ink)}
+#fTiming.full{position:fixed!important;inset:0!important;z-index:3000;margin:0!important;border-radius:0!important;overflow:auto;max-height:none!important;
+  padding:calc(10px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px))!important;background:var(--panel,#fff)}
+#fTiming.full svg{max-height:none!important} #fTiming.full .tmtap, #fTiming.full .tmmore{display:revert}
 #fChart .cfs{position:absolute;top:5px;right:6px;width:30px;height:30px;padding:4px;border:1px solid var(--line,#d5dcd8);border-radius:8px;background:var(--panel,#fff);cursor:pointer;z-index:2;display:grid;place-items:center}
 #fChart .cfs svg{width:18px;height:18px;cursor:pointer} #fChart .cfs path{stroke:var(--ink)}
 #fChart.full{position:fixed!important;inset:0!important;z-index:3000;margin:0!important;border-radius:0!important;overflow:auto;max-height:none!important;
@@ -4006,6 +4012,19 @@ const fcButtons = () => `<div class="seg cmode"><button data-c="cum" aria-presse
 // Full screen chart: the chart fills the whole screen (turn a phone sideways for the widest view); the same button,
 // or Escape, brings it back. The button is put back each time the chart is redrawn.
 const fcFull = () => $("fChart").classList.contains("full");
+// the rain timing panel (Daily) gets the same full screen button
+function tmSetFull(on){
+  $("fTiming").classList.toggle("full", on); document.body.classList.toggle("chartfull", on);
+  fTiming(); if (!on) setTimeout(() => $("fTiming").scrollIntoView({block: "nearest"}), 50);
+}
+new MutationObserver(() => {
+  const box = $("fTiming"); if (box.querySelector(".cfs") || !box.firstChild) return;
+  const b = document.createElement("button"); b.className = "cfs"; b.type = "button";
+  const on = box.classList.contains("full"); b.innerHTML = on ? FS_CLOSE : FS_OPEN; b.title = on ? "Back to the page" : "Full screen rain timing"; b.setAttribute("aria-label", b.title);
+  b.onclick = () => tmSetFull(!box.classList.contains("full")); box.prepend(b);
+}).observe($("fTiming"), {childList: true});
+addEventListener("keydown", e => { if (e.key === "Escape" && $("fTiming").classList.contains("full")) tmSetFull(false); });
+addEventListener("resize", () => { if ($("fTiming").classList.contains("full")) { clearTimeout(tmSetFull.t); tmSetFull.t = setTimeout(fTiming, 150); } });
 function fcSetFull(on){
   $("fChart").classList.toggle("full", on); document.body.classList.toggle("chartfull", on);
   fChartDraw(); if (!on) setTimeout(() => $("fChart").scrollIntoView({block: "nearest"}), 50);
@@ -5495,7 +5514,8 @@ function stormHours1(st, at, start, end){
 }
 async function fTiming(){
   const box = $("fTiming"), d = fDayNow();
-  if (tab !== "fc" || !d) { document.body.classList.remove("fcdaily"); const was = !box.hidden; box.hidden = true; fStopPlay(); if (was && innerWidth >= 1000 && FC) fChartDraw(); return; }
+  if (tab !== "fc" || !d) { document.body.classList.remove("fcdaily"); const was = !box.hidden; box.hidden = true;
+    if (box.classList.contains("full")) { box.classList.remove("full"); document.body.classList.remove("chartfull"); } fStopPlay(); if (was && innerWidth >= 1000 && FC) fChartDraw(); return; }
   if (fFrameDay && fFrameDay !== d) { fFrame = null; fFrameDay = null; fStopPlay(); }
   const td = timingData(d);
   if (!td) { box.hidden = false; box.innerHTML = `<div class="tmhead"><b>Rain timing</b></div><p class="tmsum" style="color:var(--ink-3)">${FC ? "No hourly forecasts reach this day here." : "Loading the hourly forecasts…"}</p>`; return; }
@@ -5530,7 +5550,9 @@ async function fTiming(){
     const parts = [[3, "Severe storm risk", "#c62828"], [2, "organised storms", "#d9660a"], [1, "storms possible", "#9a7a00"]].map(([L, w, c]) => { const r = spells(L); return r.length ? `<b style="color:${c}">${w} ${txt(r)}</b>` : ""; }).filter(Boolean);
     if (parts.length) { parts[0] = parts[0].replace(/>([a-z])/, (m, ch) => ">" + ch.toUpperCase()); sum += ` ${parts.join(" · ")} (${SNAME[tmStorm]}).`; } }
   // the strip
-  const Wd = 480, bw = Wd / 24, y0 = 14, bh = 56, cy = y0 + bh + 6, ch = 20;
+  // full screen: the bars as tall as the screen allows (the strip is drawn the same width, so taller bars fill the height)
+  const tmFull = box.classList.contains("full");
+  const Wd = 480, bw = Wd / 24, y0 = 14, bh = tmFull ? Math.max(56, Math.min(420, Math.round((innerHeight - 250) * 514 / Math.max(300, innerWidth - 30)) - 50)) : 56, cy = y0 + bh + 6, ch = 20;
   let g = "";
   for (let i = 9; i < 19; i++) g += `<rect x="${i * bw}" y="${y0 - 4}" width="${bw}" height="${bh + 4}" fill="rgba(40,60,110,.09)"/>`;   // 7pm to 5am
   if (past) g += `<rect x="0" y="${y0 - 4}" width="${past * bw}" height="${bh + ch + 10}" fill="var(--panel)" fill-opacity=".6" pointer-events="none"/><text pointer-events="none" x="${Math.max(2, past * bw - 3)}" y="${y0 + 10}" text-anchor="${past > 2 ? "end" : "start"}">now</text><line x1="${past * bw}" x2="${past * bw}" y1="${y0 - 4}" y2="${y0 + bh}" stroke="var(--ink-3)" stroke-dasharray="2 2"/>`;
