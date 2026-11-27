@@ -1,0 +1,45 @@
+name: Probe Bureau rainfall tables (temporary)
+
+# One-off look at which flood-warning rainfall tables the Bureau publishes on its FTP site for the radar map's area,
+# and what their rows and station links look like. Prints only; changes nothing. Removed once the real job is built.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Look
+        run: |
+          python3 - <<'EOF'
+          import ftplib, io, re, html
+          f = ftplib.FTP("ftp.bom.gov.au", timeout=60); f.login()
+          names = f.nlst("/anon/gen/fwo")
+          cand = sorted(n.split("/")[-1] for n in names if re.search(r"IDQ6\d+\.html$", n))
+          print(len(cand), "IDQ6 html files")
+          def get(d, n):
+              b = io.BytesIO(); f.retrbinary(f"RETR {d}/{n}", b.write); return b.getvalue().decode("latin-1", "replace")
+          shown = 0
+          for n in cand:
+              try:
+                  t = get("/anon/gen/fwo", n)
+              except Exception as e:
+                  continue
+              title = re.search(r"<title>(.*?)</title>", t, re.S | re.I)
+              title = " ".join(html.unescape(title.group(1)).split()) if title else "?"
+              if "rain" not in t.lower():
+                  continue
+              rows = re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I)
+              cell = lambda c: " ".join(html.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+              print(f"\n== {n}: {title} ({len(rows)} rows)")
+              if shown < 6 or any(k in t for k in ("Condamine", "Warrill", "Bremer", "Lockyer", "Logan")):
+                  for r in rows[:6]:
+                      cells = re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S | re.I)
+                      print("   ", [cell(c) for c in cells], re.findall(r'href="([^"]+)"', r)[:2])
+                  shown += 1
+          print("\nsitelists:", f.nlst("/anon2/home/ncc/metadata/sitelists"))
+          EOF
