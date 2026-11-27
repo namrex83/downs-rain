@@ -22,7 +22,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">   <!-- the home-screen app opens full screen, no browser bars -->
 <meta name="theme-color" content="#1d6fb8">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* Layout: a sky-blue header band with the tabs, controls, a tall map, then the numbers — read top to bottom on a phone. */
@@ -992,8 +992,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
   <p class="note" id="pagever" style="text-align:center;font-size:.72rem;color:var(--ink-3)"></p>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+<!-- outside libraries with a fingerprint (integrity): the browser won't run them if a single byte has been changed -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.js" integrity="sha384-MtIdllebpZyms2pw9K3YJl8BEqrKNQCdSFAySjeglab6z2PkeFdF4Lb9cDsnxQuG" crossorigin="anonymous"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -2751,12 +2752,14 @@ function readIssue(){
   if (!day || !rows.length) { alert("Enter the rain day and at least one gauge with its mm."); return null; }
   const missing = rows.filter(([n, , loc]) => isNewGauge(n) && !loc).map(([n]) => n);
   if (missing.length) { alert(`Please set where ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"}: tap "I'm at the gauge" or "Pick on map" under ${missing.length > 1 ? "them" : "it"}.`); return null; }
-  const posLines = pins.map(([n, , loc]) => `pos,${n},${loc[0].toFixed(5)},${loc[1].toFixed(5)}`);
+  // the GitHub issue is public: readings only. Who sent them and any new gauge's position go only to the owner's email;
+  // positions are then added to the private GAUGE_POSITIONS list (a GitHub secret), never to anything public
+  const posJson = pins.map(([n, , loc]) => `"${n.replace(/"/g, "")}": [${loc[0].toFixed(5)}, ${loc[1].toFixed(5)}]`);
   const who = $("readWho").value.trim();
-  const body = `Readings for the rain day to 9am ${day}${who ? ` from ${who}` : ""}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
-    + (posLines.length ? "\n\nNew gauge position:\n" + posLines.join("\n") : "") + "\n\n<!-- sent from the SEQ Weather Desk page -->";
+  const body = `Readings for the rain day to 9am ${day}.\n\n` + rows.map(([n, mm]) => `${day},${n},,,${+mm}`).join("\n")
+    + "\n\n<!-- sent from the SEQ Weather Desk page -->";
   try { localStorage.setItem("readMine", JSON.stringify([...new Set(all.filter(([n]) => n).map(([n]) => n))].slice(0, 12))); } catch(e){}
-  return {day, rows, pins, who, body, url: `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`};
+  return {day, rows, pins, posJson, who, body, url: `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Gauge readings ${day}`)}&body=${encodeURIComponent(body)}`};
 }
 // spells out the hours the chosen rain day covers, e.g. "9am Sat 21 Nov until now (10:09pm Sat)"
 function readSpanTxt(msg){
@@ -2767,6 +2770,7 @@ function readSpanTxt(msg){
 $("readDay").onchange = () => readSpanTxt();
 $("readOwner").onclick = async () => {
   const r = readIssue(); if (!r) return;
+  if (r.posJson.length) prompt("New gauge position(s): keep private by adding to the GAUGE_POSITIONS secret on GitHub (Settings > Secrets and variables > Actions). Copy this:", r.posJson.join(", "));
   const win = window.open(r.url, "_blank"); if (win) win.opener = null; else location.href = r.url;
   $("readDlg").close();
 };
@@ -2779,8 +2783,9 @@ $("readForm").onsubmit = async e => {
   $("readSend").disabled = true; $("readSend").textContent = "Sending…";
   const lines = r.rows.map(([n, mm]) => `${n}: ${+mm} mm`).join("\n");
   const message = `Rain gauge readings for ${rainDay(r.day)} (9am to 9am), from ${r.who || "(no name given)"}:\n\n${lines || "(no readings)"}`
-    + (r.pins.length ? `\n\nNew gauge${r.pins.length > 1 ? "s" : ""}: ${r.pins.map(([n, , loc]) => `${n} at ${loc[0].toFixed(5)}, ${loc[1].toFixed(5)}`).join("; ")}` : "")
-    + `\n\nTo add them to the map, open this link and tap "Submit new issue":\n${r.url}`;
+    + (r.pins.length ? `\n\nNew gauge${r.pins.length > 1 ? "s" : ""}: ${r.pins.map(([n, , loc]) => `${n} at ${loc[0].toFixed(5)}, ${loc[1].toFixed(5)}`).join("; ")}`
+       + `\nKeep ${r.pins.length > 1 ? "these positions" : "this position"} private: add to the GAUGE_POSITIONS secret on GitHub (Settings > Secrets and variables > Actions), inside its { }:\n${r.posJson.join(",\n")}` : "")
+    + `\n\nTo add the readings to the map, open this link and tap "Submit new issue" (it's public: it has only the gauge names and readings, not who sent them or where any gauge is):\n${r.url}`;
   try {
     const res = await fetch("https://api.web3forms.com/submit", {method: "POST", headers: {"Content-Type": "application/json", Accept: "application/json"},
       body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: `Gauge readings ${rainDay(r.day)}${r.who ? ` from ${r.who}` : ""}`, from_name: "SEQ Weather Desk", message})});
@@ -5566,7 +5571,7 @@ async function agroStore(op, val){
 let JSZIP = null;
 function loadJSZip(){
   return JSZIP || (JSZIP = new Promise((ok, no) => { const sc = document.createElement("script");
-    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; sc.onload = () => ok(window.JSZip); sc.onerror = () => { JSZIP = null; no(new Error("zip")); }; document.head.appendChild(sc); }));
+    sc.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"; sc.integrity = "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"; sc.crossOrigin = "anonymous"; sc.onload = () => ok(window.JSZip); sc.onerror = () => { JSZIP = null; no(new Error("zip")); }; document.head.appendChild(sc); }));
 }
 const kmlCol = (c, dflt) => { c = (c || "").trim(); if (!/^[0-9a-f]{8}$/i.test(c)) return dflt;   // KML colours are aabbggrr
   return {col: `#${c.slice(6, 8)}${c.slice(4, 6)}${c.slice(2, 4)}`, op: parseInt(c.slice(0, 2), 16) / 255}; };
@@ -5727,7 +5732,7 @@ async function agroParse(name, buf){
 let SHPJS = null;
 function loadShp(){
   return SHPJS || (SHPJS = new Promise((ok, no) => { const sc = document.createElement("script");
-    sc.src = "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"; sc.onload = () => ok(window.shp); sc.onerror = () => { SHPJS = null; no(new Error("shp")); }; document.head.appendChild(sc); }));
+    sc.src = "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"; sc.integrity = "sha384-All+uTLkqRBeyGd6OkVGJGbq2ChIKDWUrewcZ+uQDZzF11/b9sgw5p714836LTKO"; sc.crossOrigin = "anonymous"; sc.onload = () => ok(window.shp); sc.onerror = () => { SHPJS = null; no(new Error("shp")); }; document.head.appendChild(sc); }));
 }
 async function shpToGeo(parts){   // parts: {shp, dbf, prj, cpg} ArrayBuffers/strings; or {zip}
   const shp = await loadShp();

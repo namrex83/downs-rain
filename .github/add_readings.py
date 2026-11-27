@@ -4,9 +4,9 @@ Adds gauge readings sent from the page's "Add gauge readings" form (as a GitHub 
 Run by .github/workflows/gauge-readings.yml, only for issues opened by the repository owner. The issue body is in
 the BODY environment variable; each reading is a line "date,name,,,mm" (date = the morning of the 9am reading).
 A reading for a gauge and day already in the file replaces the old one. Gauge positions are never taken from the
-issue for the private gauges (those stay in the PRIVATE_GAUGES secret). A line "pos,name,lat,lon" (the 📍 button)
-saves a new gauge's position in gauge_positions.json (used for the correction; listed in the table, no dot). Writes a short
-report to report.md for the reply on the issue.
+issue: they're kept only in secrets (PRIVATE_GAUGES, PRIVATE_GAUGES_EXTRA, GAUGE_POSITIONS), never in the public
+repository or the issue. A "pos,..." line (from an older page) is ignored and not saved. Writes a short report to report.md
+for the reply on the issue (which is public, so it names gauges and readings only).
 """
 import datetime as dt
 import json
@@ -30,16 +30,7 @@ def main():
     new, bad, saved, failed = [], [], [], []
     positions = json.load(open(POS)) if os.path.exists(POS) else {}
     for raw in body.splitlines():
-        pm = POS_LINE.match(raw)
-        if pm:
-            name = " ".join(pm.group(1).split())
-            lat, lon = float(pm.group(2)), float(pm.group(3))
-            if -45 <= lat <= -9 and 110 <= lon <= 155:
-                positions = {k: v for k, v in positions.items() if site_key(k) != site_key(name)}
-                positions[name] = [round(lat, 5), round(lon, 5)]
-                saved.append(name)
-            else:
-                failed.append(f"{name} (that position isn't in Australia)")
+        if POS_LINE.match(raw):   # positions are never saved in the public repository
             continue
         if not raw.strip() or raw.strip().startswith(("#", "<!--", ">")) or "," not in raw:
             continue
@@ -57,9 +48,6 @@ def main():
             bad.append(raw.strip()[:80])
             continue
         new.append((day, name, mm))
-    if saved:
-        with open(POS, "w") as f:
-            json.dump(positions, f, indent=0, sort_keys=True)
     lines = open(CSV).read().splitlines() if os.path.exists(CSV) else []
     replaced = 0
     if new:
@@ -77,7 +65,7 @@ def main():
         with open(CSV, "w") as f:
             f.write("\n".join(kept) + "\n")
     secret = set()
-    for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA"):
+    for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA", "GAUGE_POSITIONS"):
         try:
             secret |= {site_key(k) for k in json.loads(os.environ.get(var) or "{}")}
         except (ValueError, TypeError):
@@ -102,7 +90,7 @@ def main():
     if unplaced:
         out.append("")
         out.append(f"No saved position yet for: {', '.join(unplaced)}. These show in the gauge table but can't correct "
-                   "the map until their position is saved: in the form, put the map pin on the gauge and tap 📍 next to its name.")
+                   "the map until the owner adds the position (from the email) to the private gauge list.")
     if bad:
         out.append("")
         out.append("Couldn't read these lines (left out): " + "; ".join(f"`{b}`" for b in bad[:10]))

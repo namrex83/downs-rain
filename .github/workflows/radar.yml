@@ -714,7 +714,8 @@ jobs:
               They're used in the correction and listed by name in the gauge table, but their positions are
               never written to anything public (no dot on the map, no lat/lon in the data files)."""
               out = {}
-              for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA"):   # the second list is for gauges added later
+              # the second list is for gauges added later; GAUGE_POSITIONS: gauges people sent from the page's form
+              for var in ("PRIVATE_GAUGES", "PRIVATE_GAUGES_EXTRA", "GAUGE_POSITIONS"):
                   try:
                       out.update({site_key(k): (float(v[0]), float(v[1])) for k, v in json.loads(os.environ.get(var) or "{}").items()})
                   except (ValueError, TypeError, IndexError, AttributeError):
@@ -947,6 +948,7 @@ jobs:
                           secret = private_sites()
                       if public_pos is None:   # gauges whose position was sent from the page (📍): listed in the table, no dot
                           try:
+                              # (old public file, only until its positions are in the GAUGE_POSITIONS secret)
                               public_pos = {site_key(k): (float(v[0]), float(v[1])) for k, v in json.load(open(os.path.join(ROOT, "gauge_positions.json"))).items()}
                           except (OSError, ValueError, TypeError, IndexError):
                               public_pos = {}
@@ -1639,6 +1641,7 @@ jobs:
         env:
           PRIVATE_GAUGES: ${{ secrets.PRIVATE_GAUGES }}   # exact positions of private gauges, {"name": [lat, lon], ...}
           PRIVATE_GAUGES_EXTRA: ${{ secrets.PRIVATE_GAUGES_EXTRA }}   # more, in the same form (gauges added later)
+          GAUGE_POSITIONS: ${{ secrets.GAUGE_POSITIONS }}   # gauges sent from the page's form, same form; never written out
         run: python radar.py
 
       - name: Season total
