@@ -20,7 +20,7 @@
 2026-11-04,Daandine (DDCGI),,,2.8
 2026-11-04,Jandowae-Macalister Road Al,,,10.0
 2026-11-04,Jimbour West Tm,,,9.0
-2026-11-04,Tangalooma (Macalister),,,8.8
+2026-11-04,T,,,8.8
 2026-11-04,Jimbour (DDCGI),,,15.4
 2026-11-04,Macalister,,,2.2
 2026-11-04,Maclee (Macalister),,,1.0
@@ -166,7 +166,7 @@
 2026-11-21,Jondaryan (DDCGI),,,2.0
 2026-11-21,Warra Alert,,,0.6
 2026-11-21,Daandine (DDCGI),,,1.0
-2026-11-21,Tangalooma (Macalister),,,0.4
+2026-11-21,T,,,0.4
 2026-11-21,Macalister,,,0.8
 2026-11-21,Macalister (DDCGI),,,0.4
 2026-11-21,Jinghi Jinghi Alert,,,1.0
@@ -186,7 +186,7 @@
 2026-11-22,Daandine (DDCGI),,,0
 2026-11-22,Jandowae-Macalister Road Al,,,0
 2026-11-22,Jimbour West Tm,,,0
-2026-11-22,Tangalooma (Macalister),,,0.6
+2026-11-22,T,,,0.6
 2026-11-22,Jimbour (DDCGI),,,1.2
 2026-11-22,Macalister,,,0
 2026-11-22,Maclee (Macalister),,,0
@@ -205,7 +205,7 @@
 2026-11-24,Cooranga (DDCGI),,,0
 2026-11-24,Jimbour North,,,0
 2026-11-24,Jimbour (DDCGI),,,0
-2026-11-24,Tangalooma (Macalister),,,0
+2026-11-24,T,,,0
 2026-11-24,Warra Alert,,,0
 2026-11-24,Macalister,,,0
 2026-11-24,Daandine (DDCGI),,,0
@@ -222,7 +222,7 @@
 2026-11-25,Jimbour North,,,0.4
 2026-11-25,Glenesk (DDi),,,0
 2026-11-25,Kupunn (DDCGI),,,0
-2026-11-25,Tangalooma (Macalister),,,0
+2026-11-25,T,,,0
 2026-11-25,Daandine (DDCGI),,,0
 # 2026-11-25: the owner judges the Bureau's Miles gauge (16.6 mm, radar 0.2 mm) a faulty reading: left out ("x" = leave this gauge's reading out that day)
 2026-11-25,Miles,,,x
@@ -249,7 +249,7 @@
 2026-11-28,Browns,,,10
 # 2026-11-28: Oz Forecast list (Dalby area) photographed 4:42am Sat, ">9am Yest." column (rain since 9am Fri, to 4:30am): a storm over Daandine/Macalister/Pirrinuan; "-" taken as 0 for gauges with 7-day totals; plain "Macalister" left out (owner: a different, unreliable gauge)
 2026-11-28,Daandine (DDCGI),,,8.8
-2026-11-28,Tangalooma (Macalister),,,6.0
+2026-11-28,T,,,6.0
 2026-11-28,Macalister (DDCGI),,,3.2
 2026-11-28,Pirrinuan (DDCGI),,,1.4
 2026-11-28,Dalby East (DDCGI),,,0
