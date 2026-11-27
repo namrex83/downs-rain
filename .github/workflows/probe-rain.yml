@@ -1,7 +1,8 @@
 name: Probe Bureau rainfall tables (temporary)
 
-# One-off look at which flood-warning rainfall tables the Bureau publishes on its FTP site for the radar map's area,
-# and what their rows and station links look like. Prints only; changes nothing. Removed once the real job is built.
+# One-off look at the Bureau's flood-warning rainfall tables (7-day, 24 h to 9am) for the area, and how many of their
+# gauges can be placed from the Bureau's station list by name. Prints only; changes nothing. Removed once the real
+# job is built.
 on:
   workflow_dispatch: {}
 
@@ -11,35 +12,52 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Look
         run: |
           python3 - <<'EOF'
-          import ftplib, io, re, html
+          import ftplib, io, re, html, zipfile
           f = ftplib.FTP("ftp.bom.gov.au", timeout=60); f.login()
-          names = f.nlst("/anon/gen/fwo")
-          cand = sorted(n.split("/")[-1] for n in names if re.search(r"IDQ6\d+\.html$", n))
-          print(len(cand), "IDQ6 html files")
           def get(d, n):
-              b = io.BytesIO(); f.retrbinary(f"RETR {d}/{n}", b.write); return b.getvalue().decode("latin-1", "replace")
-          shown = 0
-          for n in cand:
-              try:
-                  t = get("/anon/gen/fwo", n)
-              except Exception as e:
+              b = io.BytesIO(); f.retrbinary(f"RETR {d}/{n}", b.write); return b.getvalue()
+          cell = lambda c: " ".join(html.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+          names = sorted(n.split("/")[-1] for n in f.nlst("/anon/gen/fwo") if re.search(r"IDQ603\d\d\.html$", n))
+          tables = {}
+          for n in names:
+              t = get("/anon/gen/fwo", n).decode("latin-1", "replace")
+              if "24 hours to 9am" not in t:
                   continue
-              title = re.search(r"<title>(.*?)</title>", t, re.S | re.I)
-              title = " ".join(html.unescape(title.group(1)).split()) if title else "?"
-              if "rain" not in t.lower():
+              title = re.search(r"<h2[^>]*>(.*?)</h2>", t, re.S | re.I) or re.search(r"<title>(.*?)</title>", t, re.S | re.I)
+              rows = [[cell(c) for c in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S | re.I)] for r in re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I)]
+              groups = [r[0] for r in rows if len(r) == 1]
+              st = [r for r in rows if len(r) >= 8 and re.match(r"^[\d.\-]*$", r[-2] or "0")]
+              tables[n] = st
+              print(f"{n}: {cell(title.group(1)) if title else '?'} | {len(st)} gauges | groups: {groups[:12]}")
+          # Bureau station list
+          z = zipfile.ZipFile(io.BytesIO(get("/anon2/home/ncc/metadata/sitelists", "stations.zip")))
+          text = z.read(z.namelist()[0]).decode("latin-1")
+          key = lambda s: re.sub(r"\b(alert|tm|al|tm\.|automatic|aws|post office|po)\b", "", re.sub(r"[^a-z0-9 ]", " ", s.lower())).split()
+          sl = {}
+          for line in text.splitlines():
+              m = re.search(r"^\s*(\d{5,6})\s+\S*\s+(.+?)\s+\S+\s+(\S+)\s+(-\d{1,2}\.\d{3,})\s+(\d{3}\.\d{3,})", line)
+              if not m:
                   continue
-              rows = re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I)
-              cell = lambda c: " ".join(html.unescape(re.sub(r"<[^>]+>", " ", c)).split())
-              print(f"\n== {n}: {title} ({len(rows)} rows)")
-              if shown < 6 or any(k in t for k in ("Condamine", "Warrill", "Bremer", "Lockyer", "Logan")):
-                  for r in rows[:6]:
-                      cells = re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S | re.I)
-                      print("   ", [cell(c) for c in cells], re.findall(r'href="([^"]+)"', r)[:2])
-                  shown += 1
-          print("\nsitelists:", f.nlst("/anon2/home/ncc/metadata/sitelists"))
+              lat, lon = float(m.group(4)), float(m.group(5))
+              if not (-30.5 < lat < -24.5 and 148 < lon < 154):
+                  continue
+              open_ = m.group(3) == ".."
+              k = " ".join(key(m.group(2)))
+              if k not in sl or open_:
+                  sl[k] = (lat, lon, m.group(2).strip(), open_)
+          print("station list entries in the area:", len(sl))
+          for n, st in tables.items():
+              hit = miss = 0; misses = []
+              for r in st:
+                  k = " ".join(key(r[0]))
+                  if k in sl:
+                      hit += 1
+                  else:
+                      miss += 1; misses.append(r[0])
+              print(f"  {n}: placed {hit} of {hit + miss}; not found e.g. {misses[:8]}")
           EOF
