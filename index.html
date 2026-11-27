@@ -397,6 +397,7 @@ body.agrodrawing #map{cursor:crosshair}
 .leaflet-tooltip.marktip::before{display:none}
 body.nomarknames .leaflet-tooltip.marktip{display:none}
 .markbtn a.on svg path, .markbtn a.on svg circle{stroke:#fff}
+.agropriv{font-size:.78rem;line-height:1.35;color:var(--ink-2);background:color-mix(in srgb, #1b7f3b 9%, var(--panel));border-radius:10px;padding:6px 10px;margin:0 0 8px}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -955,6 +956,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
         <button type="button" class="agrofile" id="agroMarkBtn">📍 Add a mark</button>
         <label class="agroop">See-through <input type="range" id="agroOp" min="0.2" max="1" step="0.05" value="0.75"></label>
         <label class="agroop"><input type="checkbox" id="agroAll"> On all maps</label></div>
+      <p class="agropriv">🔒 <b>Private:</b> your files, drawn paddocks and marks stay on this phone or computer only. Nothing is uploaded or sent to Namrex Weather or anyone else, and no one else can see them.</p>
       <div id="agroList"></div>
       <p class="note">Open a Google Earth file (KML or KMZ) or a shapefile (pick the .shp, .dbf and .prj together, or a .zip of them), e.g. a paddock, elevation or yield layer from an email: save the attachment to Files, then open it here). It's drawn on the map, and stays on this phone for next time: nothing is uploaded. Or <b>draw a paddock</b> yourself: tap its corners on the satellite map (or stand at each corner and tap <b>📍 Here</b>), then <b>Done</b> to name and save it, with its area in hectares; it's kept on this phone only. <b>Add a mark</b> puts a named dot on the map (tap the spot, or <b>📍 Here</b> for where you are): a gate, tank, bore, trap or anything else you want to find again. Use <b>full screen</b> and the <b>locate</b> button to see where you are in the paddock. Tap a shape for its name and details.</p>
     </div>
@@ -5254,7 +5256,7 @@ const DISCLAIMER = {
   rain: "These maps are estimates made from weather radar and a small number of rain gauges, not measured rainfall. They can be wrong, sometimes by a lot, especially in storms and hail and far from the radar. Check a rain gauge before relying on them for decisions such as spraying, planting, insurance or contracts.",
   soil: "These are weather-model soil temperatures, worked out for 10 cm from the model's layers on a grid about 25 km across. They are not measured readings: soil type, moisture, stubble and aspect can put a paddock several degrees off. The cotton planting check is only a guide; measure the soil temperature at planting depth before planting. Evaporation figures are model estimates too.",
   storms: "These are raw weather-model storm ingredients, not storm forecasts or warnings. They show where storms could be severe if they form, not whether or where they will form. For storm warnings, use the Bureau of Meteorology.",
-  outlook: "Paddock layers: files you open (KML/KMZ) stay on this phone or computer only. They're read and drawn in your browser and saved there for next time; nothing is uploaded or sent to Namrex Weather or anyone else, and other visitors can't see them. Tap ✕ to delete one. The layers are drawn as the file gives them, so check them against the source (e.g. your agronomist's software) before acting on them. Outlooks: these links open other organisations' websites; their outlooks and graphs belong to them, and outlooks give the chances of wetter or drier, warmer or cooler than usual, not amounts on particular days."
+  outlook: "Paddock layers: files you open (KML, KMZ or shapefiles), paddocks you draw and marks you add stay on this phone or computer only. They're read, drawn and saved in your own browser for next time; nothing is uploaded or sent to Namrex Weather or anyone else, we never see them, and other visitors can't see them. They aren't shared between your devices, and clearing this browser's data for the site deletes them. Tap ✕ to delete one. The layers are drawn as the file gives them, so check them against the source (e.g. your agronomist's software) before acting on them. Outlooks: these links open other organisations' websites; their outlooks and graphs belong to them, and outlooks give the chances of wetter or drier, warmer or cooler than usual, not amounts on particular days."
 };
 let viewBeforeRadar = null;
 const fcZoom = () => HOME_ZOOM - (innerWidth >= 1000 ? 1.5 : 1.75);   // about Emerald to Grafton; a little closer on a wide screen
@@ -5883,7 +5885,7 @@ async function agroMarkAt(ll){
   const d = agroDrawing; if (!d || Date.now() - (d.btnAt || 0) < 400) return;
   d.dots.clearLayers(); L.circleMarker(ll, {pane: "agro", radius: 8, color: "#fff", weight: 2, fillColor: "#e53935", fillOpacity: 1, interactive: false}).addTo(d.dots);
   await new Promise(r => setTimeout(r, 30));
-  const nm = (prompt("Name this mark (e.g. Gate, Tank, Trap 3):", `Mark ${AGRO.filter(a => String(a.id).startsWith("mark-")).length + 1}`) || "").trim();
+  const nm = (prompt("Name this mark (e.g. Gate, Tank, Trap 3). Saved on this phone only:", `Mark ${AGRO.filter(a => String(a.id).startsWith("mark-")).length + 1}`) || "").trim();
   if (!nm) { d.dots.clearLayers(); return; }   // still marking: tap somewhere else, or Cancel
   const geo = {type: "FeatureCollection", features: [{type: "Feature", properties: {Name: nm, Mark: 1, Added: new Date().toLocaleDateString("en-AU")},
     geometry: {type: "Point", coordinates: [+ll.lng.toFixed(7), +ll.lat.toFixed(7)]}}]};
@@ -5926,7 +5928,7 @@ function agroDrawStop(){
 }
 async function agroDrawDone(){
   const d = agroDrawing; if (!d || d.pts.length < 3) return;
-  const ha = ringHa(d.pts), nm = (prompt(`Name this paddock (${ha.toFixed(1)} ha):`, `Paddock ${AGRO.length + 1}`) || "").trim();
+  const ha = ringHa(d.pts), nm = (prompt(`Name this paddock (${ha.toFixed(1)} ha). Saved on this phone only:`, `Paddock ${AGRO.length + 1}`) || "").trim();
   if (!nm) return;   // back to drawing
   const ring = d.pts.map(p => [+p.lng.toFixed(7), +p.lat.toFixed(7)]); ring.push(ring[0]);
   const geo = {type: "FeatureCollection", features: [{type: "Feature", properties: {Name: nm, "Area (ha)": +ha.toFixed(2), Drawn: new Date().toLocaleDateString("en-AU")},
