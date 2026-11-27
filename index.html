@@ -395,6 +395,8 @@ body.agrodrawing #map{cursor:crosshair}
 .agrodraw button.go{background:#1f6fbf;color:#fff} .agrodraw button:disabled{opacity:.4}
 .leaflet-tooltip.marktip{background:rgba(255,255,255,.92);border:0;border-radius:6px;padding:1px 6px;font:700 .72rem var(--body);color:#1c2621;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .leaflet-tooltip.marktip::before{display:none}
+body.nomarknames .leaflet-tooltip.marktip{display:none}
+.markbtn a.on svg path, .markbtn a.on svg circle{stroke:#fff}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -3050,8 +3052,25 @@ function addDot(ll){
     .bindTooltip(dotLabel(ll), {permanent: true, direction: "top", offset: [0, -7], className: "pinlabel dotlabel"});
   dots.push({ll, m}); m.addTo(dotLayer); dotLayer.addTo(map); $("dotClear").hidden = false; fsSync();
 }
+// a map button to show or hide your marks' names (only there when marks are showing); remembered
+let markNames = true; try { markNames = localStorage.getItem("markNames") !== "0"; } catch(e){}
+let markBtn = null;
+const MarkNames = L.Control.extend({ options: {position: "topleft"}, onAdd(){
+  const box = L.DomUtil.create("div", "leaflet-bar locate markbtn");
+  markBtn = L.DomUtil.create("a", "", box); markBtn.setAttribute("role", "button");
+  markBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#1c2621" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>';
+  L.DomEvent.disableClickPropagation(box);
+  L.DomEvent.on(markBtn, "click", e => { L.DomEvent.preventDefault(e); markNames = !markNames; try { localStorage.setItem("markNames", markNames ? "1" : "0"); } catch(_){} markLabels(); });
+  return box; } });
+let markCtl = null;
 // your marks (Paddock layers) show the rain at them after their name on the Rainfall map, for the day or span showing
 function markLabels(){
+  const marks = (typeof AGRO !== "undefined" ? AGRO : []).filter(a => String(a.id).startsWith("mark-") && a.on);
+  const showing = marks.length && map.hasLayer(agroGroup);
+  if (showing && !markCtl) { markCtl = new MarkNames(); markCtl.addTo(map); }
+  if (markCtl) markCtl.getContainer().style.display = showing ? "" : "none";
+  document.body.classList.toggle("nomarknames", !markNames);
+  if (markBtn) { markBtn.classList.toggle("on", markNames); markBtn.title = markNames ? "Hide your marks' names" : "Show your marks' names"; markBtn.setAttribute("aria-label", markBtn.title); }
   for (const a of (typeof AGRO !== "undefined" ? AGRO : [])){
     if (!String(a.id).startsWith("mark-")) continue;
     a.layer.eachLayer(l => { const nm = l.feature && l.feature.properties && l.feature.properties.Name; if (!nm || !l.getTooltip()) return;
@@ -5802,6 +5821,7 @@ function agroSetHide(a, cols){
 }
 function agroListDraw(){
   try { agroFsDraw(); } catch(e){}
+  setTimeout(() => { try { markLabels(); } catch(e){} }, 0);
   $("agroList").innerHTML = AGRO.length ? AGRO.map((a, i) => `<div class="agrorow"><input type="checkbox" data-i="${i}" ${a.on ? "checked" : ""} aria-label="Show ${a.name}">
     <span class="nm">${a.name.replace(/[<&]/g, "")}<small>${[a.stats.shapes ? `${a.stats.shapes} shape${a.stats.shapes === 1 ? "" : "s"}` : "", a.stats.pictures ? `${a.stats.pictures} picture layer${a.stats.pictures === 1 ? "" : "s"}` : "", a.stats.label ? esc2(a.stats.label) : ""].filter(Boolean).join(" · ")}</small></span>
     <button type="button" data-z="${i}">Zoom to</button><button type="button" data-x="${i}" aria-label="Remove">✕</button></div>${a.stats.legend && a.on ? legendHTML(a.stats.legend, a, i) : ""}`).join("") : "";
