@@ -133,7 +133,8 @@ jobs:
           FOCUS = (-27.18, 151.27)   # Dalby: the page reports the scale factor here
           BIAS_RADIUS_KM = 100       # gauges within about this distance set the local scale factor
           BIAS_PRIOR_MM = 10.0       # gauge rain needed before the factor moves far from 1 (stops one gauge swinging it)
-          CORRECT_VERSION = 7        # bump when correct() changes, so recent days with your readings are redone
+          CORRECT_VERSION = 8        # bump when correct() changes, so recent days with your readings are redone
+          GAP_TRUST_KM = 30.0        # on a day the radar only partly covered, gauges are trusted over the radar within about this far
           DRY_KM = 60.0              # dry area: gauges reading nothing count within about this distance...
           DRY_LIGHT_MM = 15.0        # ...and turn the radar's rain there down to near nothing up to this much,
           DRY_FADE_MM = 25.0         # fading out by this much (heavier falls are left to the usual correction)
@@ -1034,7 +1035,7 @@ jobs:
               return [{k: v for k, v in g.items() if k not in ("lat", "lon")} if g.get("private") else g for g in gauges]
           
           
-          def correct(radar, gauges):
+          def correct(radar, gauges, coverage=1.0):
               """Gauge-adjust a radar total: a scale factor that varies smoothly across the map (set
               mostly by gauges within about BIAS_RADIUS_KM), then local fixes near each gauge.
               Returns the field, the scale factor at FOCUS (Dalby), the overall factor and gauges used."""
@@ -1120,6 +1121,25 @@ jobs:
                   light = np.clip((DRY_FADE_MM - radar) / (DRY_FADE_MM - DRY_LIGHT_MM), 0, 1)
                   damp = np.clip(dry * 2.5, 0, 1) * (1 - np.clip(wet * 2, 0, 1)) * light
                   field = field * (1 - 0.97 * damp)
+                  # a day the radar only partly covered (pictures missed): the radar total is missing those hours, so
+                  # around the gauges the map leans on what they measured, the more so the less the radar saw (none
+                  # of this when the radar covered 80% or more of the day)
+                  trust = float(np.clip(1 - coverage / 0.8, 0, 1))
+                  if trust > 0:
+                      gnum = np.zeros_like(radar)
+                      gden = np.zeros_like(radar)
+                      near = np.zeros_like(radar)
+                      for g in used:
+                          c, r = g["_px"]
+                          d = np.hypot(xx - c, yy - r) * k
+                          wi = 1.0 / (d * d + 25.0)
+                          gnum += wi * g["mm"]
+                          gden += wi
+                          near = np.maximum(near, np.exp(-(d / GAP_TRUST_KM) ** 2))
+                      surf = gnum / gden
+                      w = trust * near
+                      field = field * (1 - w) + surf * w
+                      log(f"  radar covered {coverage:.0%} of the time: gauges trusted over it ({trust:.0%}) within ~{GAP_TRUST_KM:.0f} km")
                   # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
                   # so the map at a gauge matches what it measured even where the radar changes quickly.
                   # All gauges are blended at once, the nearest counting by far the most, so a gauge a few km
@@ -1191,7 +1211,7 @@ jobs:
                   bom = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
                          for g in meta.get("gauges", []) if g.get("source") == "BOM"]
                   gauges = drop_marked(bom + usable(mine), mine)
-                  field, bias, overall, npairs = correct(radar, gauges)
+                  field, bias, overall, npairs = correct(radar, gauges, meta.get("coverage_pct", 100) / 100)
                   meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
                   meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
                                "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine)})
@@ -1280,7 +1300,7 @@ jobs:
               log(f"  7-day total {want[0]} to {want[-1]} from {len(used)} finished day(s)")
           
           
-          def write_today(day, accum, info, positions=None):
+          def write_today(day, accum, info, positions=None, coverage=1.0):
               """The running total since 9am: radar only (today.png, grid_raw) and, when any gauges have readings so
               far (BOM gauges since 9am, plus readings entered in my_gauges.csv for this day), a provisional
               gauge-corrected version (today_corr.png, grid). The day is corrected properly once it finishes."""
@@ -1294,7 +1314,7 @@ jobs:
                   mine = read_my_gauges(day)
                   gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
                   if gauges:   # dry readings count too: they take out radar rain that didn't reach the ground
-                      field, bias, overall, npairs = correct(accum, gauges)
+                      field, bias, overall, npairs = correct(accum, gauges, coverage)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
                       out.update({"provisional": True, "grid_raw": out["grid"], "grid": enc(field).flatten().tolist(),
                                   "bias": round(bias, 2), "gauges_used": npairs, "gauges": public(gauges + waiting(mine))})
@@ -1566,7 +1586,8 @@ jobs:
                       radar = merged_radar(day, win)
                       mine = read_my_gauges(day)
                       gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
-                      field, bias, overall, npairs = correct(radar, gauges)
+                      cover = (win["minutes"] + win.get("g", {}).get("minutes", 0)) / 1440
+                      field, bias, overall, npairs = correct(radar, gauges, cover)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * (win["minutes"] + win.get("g", {}).get("minutes", 0)) / 1440),
                               "filled_from_brisbane_min": win.get("g", {}).get("minutes", 0),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
@@ -1624,8 +1645,11 @@ jobs:
                       written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{w.get('g', {}).get('frames', 0)}:{gauge_key([g for g in read_my_gauges(cur) if not g.get("unplaced")])}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           merged = merged_radar(cur, w)
+                          so_far = max(1.0, (now - (window_end_utc(cur) - dt.timedelta(days=1))).total_seconds() / 60)
+                          cover = min(1.0, (w["minutes"] + w.get("g", {}).get("minutes", 0)) / so_far)
                           write_today(cur, merged,
-                                      {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M")}, positions)
+                                      {"frames": w["frames"], "as_of": (now + TZ_OFFSET).strftime("%H:%M"), "coverage_pct": round(100 * cover)},
+                                      positions, cover)
                           try:
                               note_rain(cur, merged)
                           except Exception as e:
