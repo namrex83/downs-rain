@@ -398,6 +398,10 @@ body.agrodrawing #map{cursor:crosshair}
 body.nomarknames .leaflet-tooltip.marktip{display:none}
 .markbtn a.on svg path, .markbtn a.on svg circle{stroke:#fff}
 .agropriv{font-size:.78rem;line-height:1.35;color:var(--ink-2);background:color-mix(in srgb, #1b7f3b 9%, var(--panel));border-radius:10px;padding:6px 10px;margin:0 0 8px}
+.rdpriv{font-size:.76rem;line-height:1.4;color:var(--ink-2);background:color-mix(in srgb, #1b7f3b 9%, var(--panel));border-radius:10px;padding:6px 10px;margin:4px 0 8px}
+.rdpriv summary{cursor:pointer;list-style:none} .rdpriv summary::-webkit-details-marker{display:none}
+.rdpriv summary span{color:var(--accent);text-decoration:underline;margin-left:4px} .rdpriv[open] summary span{display:none}
+.rdpriv ul{margin:6px 0 2px;padding-left:18px} .rdpriv li{margin:3px 0}
 .agroleg tr[data-c]{cursor:pointer} .agroleg tr.off{opacity:.35;text-decoration:line-through}
 .agroleg caption span{font-weight:400;color:var(--ink-3);font-size:.7rem}
 .agroleg caption button{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:1px 8px;font:600 .7rem var(--body);cursor:pointer;margin-left:4px} .agroleg th{color:var(--ink-3);font-size:.68rem}
@@ -920,6 +924,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
       <label class="rdday">Your name <input id="readWho" maxlength="60" autocomplete="name" placeholder="So we know who sent them"></label>
       <input type="checkbox" id="readBot" tabindex="-1" autocomplete="off" hidden>
       <p class="note">Your readings are sent to Namrex Weather Co. to check and add to the map. For a new gauge, tap <b>I'm at the gauge</b> or <b>Pick on map</b> under it so we know where it is.</p>
+      <details class="rdpriv"><summary>🔒 <b>Your data and location:</b> readings are public, your name and the gauge's GPS spot are not. <span>More</span></summary>
+        <ul>
+          <li><b>Shown publicly:</b> the gauge name you type, its readings (mm) and the day. They appear in the site's gauge table and are used to correct the rain map. Use a nickname for the gauge (e.g. "Back paddock"), not your address.</li>
+          <li><b>Never shown or published:</b> your name and your gauge's GPS position. They're emailed only to Namrex Weather Co.; the position is kept in a private, locked store and used only to correct the map. There's no dot for your gauge on the map, and its position isn't in any of the site's data.</li>
+          <li><b>"I'm at the gauge"</b> uses your phone's location once, to place the gauge. It isn't kept, tracked or used for anything else.</li>
+          <li>Because the map follows your reading within a few km of the gauge, someone could tell there's a gauge somewhere in that area, but never its exact spot.</li>
+          <li>To have your readings or gauge removed, send a message with <b>Contact</b>.</li>
+        </ul>
+      </details>
       <div class="rdbtns"><button type="button" class="linkbtn" id="readCancel">Cancel</button><button type="submit" class="primary" id="readSend">Send</button></div>
       <button type="button" class="linkbtn rdowner" id="readOwner">Site owner: send straight to GitHub</button>
     </form>
