@@ -706,6 +706,128 @@ jobs:
               return out
           
           
+          # ---------------------------------------------------------------- the Bureau's flood-warning rain gauges
+          # Hundreds of rain gauges (the Bureau's, councils', Seqwater's: the "Alert" and "Tm" stations) in the Bureau's
+          # rainfall tables on its FTP site, one per river area: each gauge's rain for the last 7 days to 9am and since
+          # 9am today. Placed by name from the Bureau's station list (exact name matches only: a wrong place is worse
+          # than none). Used like the other gauges: through the day (since 9am, the rain it caught) and for each
+          # finished day (24 hours to 9am), re-done as late reports come in.
+          FWO_DIR = "/anon/gen/fwo"
+          FWO_TABLES = ["IDQ60367.html", "IDQ60360.html", "IDQ60359.html", "IDQ60366.html", "IDQ60361.html", "IDQ60362.html"]
+          FWO_WORDS = {"rd": "road", "mt": "mount", "ck": "creek", "crk": "creek", "st": "street", "stn": "station", "hw": "", "tw": "",
+                       "hg": "", "ds": "", "alert": "", "tm": "", "al": "", "aws": "", "automatic": "", "manual": "", "po": "",
+                       "post": "", "office": "", "the": "", "nth": "north", "sth": "south", "upr": "upper", "lwr": "lower"}
+          FWO = None   # this run's tables: {"days": {day: {name: mm}}, "today": {name: mm}, "day_now": day, "pos": {name: (lat, lon)}}
+
+
+          def fwo_key(name):
+              s = re.sub(r"[^a-z0-9 ]", " ", name.lower())
+              return " ".join(w2 for w in s.split() for w2 in [FWO_WORDS.get(w, w)] if w2)
+
+
+          def fwo_positions(src):
+              """{name key: (lat, lon)} from the Bureau's station list for the area, kept a week in state/fwo_pos.json."""
+              p = os.path.join(STATE, "fwo_pos.json")
+              try:
+                  c = json.load(open(p))
+                  if time.time() - c["t"] < 7 * 86400:
+                      return {k: tuple(v) for k, v in c["pos"].items()}
+              except (OSError, ValueError, KeyError):
+                  pass
+              z = zipfile.ZipFile(io.BytesIO(src.get(FTP_SITES_DIR, "stations.zip")))
+              text = z.read(z.namelist()[0]).decode("latin-1")
+              pos, still = {}, set()
+              for line in text.splitlines():
+                  m = re.search(r"^\s*(\d{5,6})\s+\S*\s+(.+?)\s+\S+\s+(\S+)\s+(-\d{1,2}\.\d{3,})\s+(\d{3}\.\d{3,})", line)
+                  if not m:
+                      continue
+                  lat, lon = float(m.group(4)), float(m.group(5))
+                  if not (-31 < lat < -24 and 147 < lon < 154):
+                      continue
+                  k, is_open = fwo_key(m.group(2)), m.group(3) == ".."
+                  if k not in pos or (is_open and k not in still):
+                      pos[k] = (lat, lon)
+                      if is_open:
+                          still.add(k)
+              os.makedirs(STATE, exist_ok=True)
+              json.dump({"t": time.time(), "pos": pos}, open(p, "w"))
+              return pos
+
+
+          def fwo_load(src, now):
+              """Read the rainfall tables (see above) into FWO."""
+              import html as H
+              global FWO
+              pos = fwo_positions(src)
+              cell = lambda c: " ".join(H.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+              num = lambda x: float(x) if re.match(r"^\d+(\.\d+)?$", x or "") else None
+              days, today, places, day_now = {}, {}, {}, None
+              for tbl in FWO_TABLES:
+                  try:
+                      t = src.get(FWO_DIR, tbl).decode("latin-1", "replace")
+                  except Exception as e:
+                      log(f"  rain table {tbl}: {e}")
+                      continue
+                  m = re.search(r"Since 9am\s+(\d{1,2})\s+([A-Za-z]{3})", t)
+                  if not m:
+                      continue
+                  qnow = (now + TZ_OFFSET).date()
+                  d0 = dt.datetime.strptime(f"{m.group(1)} {m.group(2)} {qnow.year}", "%d %b %Y").date()
+                  if d0 > qnow + dt.timedelta(days=1):
+                      d0 = d0.replace(year=d0.year - 1)
+                  day_now = d0.isoformat()
+                  cols = [(d0 - dt.timedelta(days=6 - i)).isoformat() for i in range(7)]   # 24 h to 9am on each of these
+                  found = []
+                  for r in re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I):
+                      c = [cell(x) for x in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S | re.I)]
+                      if len(c) < 9 or not c[0] or not all(x == "" or num(x) is not None for x in c[1:9]):
+                          continue
+                      name = c[0]
+                      k = fwo_key(name)
+                      ll = pos.get(k) or pos.get(fwo_key(re.sub(r"\(.*?\)", "", name)))
+                      if not ll:
+                          continue
+                      found.append((name, ll, c))
+                  if not found:
+                      continue
+                  # a name that matched a station far from the rest of its table is a different place with the same name
+                  mlat = float(np.median([f[1][0] for f in found])); mlon = float(np.median([f[1][1] for f in found]))
+                  for name, ll, c in found:
+                      if math.hypot((ll[0] - mlat) * 111, (ll[1] - mlon) * 99) > 350:
+                          continue
+                      places[name] = ll
+                      for d, x in zip(cols, c[1:8]):
+                          if num(x) is not None:
+                              days.setdefault(d, {})[name] = num(x)
+                      if num(c[8]) is not None:
+                          today[name] = num(c[8])
+              FWO = {"days": days, "today": today, "day_now": day_now, "pos": places}
+              log(f"  Bureau flood-warning rain gauges: {len(places)} placed; {len(today)} with rain since 9am {day_now}")
+
+
+          def fwo_gauges(day, others, since9am=False, wet_only=False):
+              """The flood-warning gauges' readings for a day (24 h to 9am), or since 9am today, as gauge entries. Left out
+              where the same gauge is already in `others` (same name, or within 1.5 km of one of them)."""
+              if not FWO:
+                  return []
+              if since9am and FWO["day_now"] != (dt.date.fromisoformat(day) - dt.timedelta(days=1)).isoformat():
+                  return []   # the tables still show the day before's "since 9am" (just after 9am)
+              vals = FWO["today"] if since9am else FWO["days"].get(day, {})
+              have = {site_key(g["name"]) for g in others} | {fwo_key(g["name"]) for g in others}
+              near = [(g["lat"], g["lon"]) for g in others if g.get("lat") is not None]
+              out = []
+              for name, mm in vals.items():
+                  if wet_only and mm < 0.5:
+                      continue
+                  lat, lon = FWO["pos"][name]
+                  if fwo_key(name) in have or site_key(name) in have:
+                      continue
+                  if any(abs(a - lat) < 0.014 and abs(b - lon) < 0.016 for a, b in near):
+                      continue
+                  out.append({"name": name, "lat": lat, "lon": lon, "mm": round(mm, 1), "source": "BOM flood"})
+              return out
+
+
           def write_obs(positions=None):
               """The latest reading from each BOM station (temperature, dew point, humidity, wind, gusts) and today's
               highest and lowest temperature so far, for the station dots on the Temp and Wind tabs: data/obs.json."""
@@ -1093,16 +1215,21 @@ jobs:
                   den += w * g["radar_mm"]
               scale = clamp(num / den)
               field = radar * scale
+              def near(c, r, km):   # the part of the map within ~km of a gauge, and each cell's distance from it (km)
+                  h = int(km / k) + 1
+                  r0, r1, c0, c1 = max(0, int(r) - h), min(n, int(r) + h + 1), max(0, int(c) - h), min(n, int(c) + h + 1)
+                  return (slice(r0, r1), slice(c0, c1)), np.hypot(xx[r0:r1, c0:c1] - c, yy[r0:r1, c0:c1] - r) * k
+              # (each gauge's effects below are worked out only as far as they reach, so hundreds of gauges stay quick)
               # local residual fix, fading out over ~25 km from each gauge
               if used:
                   num = np.zeros_like(radar)
                   den = np.full_like(radar, 0.15)          # weight left with the scaled radar far from gauges
                   for g in used:
                       c, r = g["_px"]
-                      d = np.hypot(xx - c, yy - r) * k
+                      sl, d = near(c, r, 220)
                       w = np.exp(-d / 25.0) / (1 + (d / 8.0) ** 2)
-                      num += w * (g["mm"] - g["radar_mm"] * scale[int(r), int(c)])
-                      den += w
+                      num[sl] += w * (g["mm"] - g["radar_mm"] * scale[int(r), int(c)])
+                      den[sl] += w
                   field = np.maximum(0, field + num / den)
                   # dry area: where the gauges around read nothing and none nearby caught rain, the radar's light
                   # rain is turned down to near nothing (high cloud whose rain dries out before it lands - virga -
@@ -1111,12 +1238,15 @@ jobs:
                   dry = np.zeros_like(radar)
                   wet = np.zeros_like(radar)
                   for g in used:
+                      if 0.2 <= g["mm"] < 0.5:
+                          continue
                       c, r = g["_px"]
-                      w = np.exp(-(np.hypot(xx - c, yy - r) * k / DRY_KM) ** 2)
+                      sl, d = near(c, r, 3 * DRY_KM)
+                      w = np.exp(-(d / DRY_KM) ** 2)
                       if g["mm"] < 0.2:
-                          dry += w
-                      elif g["mm"] >= 0.5:
-                          wet += w * min(1.0, g["mm"] / 3.0)   # a light shower (under 3 mm) only partly counts
+                          dry[sl] += w
+                      else:
+                          wet[sl] += w * min(1.0, g["mm"] / 3.0)   # a light shower (under 3 mm) only partly counts
                   # "light" is judged on the radar's own figure, before any scaling by far-off gauges
                   light = np.clip((DRY_FADE_MM - radar) / (DRY_FADE_MM - DRY_LIGHT_MM), 0, 1)
                   damp = np.clip(dry * 2.5, 0, 1) * (1 - np.clip(wet * 2, 0, 1)) * light
@@ -1128,16 +1258,16 @@ jobs:
                   if trust > 0:
                       gnum = np.zeros_like(radar)
                       gden = np.zeros_like(radar)
-                      near = np.zeros_like(radar)
+                      close = np.zeros_like(radar)
                       for g in used:
                           c, r = g["_px"]
-                          d = np.hypot(xx - c, yy - r) * k
+                          sl, d = near(c, r, 8 * GAP_TRUST_KM)
                           wi = 1.0 / (d * d + 25.0)
-                          gnum += wi * g["mm"]
-                          gden += wi
-                          near = np.maximum(near, np.exp(-(d / GAP_TRUST_KM) ** 2))
-                      surf = gnum / gden
-                      w = trust * near
+                          gnum[sl] += wi * g["mm"]
+                          gden[sl] += wi
+                          close[sl] = np.maximum(close[sl], np.exp(-(d / GAP_TRUST_KM) ** 2))
+                      surf = np.where(gden > 0, gnum / np.maximum(gden, 1e-12), 0)
+                      w = trust * close
                       field = field * (1 - w) + surf * w
                       log(f"  radar covered {coverage:.0%} of the time: gauges trusted over it ({trust:.0%}) within ~{GAP_TRUST_KM:.0f} km")
                   # right around each gauge the map takes the gauge's reading, fading out over ~GAUGE_HOLD_KM,
@@ -1149,12 +1279,12 @@ jobs:
                   tden = np.zeros_like(radar)
                   for g in used:
                       c, r = g["_px"]
-                      d = np.hypot(xx - c, yy - r) * k
-                      hold = np.maximum(hold, np.exp(-(d / GAUGE_HOLD_KM) ** 2))
+                      sl, d = near(c, r, 60)
+                      hold[sl] = np.maximum(hold[sl], np.exp(-(d / GAUGE_HOLD_KM) ** 2))
                       wi = 1.0 / (d * d + 0.25)        # nearest gauge wins near its own spot
-                      tnum += wi * g["mm"]
-                      tden += wi
-                  field = field * (1 - hold) + (tnum / tden) * hold
+                      tnum[sl] += wi * g["mm"]
+                      tden[sl] += wi
+                  field = field * (1 - hold) + np.where(tden > 0, tnum / np.maximum(tden, 1e-12), 0) * hold
               for g in used:
                   c, r = g.pop("_px")
                   g["corrected_mm"] = round(float(field[int(r), int(c)]), 1)
@@ -1205,18 +1335,25 @@ jobs:
                       continue
                   meta = json.load(open(mp))
                   mine = read_my_gauges(day)
-                  if gauge_key(mine) == (meta.get("my_gauges") or ""):
-                      continue
-                  radar = np.load(radar_total_path(day))["radar"].astype(np.float32)
                   bom = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
                          for g in meta.get("gauges", []) if g.get("source") == "BOM"]
-                  gauges = drop_marked(bom + usable(mine), mine)
+                  # the flood-warning gauges: today's tables if they still cover the day, else as the day was made
+                  if FWO and day in FWO["days"]:
+                      fwo = fwo_gauges(day, bom + usable(mine) + mine)
+                  else:
+                      fwo = [{k: g[k] for k in ("name", "lat", "lon", "mm", "source")}
+                             for g in meta.get("gauges", []) if g.get("source") == "BOM flood"]
+                  fkey = gauge_key(fwo)
+                  if gauge_key(mine) == (meta.get("my_gauges") or "") and fkey == (meta.get("fwo_key") or ""):
+                      continue
+                  radar = np.load(radar_total_path(day))["radar"].astype(np.float32)
+                  gauges = drop_marked(bom + usable(mine), mine) + fwo
                   field, bias, overall, npairs = correct(radar, gauges, meta.get("coverage_pct", 100) / 100)
                   meta = {k: meta[k] for k in ("frames", "coverage_pct", "rebuilt") if k in meta}
                   meta.update({"bias": round(bias, 2), "bias_overall": round(overall, 2), "gauges_used": npairs,
-                               "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine)})
+                               "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine), "fwo_key": fkey})
                   write_outputs(day, radar, field, meta)
-                  log(f"Re-corrected {day} with {len(usable(mine))} of your gauge reading(s): radar x{bias:.2f} at Dalby")
+                  log(f"Re-corrected {day} with {len(usable(mine))} of your gauge reading(s) and {len(fwo)} flood-warning gauge(s): radar x{bias:.2f} at Dalby")
           
           
           def write_outputs(day, radar, field, meta):
@@ -1313,6 +1450,7 @@ jobs:
               try:
                   mine = read_my_gauges(day)
                   gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
+                  gauges += fwo_gauges(day, gauges + mine, since9am=True)   # the flood-warning gauges' rain since 9am
                   if gauges:   # dry readings count too: they take out radar rain that didn't reach the ground
                       field, bias, overall, npairs = correct(accum, gauges, coverage)
                       colourise(to_mercator(field, IMAGE_W, smooth=True)).save(os.path.join(DATA, "today_corr.png"), optimize=True)
@@ -1443,6 +1581,10 @@ jobs:
               src = Source()
               try:
                   positions = station_positions(src)
+                  try:
+                      fwo_load(src, now)
+                  except Exception as e:
+                      log(f"  Bureau rain tables skipped: {e}")
                   names = src.list_frames()
                   log(f"{len(names)} {PRODUCT} frames on the server")
                   last = dt.datetime.fromisoformat(st["last_ts"]) if st["last_ts"] else None
@@ -1586,12 +1728,14 @@ jobs:
                       radar = merged_radar(day, win)
                       mine = read_my_gauges(day)
                       gauges = drop_marked(fetch_bom_gauges(day, positions) + usable(mine), mine)
+                      gauges += fwo_gauges(day, gauges + mine)
                       cover = (win["minutes"] + win.get("g", {}).get("minutes", 0)) / 1440
                       field, bias, overall, npairs = correct(radar, gauges, cover)
                       meta = {"frames": win["frames"], "coverage_pct": round(100 * (win["minutes"] + win.get("g", {}).get("minutes", 0)) / 1440),
                               "filled_from_brisbane_min": win.get("g", {}).get("minutes", 0),
                               "bias": round(bias, 2), "bias_overall": round(overall, 2),
-                              "gauges_used": npairs, "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine)}
+                              "gauges_used": npairs, "gauges": public(gauges + waiting(mine)), "my_gauges": gauge_key(mine),
+                              "fwo_key": gauge_key([g for g in gauges if g.get("source") == "BOM flood"])}
                       save_radar_total(day, radar)
                       write_outputs(day, radar, field, meta)
                       try:
@@ -1642,7 +1786,7 @@ jobs:
                   # (until the previous day is finished at 9:25am, its running map stays up rather than the new day's)
                   if cur in st["windows"] and not any(d < cur for d in st["windows"]):
                       w = st["windows"][cur]
-                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{w.get('g', {}).get('frames', 0)}:{gauge_key([g for g in read_my_gauges(cur) if not g.get("unplaced")])}"   # also redo it when readings are entered
+                      written = f"{cur}:{w['frames']}:{w.get('b', {}).get('frames', 0)}:{w.get('c', {}).get('frames', 0)}:{w.get('g', {}).get('frames', 0)}:{round(sum((FWO or {}).get('today', {}).values()), 1)}:{gauge_key([g for g in read_my_gauges(cur) if not g.get("unplaced")])}"   # also redo it when readings are entered
                       if st.get("today_hour") != written:
                           merged = merged_radar(cur, w)
                           so_far = max(1.0, (now - (window_end_utc(cur) - dt.timedelta(days=1))).total_seconds() / 60)
