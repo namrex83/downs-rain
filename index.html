@@ -360,6 +360,7 @@ body.mapfull #contactBtn,body:has(#map.full) #contactBtn{display:none!important}
 .timing svg{display:block;width:100%;height:auto;touch-action:manipulation}
 .timing svg text{font:600 10px var(--body);fill:var(--ink-2)}
 .timing svg .blk{cursor:pointer}
+.timing .tmmodels{margin:4px 0 2px;font-size:.82rem;line-height:1.4;color:var(--ink)} .timing .tmmodels span{color:var(--ink-3)}
 .timing .tmbtns{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:.8rem;color:var(--ink-2)}
 .timing .tmbtns button{font:600 .8rem var(--body);border:1px solid var(--accent);color:var(--accent);background:none;border-radius:999px;padding:5px 11px;cursor:pointer}
 .timing .tmbtns button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink,#fff)}
@@ -5512,7 +5513,9 @@ function timingData(d){
   if (nm.length >= 2){ const w = namWeights(nm, leadOf(end), "map"); nam = hr[nm[0]].map((_, i) => nm.reduce((a, m) => a + w[m] * hr[m][i], 0)); }
   else nam = hr[ms[0]].map((_, i) => ms.reduce((a, m) => a + hr[m][i], 0) / ms.length);
   const chance = [...Array(8)].map((_, b) => ms.filter(m => hr[m][b*3] + hr[m][b*3+1] + hr[m][b*3+2] >= 0.5).length);
-  return {start, end, nam, chance, n: ms.length, blend: nm.length >= 2};
+  // each model's rain in each 3 hours, wettest first: listed when a 3-hour block is tapped
+  const blocks = [...Array(8)].map((_, b) => ms.map(m => [m, hr[m][b*3] + hr[m][b*3+1] + hr[m][b*3+2]]).sort((x, y) => y[1] - x[1]));
+  return {start, end, nam, chance, blocks, n: ms.length, blend: nm.length >= 2};
 }
 // storm category each hour at the pin, the worse of GFS (hourly) and ECMWF (3-hourly, filled across its 3 hours):
 // 1 storms possible, 2 organised storms, 3+ severe
@@ -5534,6 +5537,7 @@ function stormHours1(st, at, start, end){
     if (v) any = true; });
   return any ? out : null;
 }
+let tmPick = null;   // the 3-hour block tapped (when it can't be shown on the map): {d, b}
 async function fTiming(){
   const box = $("fTiming"), d = fDayNow();
   if (tab !== "fc" || !d) { document.body.classList.remove("fcdaily"); const was = !box.hidden; box.hidden = true;
@@ -5582,7 +5586,7 @@ async function fTiming(){
   nam.forEach((v, i) => { if (v < 0.05) return; const h = Math.max(2, v / top * bh);
     g += `<rect x="${i * bw + 2}" y="${y0 + bh - h}" width="${bw - 4}" height="${h}" rx="2" fill="var(--accent)"><title>${hrClock(i)}: ${fmt(v)} mm</title></rect>`; });
   g += `<line x1="0" x2="${Wd}" y1="${y0 + bh}" y2="${y0 + bh}" stroke="var(--line)"/>`;
-  chance.forEach((c, b) => { const x = b * bw * 3, on = fFrame === b && fFrameDay === d;
+  chance.forEach((c, b) => { const x = b * bw * 3, on = (fFrame === b && fFrameDay === d) || !!(tmPick && tmPick.d === d && tmPick.b === b);
     g += `<g class="blk" data-b="${b}"><rect x="${x + 1}" y="${cy}" width="${bw * 3 - 2}" height="${ch}" rx="4" fill="var(--accent)" fill-opacity="${c ? 0.12 + 0.75 * c / n : 0.04}" ${on ? `stroke="var(--ink)" stroke-width="2"` : ""}/>`
        + `<text x="${x + bw * 1.5}" y="${cy + 14}" text-anchor="middle" style="fill:${c / n > 0.55 ? "#fff" : "var(--ink-2)"}">${c}/${n}</text></g>`; });
   if (past) { const m = g.match(/<rect x="0" y="[^"]+" width="[^"]+" height="[^"]+" fill="var\(--panel\)"[^>]*\/><text[^>]*>now<\/text><line[^>]*\/>/); if (m) { g = g.replace(m[0], "") + m[0]; } }
@@ -5603,8 +5607,14 @@ async function fTiming(){
     <svg viewBox="0 0 ${Wd + 34} ${cy + ch + 17}" role="img" aria-label="Rain hour by hour and how many models have rain in each 3 hours">${g}</svg>
     <div class="tmstorm">Storms from <span class="seg" id="tmStormSeg">${["ecmwf", "gfs", "both"].map(k => `<button type="button" data-s="${k}" aria-pressed="${tmStorm === k}">${k === "both" ? "Both" : SNAME[k]}</button>`).join("")}</span></div>
     ${canMap ? `<div class="tmbtns"><button type="button" id="tmPlay" aria-pressed="${!!fPlay}">${fPlay ? "❚❚ Pause" : "▶ Play the day on the map"}</button>${fFrame != null && fFrameDay === d ? `<button type="button" id="tmAll">Whole day</button><span>Map: ${frameLabel()}</span>` : `<span class="tmtap">or tap a 3-hour block</span>`}</div>` : ""}
+    ${(() => { const b = canMap ? (fFrame != null && fFrameDay === d ? fFrame : null) : (tmPick && tmPick.d === d ? tmPick.b : null);
+      if (b == null || !td.blocks) return "";
+      const L = td.blocks[b], wet = L.filter(([, v]) => v >= 0.5), dry = L.filter(([, v]) => v < 0.5);
+      const nmTxt = ([m, v]) => `<b>${hName(m)}</b> ${fmt(v)}`;
+      return `<p class="tmmodels"><b>${FR_CLOCK[b]}–${FR_CLOCK[b + 1]}:</b> ${wet.length ? `rain in ${wet.length} of ${L.length}: ${wet.map(nmTxt).join(", ")} mm` : `none of the ${L.length} models has 0.5 mm+`}${dry.length && wet.length ? ` · <span>dry or under 0.5 mm: ${dry.map(([m]) => hName(m)).join(", ")}</span>` : ""}</p>`; })()}
     <div class="tmkey"><b>Bars</b> = rain each hour (mm, scale on the left), Namrex AI${td.blend ? "" : " (average of the models)"} · <b>${Math.max(1, n - 1)}/${n}</b> = ${Math.max(1, n - 1)} of ${n} models have rain (0.5 mm+) in those 3 hours: more = surer<span class="tmmore"> · night shaded</span>${storm ? ` · strip above the bars: <span style="color:#f2c94c">■</span> storms possible <span style="color:#f08a24">■</span> organised storms <span style="color:#d32f2f">■</span> severe (${SNAME[tmStorm]})` : ""}</div>`;
   box.querySelectorAll("#tmStormSeg button").forEach(b => b.onclick = () => { try { localStorage.setItem("tmStorm", b.dataset.s); } catch(e){} if (FC) fChartDraw(); else fTiming(); });
+  if (!canMap) box.querySelectorAll(".blk").forEach(el => el.onclick = () => { const b = +el.dataset.b; tmPick = tmPick && tmPick.d === d && tmPick.b === b ? null : {d, b}; fTiming(); });
   if (canMap) {
     box.querySelectorAll(".blk").forEach(el => el.onclick = () => { fStopPlay(); fSetFrame(+el.dataset.b); });
     $("tmPlay").onclick = () => {
