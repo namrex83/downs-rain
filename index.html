@@ -776,6 +776,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0;min-heigh
     <div class="field catchfield"><label for="catchSel" id="catchSelLbl">Catchment</label><select id="catchSel"><option value="">None</option></select></div>
   </div>
   <div class="sevnote" id="sevNote" hidden></div>
+  <div class="sevnote rainOnly" id="radarNote" hidden></div>
   <div class="controls stormOnly" hidden>
     <div class="field" id="sFieldWrap"><label for="sField">Map</label><select id="sField">
       <option value="mix" selected>Combined storm risk</option>
@@ -2619,6 +2620,7 @@ async function draw(){
   if (overlay) map.removeLayer(overlay);
   overlay = L.imageOverlay(img, [[s,w],[n,e]], {opacity: rainOpacity, interactive:false}).addTo(map);
   $("tap").textContent = "Tap the map to read the rainfall at any spot.";
+  radarHealth(today ? meta : null);
   if (prov){
     const g = meta.gauges || [];
     $("stats").innerHTML = stat(`×${meta.bias}`, "Provisional scale, at Dalby") + stat(meta.gauges_used, "Gauges so far") + stat(meta.as_of, "Last updated");
@@ -3069,6 +3071,27 @@ function setPin(label){
 const readAnyTap = () => tab === "storms" ? sReadTap() : tab === "fc" ? fReadTap() : tab === "wind" ? wReadTap() : tab === "temp" ? tReadTap() : tab === "soil" ? oReadTap() : tab === "radar" ? (tapAt && setPin("")) : tab === "catch" ? null : readTap();
 map.on("click", ev => { if (agroDrawing) { agroDrawing.mark ? agroMarkAt(ev.latlng) : agroDrawAdd(ev.latlng); return; } if (pickRow) { pickDone(ev.latlng); return; } if (dotMode && tab === "rain") { addDot(ev.latlng); return; } tapAt = ev.latlng; readAnyTap(); });
 
+// A notice on the Rainfall tab when the running map has a problem: it hasn't been updated for over an hour (the
+// radar job has stopped), or the radar job says radar pictures aren't coming in or gauges are catching rain the
+// radar isn't showing (data/health.json).
+async function radarHealth(meta){
+  const box = $("radarNote"); if (!box) return;
+  if (!meta || !meta.as_of || !meta.date) { box.hidden = true; return; }
+  const msgs = [];
+  const nowQ = new Date(Date.now() + 10 * 36e5), [hh, mm] = meta.as_of.split(":").map(Number);
+  let age = null;
+  for (const d of [addDays(meta.date, -1), meta.date]) {   // the running day spans two dates: the time is on whichever is closest before now
+    const t = Date.parse(d + "T00:00:00Z") + (hh * 60 + mm) * 6e4, a = (nowQ.getTime() - t) / 6e4;
+    if (a >= -5 && (age == null || a < age)) age = a;
+  }
+  if (age != null && age > 75) msgs.push(`The rain map was last updated ${age >= 120 ? `${Math.round(age / 60)} hours` : `${Math.round(age)} minutes`} ago: new radar pictures aren't being added just now, so it may be missing recent rain.`);
+  try {
+    const h = await getJSON("data/health.json" + bust());
+    if (h && h.checked && Date.now() - Date.parse(h.checked.replace("Z", ":00Z")) < 3 * 36e5) for (const p of h.problems || []) if (!/No new radar pictures/.test(p) || !msgs.length) msgs.push(p);
+  } catch(e){}
+  box.hidden = !msgs.length;
+  box.innerHTML = msgs.length ? `⚠️ <b>Radar map problem:</b> ${msgs.join(" ")} Rain gauges are filling in where they can. Namrex Weather has been alerted.` : "";
+}
 // Extra dots on the Rainfall map: with "+ Add dots" on, each tap adds a labelled dot with the total there, so
 // several spots can be compared (or screenshotted) at once. They follow the day or view picked; Clear removes them.
 let dotMode = false;

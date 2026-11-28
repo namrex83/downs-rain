@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  actions: write   # the radar watchdog can restart the radar job
+  issues: write    # and tell the owner
 
 concurrency:
   group: forecast
@@ -17,6 +19,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # Watchdog: if the radar job (which keeps itself going every ~10 minutes) has stopped, start it again and tell
+      # the owner (a GitHub issue).
+      - name: Check the radar job is running
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow radar.yml --limit 1 --json createdAt,status -q '.[0] | "\(.createdAt) \(.status)"')
+          when=${last%% *}; status=${last##* }
+          age=$(( ( $(date +%s) - $(date -d "${when:-1970-01-01T00:00:00Z}" +%s) ) / 60 ))
+          echo "Latest radar run: $last ($age min ago)"
+          if [ "$status" = "completed" ] && [ "$age" -gt 60 ]; then
+            gh workflow run radar.yml -R "$GITHUB_REPOSITORY" --ref main && echo "Restarted the radar job"
+            if [ -z "$(gh issue list -R "$GITHUB_REPOSITORY" --label radar-alert --state open --json number -q '.[0].number')" ]; then
+              gh label create radar-alert -R "$GITHUB_REPOSITORY" --color d73a4a --description "The radar rain map has a problem" --force >/dev/null
+              gh issue create -R "$GITHUB_REPOSITORY" --title "⚠️ Radar rain map problem" --label radar-alert \
+                --body "The radar job hadn't run for $age minutes, so radar pictures were being missed. It has been restarted. This issue closes itself once the radar job runs cleanly again."
+            fi
+          fi
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
