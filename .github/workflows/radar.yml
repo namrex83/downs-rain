@@ -782,9 +782,12 @@ jobs:
                       d0 = d0.replace(year=d0.year - 1)
                   day_now = d0.isoformat()
                   cols = [(d0 - dt.timedelta(days=6 - i)).isoformat() for i in range(7)]   # 24 h to 9am on each of these
-                  found = []
+                  found, group = [], ""
                   for r in re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S | re.I):
                       c = [cell(x) for x in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S | re.I)]
+                      if len(c) == 1 and c[0] and len(c[0]) < 60:
+                          group = c[0]   # the river area the next rows belong to (e.g. "Stanley/Upper Brisbane")
+                          continue
                       if len(c) < 9 or not c[0] or not all(x == "" or num(x) is not None for x in c[1:9]):
                           continue
                       name = c[0]
@@ -792,13 +795,22 @@ jobs:
                       ll = pos.get(k) or pos.get(fwo_key(re.sub(r"\(.*?\)", "", name)))
                       if not ll:
                           continue
-                      found.append((name, ll, c))
+                      found.append((name, ll, c, group))
                   if not found:
                       continue
-                  # a name that matched a station far from the rest of its table is a different place with the same name
-                  mlat = float(np.median([f[1][0] for f in found])); mlon = float(np.median([f[1][1] for f in found]))
-                  for name, ll, c in found:
-                      if math.hypot((ll[0] - mlat) * 111, (ll[1] - mlon) * 99) > 350:
+                  # a name that matched a station far from the rest of its river area is a different place with the same
+                  # name (e.g. an "Eskdale" or "Glenwood" elsewhere in Queensland): left out
+                  med = {}
+                  for grp in {f[3] for f in found}:
+                      pts = [f[1] for f in found if f[3] == grp]
+                      if len(pts) >= 3:
+                          med[grp] = (float(np.median([p[0] for p in pts])), float(np.median([p[1] for p in pts])), 90)
+                  tl = (float(np.median([f[1][0] for f in found])), float(np.median([f[1][1] for f in found])), 250)
+                  dropped = []
+                  for name, ll, c, grp in found:
+                      mlat, mlon, lim = med.get(grp, tl)
+                      if math.hypot((ll[0] - mlat) * 111, (ll[1] - mlon) * 99) > lim:
+                          dropped.append(name)
                           continue
                       places[name] = ll
                       for d, x in zip(cols, c[1:8]):
@@ -806,6 +818,8 @@ jobs:
                               days.setdefault(d, {})[name] = num(x)
                       if num(c[8]) is not None:
                           today[name] = num(c[8])
+                  if dropped:
+                      log(f"  {tbl}: left out (same name as a station elsewhere): {', '.join(dropped[:12])}")
               FWO = {"days": days, "today": today, "day_now": day_now, "pos": places}
               log(f"  Bureau flood-warning rain gauges: {len(places)} placed; {len(today)} with rain since 9am {day_now}")
 
@@ -1218,6 +1232,15 @@ jobs:
                       g["ignored"] = "far below the radar"
                       log(f"  ignoring {g['name']}: gauge {g['mm']} mm, radar {g['radar_mm']} mm (under {FAR_RATIO:.0%})")
                       continue
+                  # a gauge with real rain where the radar, which saw most of the day, has none anywhere near it: more
+                  # likely a gauge in the wrong place or a faulty reading than rain the radar missed (on a day the
+                  # radar mostly missed, the gauges are what's left, so they stay)
+                  if coverage >= 0.8 and g["mm"] >= 5 and g.get("source") == "BOM flood":
+                      ring8 = max(1, int(round(8 / k)))
+                      if float(radar[max(0, int(r) - ring8):int(r) + ring8 + 1, max(0, int(c) - ring8):int(c) + ring8 + 1].max()) < 0.5:
+                          g["ignored"] = "rain where the radar saw none near it"
+                          log(f"  ignoring {g['name']}: gauge {g['mm']} mm, no radar rain within 8 km")
+                          continue
                   g["_px"] = (c, r)
                   used.append(g)
               pairs = [g for g in used if g["mm"] >= 0.5 and g["radar_mm"] >= 0.5]
