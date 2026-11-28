@@ -2951,8 +2951,7 @@ $("contactForm").onsubmit = async e => {
 };
 // Rain gauges on the Rainfall map: the public gauges the day was corrected with (BOM). Local gauges are
 // listed in the table by name, but their positions are never sent to the page, so they get no dot. Values show when zoomed in, or tap a dot.
-let gaugeSites = [], gaugesOn = true;
-try { gaugesOn = localStorage.getItem("gaugesOn") !== "0"; } catch(e){}
+let gaugeSites = [], gaugesOn = false;   // the gauge dots always start off (hundreds of Bureau gauges now); On shows them for this visit
 function drawGauges(){
   gaugeLayer.clearLayers();
   [...$("gSeg").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.g === "1") === gaugesOn));
@@ -2970,7 +2969,7 @@ function drawGauges(){
   }
 }
 $("gSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; gaugesOn = b.dataset.g === "1";
-  try { localStorage.setItem("gaugesOn", gaugesOn ? "1" : "0"); } catch(_){} drawGauges(); declutter(); };
+  drawGauges(); declutter(); };
 map.on("zoomend", () => { if (tab === "rain") { drawGauges(); declutter(); } });
 const setHailSeg = () => [...$("hSeg").children].forEach(b => b.setAttribute("aria-pressed", (b.dataset.h === "1") === hailOn));
 setHailSeg();
