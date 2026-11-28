@@ -770,7 +770,10 @@ jobs:
                   except Exception as e:
                       log(f"  rain table {tbl}: {e}")
                       continue
-                  m = re.search(r"Since 9am\s+(\d{1,2})\s+([A-Za-z]{3})", t)
+                  # (on the tags-stripped text: the header may be split over lines or have &nbsp;s)
+                  m = re.search(r"Since\s+9am\s+(\d{1,2})\s+([A-Za-z]{3})", cell(t))
+                  if not m:
+                      log(f"  rain table {tbl}: no 'Since 9am' date found")
                   if not m:
                       continue
                   qnow = (now + TZ_OFFSET).date()
